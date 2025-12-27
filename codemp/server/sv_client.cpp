@@ -38,6 +38,76 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 static void SV_CloseDownload( client_t *cl );
 
 /*
+=============================================================================
+SESSION PERSISTENCE (JEDAIIDUEL)
+=============================================================================
+*/
+#define MAX_SESSIONS 1024
+#define SESSION_TIMEOUT 3600000 // 1 hour in ms
+
+typedef struct {
+	netadr_t	ip;
+	char		name[MAX_NAME_LENGTH];
+	int			expiryTime;
+	qboolean	active;
+} session_t;
+
+static session_t sv_sessions[MAX_SESSIONS];
+
+/*
+==================
+SV_AddSession
+==================
+*/
+void SV_AddSession( client_t *cl ) {
+	int i;
+	int freeSlot = -1;
+
+	// Check if already has session, if so update expiry
+	for ( i = 0; i < MAX_SESSIONS; i++ ) {
+		if ( sv_sessions[i].active && NET_CompareBaseAdr( sv_sessions[i].ip, cl->netchan.remoteAddress ) && !Q_stricmp( sv_sessions[i].name, cl->name ) ) {
+			sv_sessions[i].expiryTime = svs.time + SESSION_TIMEOUT;
+			return;
+		}
+		if ( !sv_sessions[i].active && freeSlot == -1 ) {
+			freeSlot = i;
+		}
+	}
+
+	// Create new session
+	if ( freeSlot != -1 ) {
+		sv_sessions[freeSlot].active = qtrue;
+		sv_sessions[freeSlot].ip = cl->netchan.remoteAddress;
+		Q_strncpyz( sv_sessions[freeSlot].name, cl->name, sizeof( sv_sessions[freeSlot].name ) );
+		sv_sessions[freeSlot].expiryTime = svs.time + SESSION_TIMEOUT;
+		Com_Printf( "Session added for %s (%s). Expires at %d\n", NET_AdrToString( cl->netchan.remoteAddress ), cl->name, sv_sessions[freeSlot].expiryTime );
+	}
+}
+
+/*
+==================
+SV_HasSession
+==================
+*/
+qboolean SV_HasSession( client_t *cl ) {
+	int i;
+	for ( i = 0; i < MAX_SESSIONS; i++ ) {
+		if ( sv_sessions[i].active ) {
+			// Check expiry
+			if ( svs.time > sv_sessions[i].expiryTime ) {
+				sv_sessions[i].active = qfalse; // Expired
+				continue;
+			}
+			if ( NET_CompareBaseAdr( sv_sessions[i].ip, cl->netchan.remoteAddress ) && !Q_stricmp( sv_sessions[i].name, cl->name ) ) {
+				return qtrue; // Found valid session
+			}
+		}
+	}
+	return qfalse;
+}
+
+
+/*
 =================
 SV_GetChallenge
 
@@ -373,6 +443,11 @@ gotnewcl:
 	}
 	if ( count == 1 || count == sv_maxclients->integer ) {
 		SV_Heartbeat_f();
+	}
+
+	// JEDAII: Check for restored session
+	if ( SV_HasSession( newcl ) ) {
+		Com_Printf( "AUTH_RESTORE: %i %s\n", newcl - svs.clients, newcl->name );
 	}
 }
 
@@ -1522,6 +1597,18 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK ) {
 	qboolean sayCmd = qfalse;
 
 	Cmd_TokenizeString(s);
+
+	// JEDAII: Intercept login command here for Auth System
+	if ( !Q_stricmp( Cmd_Argv(0), "login" ) ) {
+		if ( Cmd_Argc() < 3 ) {
+			SV_SendServerCommand( cl, "print \"Usage: login <username> <password>\n\"" );
+			return;
+		}
+		// Print to server log for Node.js
+		Com_Printf( "AUTH_REQUEST: %i %s %s\n", cl - svs.clients, Cmd_Argv(1), Cmd_Argv(2) );
+		SV_SendServerCommand( cl, "print \"Login request sent...\n\"" );
+		return;
+	}
 
 	cmd = Cmd_Argv(0);
 	arg1 = Cmd_Argv(1);

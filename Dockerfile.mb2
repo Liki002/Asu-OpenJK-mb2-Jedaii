@@ -1,0 +1,54 @@
+FROM i386/debian:bullseye
+
+# Set DEBIAN_FRONTEND to noninteractive to avoid prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install required dependencies
+RUN apt update && apt install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    libglew-dev \
+    libsdl2-dev \
+    libopenal-dev \
+    libjpeg-dev \
+    libpng-dev \
+    zlib1g-dev \
+    libcurl4-openssl-dev \
+    libxext-dev \
+    libxt-dev \
+    python3 \
+    gcc \
+    g++ \
+    gcc-multilib \
+    g++-multilib \
+    ninja-build
+
+# Copy the OpenJK source code into the container
+COPY . /openjk_build/OpenJK
+
+# Build OpenJK - This builds all default targets
+RUN cd /openjk_build/OpenJK && \
+    mkdir -p build && \
+    cd build && \
+    cmake -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_SYSTEM_NAME=Linux \
+    -DCMAKE_SYSTEM_PROCESSOR=i386 \
+    -DCMAKE_C_COMPILER="/usr/bin/gcc" \
+    -DCMAKE_CXX_COMPILER="/usr/bin/g++" \
+    -DBuildMPDed=ON \
+    -DBuildMPGame=ON \
+    -DBuildMPCGame=ON \
+    -DBuildMPEngine=OFF \
+    -DBuildMPRdVanilla=OFF \
+    -DBuildMPUI=OFF \
+    -DBuildSPEngine=OFF \
+    -DBuildSPGame=OFF \
+    -DBuildSPRdVanilla=OFF \
+    -DBuildMPRend2=OFF \
+    .. && \
+    ninja && \
+    ls -R /openjk_build/OpenJK/build
+
+# No checks, assume success for debugging

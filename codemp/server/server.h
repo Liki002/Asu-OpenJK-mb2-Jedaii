@@ -418,6 +418,9 @@ void SV_ExecuteClientCommand( client_t *cl, const char *s, qboolean clientOK );
 void SV_ClientThink (client_t *cl, usercmd_t *cmd);
 
 void SV_WriteDownloadToClient( client_t *cl , msg_t *msg );
+void SV_AddSession( client_t *cl );
+qboolean SV_HasSession( client_t *cl );
+
 
 //
 // sv_ccmds.c

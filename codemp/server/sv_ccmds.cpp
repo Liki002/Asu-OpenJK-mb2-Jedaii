@@ -1943,9 +1943,165 @@ static void SV_CompleteMapName( char *args, int argNum ) {
 
 /*
 ==================
+SV_ConPrint_f
+==================
+*/
+static void SV_ConPrint_f(void) {
+	char	text[MAX_SAY_TEXT] = { 0 };
+	char		*target;
+	client_t	*cl;
+	if (!com_dedicated->integer) {
+		Com_Printf("Server is not dedicated.\n");
+		return;
+	}
+	// make sure server is running
+	if (!com_sv_running->integer) {
+		Com_Printf("Server is not running.\n");
+		return;
+	}
+	if (Cmd_Argc() < 3) {
+		Com_Printf("Usage: svprint <client number or 'all'> <text>\n");
+		return;
+	}
+	target = Cmd_Argv(1);
+	Cmd_ArgsFromBuffer(2, text, sizeof(text));
+	if (!Q_stricmp("all", target)) {
+		cl = NULL;
+		Com_Printf("print: svprint to all" S_COLOR_WHITE ": %s\n", SV_ExpandNewlines((char *)text));
+	} else {
+		cl = SV_GetPlayerByNum();
+		if (!cl) {
+			return;
+		}
+		Com_Printf("print: svprint to %s" S_COLOR_WHITE ": %s\n", cl->name, SV_ExpandNewlines((char *)text));
+	}
+	SV_SendServerCommand(cl, "chat \"%s" S_COLOR_WHITE "\"\n", text);
+}
+
+/*
+==================
 SV_AddOperatorCommands
 ==================
 */
+/*
+==================
+SV_ConfirmLogin_f
+==================
+*/
+static void SV_ConfirmLogin_f( void ) {
+	int clientNum;
+	client_t *cl;
+
+	// make sure server is running
+	if ( !com_sv_running->integer ) {
+		return;
+	}
+
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf ("Usage: sv_confirmlogin <client number>\n");
+		return;
+	}
+
+	clientNum = atoi( Cmd_Argv(1) );
+	if ( clientNum < 0 || clientNum >= sv_maxclients->integer ) {
+		return;
+	}
+
+	cl = &svs.clients[clientNum];
+	if ( cl->state < CS_CONNECTED ) {
+		return;
+	}
+
+	SV_AddSession( cl );
+}
+
+/*
+==================
+SV_GetPlayer_f (JEDAIIDUEL)
+Returns JSON info about a player for the Bot
+==================
+*/
+static void SV_GetPlayer_f( void ) {
+	int clientNum;
+	client_t *cl;
+	char *cleanName;
+	char cleanNameBuf[MAX_NAME_LENGTH];
+
+	if ( Cmd_Argc() != 2 ) {
+		Com_Printf ("Usage: sv_getplayer <client number>\n");
+		return;
+	}
+
+	clientNum = atoi( Cmd_Argv(1) );
+	if ( clientNum < 0 || clientNum >= sv_maxclients->integer ) {
+		Com_Printf ("PLAYER_INFO_ERROR: Invalid client number\n");
+		return;
+	}
+
+	cl = &svs.clients[clientNum];
+	if ( cl->state < CS_CONNECTED ) {
+		Com_Printf ("PLAYER_INFO_ERROR: Client not connected\n");
+		return;
+	}
+
+	// Create clean name for JSON safely
+	Q_strncpyz( cleanNameBuf, cl->name, sizeof(cleanNameBuf) );
+	Q_CleanStr( cleanNameBuf ); // Remove color codes
+
+	// Print JSON to console (Bot parses this)
+	Com_Printf( "PLAYER_INFO: { \"id\": %d, \"name\": \"%s\", \"rawName\": \"%s\", \"ip\": \"%s\", \"ping\": %d, \"lastPacket\": %d }\n",
+		clientNum,
+		cleanNameBuf,
+		cl->name, // Note: Raw name might have quotes/colors, might break simple JSON parsers if not careful. Bot handles this.
+		NET_AdrToString( cl->netchan.remoteAddress ),
+		cl->ping,
+		cl->lastPacketTime
+	);
+}
+
+/*
+==================
+SV_Console_f (JEDAIIDUEL)
+Prints raw text to client console (no prefix, no chat)
+==================
+*/
+static void SV_Console_f(void) {
+	char	text[MAX_SAY_TEXT] = { 0 };
+	char		*target;
+	client_t	*cl;
+
+	// make sure server is running
+	if (!com_sv_running->integer) {
+		return;
+	}
+
+	if (Cmd_Argc() < 3) {
+		Com_Printf("Usage: sv_console <client number or 'all'> <text>\n");
+		return;
+	}
+
+	target = Cmd_Argv(1);
+	Cmd_ArgsFromBuffer(2, text, sizeof(text));
+
+	if (!Q_stricmp("all", target)) {
+		SV_SendServerCommand(NULL, "print \"%s\n\"\n", text);
+		Com_Printf("sv_console to all: %s\n", text);
+	} else {
+		int clientNum = atoi(target);
+		if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
+			return;
+		}
+		cl = &svs.clients[clientNum];
+		if (cl->state < CS_CONNECTED) {
+			return;
+		}
+		SV_SendServerCommand(cl, "print \"%s\n\"\n", text);
+		Com_Printf("sv_console to %s: %s\n", cl->name, text);
+	}
+}
+
+
+
 void SV_AddOperatorCommands( void ) {
 	static qboolean	initialized;
 
@@ -1978,6 +2134,7 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("killserver", SV_KillServer_f, "Shuts the server down and disconnects all clients" );
 	Cmd_AddCommand ("svsay", SV_ConSay_f, "Broadcast server messages to clients" );
 	Cmd_AddCommand ("svtell", SV_ConTell_f, "Private message from the server to a user" );
+	Cmd_AddCommand ("svprint", SV_ConPrint_f, "Target a message from the server to specific client or all clients without a prefix");
 	Cmd_AddCommand ("forcetoggle", SV_ForceToggle_f, "Toggle g_forcePowerDisable bits" );
 	Cmd_AddCommand ("weapontoggle", SV_WeaponToggle_f, "Toggle g_weaponDisable bits" );
 	Cmd_AddCommand ("svrecord", SV_Record_f, "Record a server-side demo" );
@@ -1989,6 +2146,9 @@ void SV_AddOperatorCommands( void ) {
 	Cmd_AddCommand ("sv_bandel", SV_BanDel_f, "Removes a ban" );
 	Cmd_AddCommand ("sv_exceptdel", SV_ExceptDel_f, "Removes a ban exception" );
 	Cmd_AddCommand ("sv_flushbans", SV_FlushBans_f, "Removes all bans and exceptions" );
+    Cmd_AddCommand ("sv_confirmlogin", SV_ConfirmLogin_f, "Confirm a player login and create a session" ); // JEDAII
+    Cmd_AddCommand ("sv_getplayer", SV_GetPlayer_f, "Returns JSON info about a player" ); // JEDAII
+    Cmd_AddCommand ("sv_console", SV_Console_f, "Prints raw text to client console" ); // JEDAII
 	Cmd_AddCommand ("whitelistip", SV_WhitelistIP_f, "Add IP to the whitelist" );
 }
 

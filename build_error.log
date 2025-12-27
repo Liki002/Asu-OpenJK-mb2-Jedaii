@@ -1,0 +1,23 @@
+[  1%] Built target bundled_minizip
+[ 13%] Built target botlib
+[ 14%] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_client.cpp.o
+/mnt/c/Users/AlphaOmega/Desktop/jedaii servers/JedaiiRankedDuel/Openjk-Jedaiifork/AsuTechio_OpenJK/codemp/server/sv_client.cpp: In function ‘void SV_AddSession(client_t*)’:
+/mnt/c/Users/AlphaOmega/Desktop/jedaii servers/JedaiiRankedDuel/Openjk-Jedaiifork/AsuTechio_OpenJK/codemp/server/sv_client.cpp:67:67: error: could not convert ‘& sv_sessions[i].session_t::ip’ from ‘netadr_t*’ {aka ‘netadr_s*’} to ‘netadr_t’ {aka ‘netadr_s’}
+   67 |                 if ( sv_sessions[i].active && NET_CompareBaseAdr( &sv_sessions[i].ip, &cl->netchan.remoteAddress ) ) {
+      |                                                                   ^~~~~~~~~~~~~~~~~~
+      |                                                                   |
+      |                                                                   netadr_t* {aka netadr_s*}
+/mnt/c/Users/AlphaOmega/Desktop/jedaii servers/JedaiiRankedDuel/Openjk-Jedaiifork/AsuTechio_OpenJK/codemp/server/sv_client.cpp:81:87: error: could not convert ‘& cl->client_s::netchan.netchan_s::remoteAddress’ from ‘netadr_t*’ {aka ‘netadr_s*’} to ‘netadr_t’ {aka ‘netadr_s’}
+   81 |                 Com_Printf( "Session added for %s. Expires at %d\n", NET_AdrToString( &cl->netchan.remoteAddress ), sv_sessions[freeSlot].expiryTime );
+      |                                                                                       ^~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                                                       |
+      |                                                                                       netadr_t* {aka netadr_s*}
+/mnt/c/Users/AlphaOmega/Desktop/jedaii servers/JedaiiRankedDuel/Openjk-Jedaiifork/AsuTechio_OpenJK/codemp/server/sv_client.cpp: In function ‘qboolean SV_HasSession(client_t*)’:
+/mnt/c/Users/AlphaOmega/Desktop/jedaii servers/JedaiiRankedDuel/Openjk-Jedaiifork/AsuTechio_OpenJK/codemp/server/sv_client.cpp:99:50: error: could not convert ‘& sv_sessions[i].session_t::ip’ from ‘netadr_t*’ {aka ‘netadr_s*’} to ‘netadr_t’ {aka ‘netadr_s’}
+   99 |                         if ( NET_CompareBaseAdr( &sv_sessions[i].ip, &cl->netchan.remoteAddress ) ) {
+      |                                                  ^~~~~~~~~~~~~~~~~~
+      |                                                  |
+      |                                                  netadr_t* {aka netadr_s*}
+make[2]: *** [codemp/CMakeFiles/openjkded.i386.dir/build.make:664: codemp/CMakeFiles/openjkded.i386.dir/server/sv_client.cpp.o] Error 1
+make[1]: *** [CMakeFiles/Makefile2:239: codemp/CMakeFiles/openjkded.i386.dir/all] Error 2
+make: *** [Makefile:156: all] Error 2

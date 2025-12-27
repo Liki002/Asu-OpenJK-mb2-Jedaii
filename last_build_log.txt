@@ -1,0 +1,127 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  120.2MB
+Step 1/5 : FROM i386/debian:bullseye
+ ---> f572c528c2b0
+Step 2/5 : ENV DEBIAN_FRONTEND=noninteractive
+ ---> Using cache
+ ---> 6932768d769a
+Step 3/5 : RUN apt update && apt install -y --no-install-recommends     build-essential     cmake     git     libglew-dev     libsdl2-dev     libopenal-dev     libjpeg-dev     libpng-dev     zlib1g-dev     libcurl4-openssl-dev     libxext-dev     libxt-dev     python3     gcc     g++     gcc-multilib     g++-multilib     ninja-build
+ ---> Using cache
+ ---> 54e9af0ca76e
+Step 4/5 : COPY . /openjk_build/OpenJK
+ ---> 3cf128d5b788
+Step 5/5 : RUN cd /openjk_build/OpenJK &&     mkdir -p build &&     cd build &&     cmake -G Ninja     -DCMAKE_BUILD_TYPE=Release     -DCMAKE_SYSTEM_NAME=Linux     -DCMAKE_SYSTEM_PROCESSOR=i386     -DCMAKE_C_COMPILER="/usr/bin/gcc"     -DCMAKE_CXX_COMPILER="/usr/bin/g++"     -DBuildMPDed=ON     -DBuildMPGame=ON     -DBuildMPCGame=ON     -DBuildMPEngine=OFF     -DBuildMPRdVanilla=OFF     -DBuildMPUI=OFF     -DBuildSPEngine=OFF     -DBuildSPGame=OFF     -DBuildSPRdVanilla=OFF     -DBuildMPRend2=OFF     .. &&     ninja &&     ls -R /openjk_build/OpenJK/build
+ ---> Running in f0f15afb8d1b
+-- The C compiler identification is GNU 10.2.1
+-- The CXX compiler identification is GNU 10.2.1
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/gcc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/g++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Architecture is i386
+-- SOURCE_DATE_EPOCH is not set: SOURCE_DATE will be set to the compile-time date
+-- Git revision is 87f145bc54192bb8be00d6698e932f1bb76d1dd2
+-- Found JPEG: /usr/lib/i386-linux-gnu/libjpeg.so (found version "62") 
+-- Found ZLIB: /usr/lib/i386-linux-gnu/libz.so (found version "1.2.11") 
+-- Found PNG: /usr/lib/i386-linux-gnu/libpng.so (found version "1.6.37") 
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /openjk_build/OpenJK/build
+[1/259] Building C object lib/minizip/CMakeFiles/bundled_minizip.dir/ioapi.c.o
+[2/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/md4.cpp.o
+[3/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/cm_polylib.cpp.o
+[4/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/cm_test.cpp.o
+[5/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/cm_load.cpp.o
+[6/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/matcomp.cpp.o
+[7/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/huffman.cpp.o
+[8/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/md5.cpp.o
+[9/259] Building C object lib/minizip/CMakeFiles/bundled_minizip.dir/unzip.c.o
+[10/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/persistence.cpp.o
+[11/259] Linking C static library lib/minizip/libbundled_minizip.a
+[12/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/cm_trace.cpp.o
+[13/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/cmd.cpp.o
+[14/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/net_chan.cpp.o
+[15/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/vm.cpp.o
+[16/259] Building C object codemp/CMakeFiles/openjkded.i386.dir/__/shared/qcommon/q_color.c.o
+[17/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/cvar.cpp.o
+[18/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/net_ip.cpp.o
+[19/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/GenericParser2.cpp.o
+../codemp/qcommon/GenericParser2.cpp: In function 'char* GetToken(char**, bool, bool)':
+../codemp/qcommon/GenericParser2.cpp:161:10: warning: 'void* memmove(void*, const void*, size_t)' specified bound 4294967295 exceeds maximum object size 2147483647 [-Wstringop-overflow=]
+  161 |   memmove(token, token+1, length);
+      |   ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+[20/259] Building C object codemp/CMakeFiles/openjkded.i386.dir/__/shared/qcommon/q_string.c.o
+[21/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/q_shared.cpp.o
+[22/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/common.cpp.o
+[23/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/z_memman_pc.cpp.o
+[24/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/files.cpp.o
+[25/259] Building C object codemp/CMakeFiles/openjkded.i386.dir/__/shared/qcommon/q_math.c.o
+[26/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/RoffSystem.cpp.o
+[27/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/stringed_interface.cpp.o
+[28/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/__/shared/qcommon/safe/files.cpp.o
+[29/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/GameInterface.cpp.o
+[30/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/Interface.cpp.o
+[31/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/msg.cpp.o
+[32/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/BlockStream.cpp.o
+[33/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/cm_patch.cpp.o
+[34/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/Memory.cpp.o
+[35/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/Q3_Interface.cpp.o
+[36/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/Sequence.cpp.o
+[37/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/qcommon/stringed_ingame.cpp.o
+[38/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/Instance.cpp.o
+[39/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_ccmds.cpp.o
+FAILED: codemp/CMakeFiles/openjkded.i386.dir/server/sv_ccmds.cpp.o 
+/usr/bin/g++ -DARCH_STRING=\"i386\" -DDEDICATED -DFINAL_BUILD -D_CONSOLE -I../codemp -I../shared -I../lib/gsl-lite/include -Ishared -I../lib/minizip/include -msse2 -std=c++11 -Wall -Wno-invalid-offsetof -Wno-write-strings -Wno-comment -fsigned-char -mstackrealign -mfpmath=sse -O3 -DNDEBUG -O3 -fvisibility=hidden -MD -MT codemp/CMakeFiles/openjkded.i386.dir/server/sv_ccmds.cpp.o -MF codemp/CMakeFiles/openjkded.i386.dir/server/sv_ccmds.cpp.o.d -o codemp/CMakeFiles/openjkded.i386.dir/server/sv_ccmds.cpp.o -c ../codemp/server/sv_ccmds.cpp
+../codemp/server/sv_ccmds.cpp:1939:2: error: expected unqualified-id before 'if'
+ 1939 |  if ( argNum == 2 )
+      |  ^~
+../codemp/server/sv_ccmds.cpp:1941:1: error: expected declaration before '}' token
+ 1941 | }
+      | ^
+../codemp/server/sv_ccmds.cpp:1943:2: error: expected unqualified-id before 'if'
+ 1943 |  if ( argNum == 2 )
+      |  ^~
+../codemp/server/sv_ccmds.cpp:1945:1: error: expected declaration before '}' token
+ 1945 | }
+      | ^
+../codemp/server/sv_ccmds.cpp: In function 'void SV_AddOperatorCommands()':
+../codemp/server/sv_ccmds.cpp:2010:39: error: 'SV_CompleteMapName' was not declared in this scope; did you mean 'Cmd_CompleteCfgName'?
+ 2010 |  Cmd_SetCommandCompletionFunc( "map", SV_CompleteMapName );
+      |                                       ^~~~~~~~~~~~~~~~~~
+      |                                       Cmd_CompleteCfgName
+[40/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/Q3_Registers.cpp.o
+[41/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_game.cpp.o
+[42/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_bot.cpp.o
+[43/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_init.cpp.o
+../codemp/server/sv_init.cpp: In function 'void SV_Init()':
+../codemp/server/sv_init.cpp:925:6: warning: unused variable 'index' [-Wunused-variable]
+  925 |  int index;
+      |      ^~~~~
+../codemp/server/sv_init.cpp: In function 'void SV_Shutdown(char*)':
+../codemp/server/sv_init.cpp:1136:37: warning: 'void* memset(void*, int, size_t)' clearing an object of non-trivial type 'serverStatic_t' {aka 'struct serverStatic_s'}; use assignment or value-initialization instead [-Wclass-memaccess]
+ 1136 |  Com_Memset( &svs, 0, sizeof( svs ) );
+      |                                     ^
+In file included from ../codemp/server/sv_init.cpp:25:
+../codemp/server/server.h:222:16: note: 'serverStatic_t' {aka 'struct serverStatic_s'} declared here
+  222 | typedef struct serverStatic_s {
+      |                ^~~~~~~~~~~~~~
+[44/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/Sequencer.cpp.o
+[45/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_challenge.cpp.o
+[46/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_client.cpp.o
+[47/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_snapshot.cpp.o
+[48/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_net_chan.cpp.o
+[49/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_world.cpp.o
+[50/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/icarus/TaskManager.cpp.o
+[51/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/sv_main.cpp.o
+[52/259] Building CXX object codemp/CMakeFiles/openjkded.i386.dir/server/NPCNav/navigator.cpp.o
+ninja: build stopped: subcommand failed.
+The command '/bin/sh -c cd /openjk_build/OpenJK &&     mkdir -p build &&     cd build &&     cmake -G Ninja     -DCMAKE_BUILD_TYPE=Release     -DCMAKE_SYSTEM_NAME=Linux     -DCMAKE_SYSTEM_PROCESSOR=i386     -DCMAKE_C_COMPILER="/usr/bin/gcc"     -DCMAKE_CXX_COMPILER="/usr/bin/g++"     -DBuildMPDed=ON     -DBuildMPGame=ON     -DBuildMPCGame=ON     -DBuildMPEngine=OFF     -DBuildMPRdVanilla=OFF     -DBuildMPUI=OFF     -DBuildSPEngine=OFF     -DBuildSPGame=OFF     -DBuildSPRdVanilla=OFF     -DBuildMPRend2=OFF     .. &&     ninja &&     ls -R /openjk_build/OpenJK/build' returned a non-zero code: 1
