@@ -1,5 +1,5 @@
 # Builder image
-FROM ubuntu:18.04 as builder
+FROM debian:bookworm-slim AS builder
 
 # Install build tools and libraries
 RUN dpkg --add-architecture i386 &&\
@@ -33,7 +33,7 @@ RUN mkdir /usr/src/openjk/build.x86_64 &&\
 
 
 # Server image
-FROM ubuntu:18.04
+FROM debian:bookworm-slim
 
 # Install utilities and libraries
 RUN dpkg --add-architecture i386 &&\
