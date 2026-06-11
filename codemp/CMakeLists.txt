@@ -331,6 +331,12 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/server/sv_gameapi.h"
 		"${MPDir}/server/duel_cull.cpp"
 		"${MPDir}/server/duel_cull.h"
+		"${MPDir}/server/cJSON.c"
+		"${MPDir}/server/sv_ranked_db.cpp"
+		"${MPDir}/server/sv_ranked_db.h"
+		"${MPDir}/server/sv_ranked_logic.cpp"
+		"${MPDir}/server/sv_ranked_logic.h"
+		"${MPDir}/server/sv_ranked_cmds.cpp"
 		)
 	source_group("server" FILES ${MPEngineAndDedServerFiles})
 	set(MPEngineAndDedFiles ${MPEngineAndDedFiles} ${MPEngineAndDedServerFiles})

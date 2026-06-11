@@ -2,38 +2,34 @@
 
 This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/OpenJK) modified for the **Jedaii Ranked Duel** server.
 
-## Added Features (Jedaii Ranked)
+## Features (Jedaii Ranked)
 
-### 1. Secure Session Persistence ("Bully's Cookie")
-Allows players to reconnect significantly faster without re-entering passwords.
-*   **Mechanism**: Stores a session "cookie" (IP + Name) for 1 hour upon successful login.
-*   **Safety**: Validates both **IP Address** and **Player Name** to prevent session hijacking on shared networks (LAN/WiFi).
-*   **Auto-Restore**: Automatically restores session when a matching client connects (`AUTH_RESTORE` log).
+This fork implements a fully native, self-contained ranking and progression system inside the OpenJK C++ game engine, requiring no external databases or scripts.
 
-### 2. New Server Commands (`sv_ccmds.cpp`)
-Targeted commands for the Ranked Node.js Bot integration.
+### 1. Native Player Accounts & Authentication
+*   **In-Game Commands**: Players register and log in directly in-game using chat commands (e.g. `!register <password>` and `!login <password>`).
+*   **JSON Persistence**: All player database profiles, stats, and configurations are saved locally in the `ranked/` folder as structured JSON databases (`accounts.json` and `config.json`).
+*   **Engine GUID Auto-Login**: Automatically links and logs players in via their client GUID (`cl_guid` / `ja_guid`) for a seamless experience.
 
-#### `sv_console <clientNum|all> "message"`
-*   **Description**: Sends a raw text message to a client's console.
-*   **Why**: Unlike `svtell` or `svprint`, this does **not** show in the chat box and has **no prefix**.
-*   **Usage**: Perfect for sending login instructions or secret tokens.
+### 2. Secure Session Persistence ("Bully's Cookie")
+*   **Fast Reconnect**: Allows players to reconnect quickly without typing passwords on every map change or game restart.
+*   **Mechanism**: Caches a session "cookie" (IP + Name) for 1 hour upon successful login.
+*   **Safety**: Validates both **IP Address** and **Player Name** to prevent session hijacking on shared networks.
 
-#### `sv_getplayer <clientNum>`
-*   **Description**: Returns detailed player information in **JSON format**.
-*   **Output**: `PLAYER_INFO: { "id": 0, "name": "Name", "ip": "1.2.3.4", "ping": 50 }`
-*   **Why**: reliable parsing for external bots (avoids regex errors with special characters in names).
+### 3. Native ELO Engine & Progression
+*   **Stat Calculation**: ELO, wins, losses, kills, and deaths are updated natively in the game engine.
+*   **Leveling System**: Players earn XP and credits from kills, streaks, and winning duels, progressing through dynamic, configurable rank titles (e.g., Youngling to Grand Master).
+*   **Rivalry Tracking**: Tracks duel histories and direct rival matchups between players.
 
-#### `sv_confirmlogin <clientNum>`
-*   **Description**: Used by the external Bot to confirm a successful login.
-*   **Effect**: Triggers the server to create/update the session cookie for that player.
+### 4. Interactive Events & Minigames
+*   **Daily Quests**: Generates automated daily quests for players to complete and earn rewards.
+*   **Trivia System**: Periodically broadcasts Star Wars trivia questions in chat, rewarding the first correct player.
+*   **Adventure Minigame**: A choice-based text adventure system playable directly via chat commands.
+*   **In-Game Shop**: Allows players to spend credits on XP boosts, ELO boosts, lucky charms, and custom win messages/sounds.
 
-### External Script Requirement
-This fork is designed to work in tandem with an **External Node.js Script (Bot)**.
-*   **How it works**: The OpenJK server handles the game, while the Node.js script handles Authentication, Ranking, and Database storage.
-*   **Setup**: The script usually runs on the same VPS (localhost) or a separate server, communicating via RCON.
-*   **Flow**:
-    1.  Server prints generic events (`AUTH_REQUEST`, `AUTH_RESTORE: <id> <name>`).
-    2.  Script reads logs -> checks database -> sends RCON commands (`sv_confirmlogin`, `sv_console`).
+### 5. Utility Server Commands (`sv_ccmds.cpp`)
+*   `sv_console <clientNum|all> "message"`: Sends a raw message to a client's console (no chat box notification, no prefix).
+*   `sv_getplayer <clientNum>`: Outputs detailed player details (name, IP, ping) in structured JSON format.
 
 ## Build Instructions (Legacy Support)
 This fork includes a custom `build_legacy.sh` script and `Dockerfile` to compile the binary for older Linux environments (Debian Bullseye / GLIBC 2.31) while using modern OpenJK source.

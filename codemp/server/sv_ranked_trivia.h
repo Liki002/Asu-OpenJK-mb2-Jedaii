@@ -1,0 +1,85 @@
+#ifndef SV_RANKED_TRIVIA_H
+#define SV_RANKED_TRIVIA_H
+
+typedef struct {
+    const char *question;
+    const char *answers[6]; // Up to 6 valid answers, null-terminated
+} rankedTrivia_t;
+
+// Ported directly from trivia.js
+static rankedTrivia_t sv_rankedTriviaQuestions[] = {
+    {"What was the name before Jedaii?", {"rogue jedi", NULL}},
+    {"Who created Jedaii?", {"vega", NULL}},
+    {"What does PB mean?", {"perfect block", NULL}},
+    {"What does ACM mean?", {"attack chain multiplier", NULL}},
+    {"What does ACC mean?", {"attack chain count", NULL}},
+    {"What does SB mean?", {"swing block", "swingblock", NULL}},
+    {"What does Mblock mean?", {"manual block", NULL}},
+    {"What does DFA mean?", {"death from above", NULL}},
+    {"What does HS mean?", {"half swing", "halfswing", NULL}},
+    {"What does BP mean?", {"block points", NULL}},
+    {"What does FP mean?", {"force points", "force power", NULL}},
+    {"What does FB mean?", {"force block", NULL}},
+    {"Who trained Luke?", {"yoda", NULL}},
+    {"What color is Mace Windu's saber?", {"purple", NULL}},
+    {"What is Chewbacca's home planet?", {"kashyyyk", NULL}},
+    {"Who built C-3PO?", {"anakin skywalker", NULL}},
+    {"Who used a saber but isn't a Jedi?", {"han solo", NULL}},
+    {"Who ordered the Clone Army?", {"sifo dyas", NULL}},
+    {"What is the Twi'leks' home planet?", {"ryloth", NULL}},
+    {"Who killed Jabba?", {"princess leia", "leia organa", "leia", NULL}},
+    {"What is Naboo's capital?", {"theed", NULL}},
+    {"What species is Admiral Ackbar?", {"mon calamari", NULL}},
+    {"Who made this ranking system?", {"likima", NULL}},
+    {"Who acted as Darth Vader?", {"david prowse", NULL}},
+    {"Who captured Han in 'Empire'?", {"boba fett", NULL}},
+    {"Who was Sidious' master?", {"darth plagueis", NULL}},
+    {"Who was the Jedi Order Grand Master?", {"yoda", NULL}},
+    {"What powers lightsabers?", {"kyber crystals", NULL}},
+    {"Who started the Galactic Empire?", {"emperor palpatine", NULL}},
+    {"What is Boba Fett's ship name?", {"slave I", "slave 1", "slavei", NULL}},
+    {"Who was Dooku's Sith apprentice?", {"asajj ventress", NULL}},
+    {"What was 'A New Hope's original title?", {"star wars", NULL}},
+    {"Who learned to survive death first?", {"quigon jinn", "qui-gon jinn", NULL}},
+    {"Who killed Qui-Gon Jinn?", {"darth maul", NULL}},
+    {"Can you block while crouching?", {"no", NULL}},
+    {"How long is the slap cooldown?", {"4 seconds", "4", "4 sec", NULL}},
+    {"How to avoid disarm or slap?", {"by swingblock", "by sb", "swingblock", "sb", NULL}},
+    {"What is the reward for PB?", {"damage negation", "no damage", "taking no damage", NULL}},
+    {"Which style has better defense?", {"staff", "white", NULL}},
+    {"How many ACC for a combo?", {"1", "1 acc", NULL}},
+    {"Do counters do more damage?", {"no", NULL}},
+    {"Who led the 212th Battalion?", {"obi wan", "kenobi", "obi wan kenobi", "obi-wan", "obi-wan kenobi", NULL}},
+    {"Who acted as Padme?", {"natalie portman", NULL}},
+    {"When was 'Revenge of the Sith' released?", {"2005", NULL}},
+    {"What was Rex and Ahsoka's last battle?", {"siege of mandalore", NULL}},
+    {"Who said 'I am the Senate'?", {"palpatine", "sheev palpatine", NULL}},
+    {"Which Jedi was on Tatooine?", {"quinlan vos", NULL}},
+    {"When was the Empire created?", {"19 bby", NULL}},
+    {"What is the Galactic Basic script?", {"aurebesh", NULL}},
+    {"What console command ends a duel?", {"duel_end", NULL}},
+    {"Is saber defense 3 better in dueling?", {"no", NULL}},
+    {"What's the MB2 map for 'Duel of the Fates'?", {"mb2_duel_dotf", NULL}},
+    {"How long is a duel round?", {"15 minutes", "15 min", "15", NULL}},
+    {"Do you lose BP holding attack?", {"yes", NULL}},
+    {"Which hosting company is best?", {"pineriver.dk", "pineriver", "pine river", NULL}},
+    {"Who was the original owner of the Millennium Falcon?", {"lando calrissian", "lando", NULL}},
+    {"What is the name of the forest moon home to the Ewoks?", {"endor", NULL}},
+    {"Who was the genetic template for the Republic's clone army?", {"jango fett", NULL}},
+    {"What planet was the Rebel's Echo Base located on?", {"hoth", NULL}},
+    {"What is the name of the Sith philosophy that dictates there can only be a master and an apprentice?", {"the rule of two", "rule of two", NULL}},
+    {"Who composed the iconic musical score for the Star Wars saga?", {"john williams", NULL}},
+    {"What is the real name of the character often called 'The Child' or 'Baby Yoda'?", {"grogu", NULL}},
+    {"What was Finn's stormtrooper designation before he defected?", {"fn-2187", NULL}},
+    {"On which planet did Obi-Wan Kenobi defeat Anakin Skywalker, leading to his transformation into Darth Vader?", {"mustafar", NULL}},
+    {"Who famously said, 'It's a trap!'?", {"admiral ackbar", "ackbar", NULL}},
+    {"What is the name of Chewbacca's signature weapon?", {"bowcaster", "wookiee bowcaster", NULL}},
+    {"What type of droid is R2-D2?", {"astromech", "astromech droid", NULL}},
+    {"What color were Ahsoka Tano's lightsabers after she left the Jedi Order?", {"white", NULL}},
+    {"In the original 1977 release of Star Wars, who shot first?", {"han solo", "han", NULL}},
+    {"What title is bestowed upon the leader of the Galactic Republic's Senate?", {"supreme chancellor", "chancellor", NULL}}
+};
+
+static const int sv_rankedTriviaCount = sizeof(sv_rankedTriviaQuestions) / sizeof(sv_rankedTriviaQuestions[0]);
+
+#endif // SV_RANKED_TRIVIA_H
