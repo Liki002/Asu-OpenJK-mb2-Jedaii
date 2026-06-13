@@ -102,6 +102,10 @@ int DuelCull(sharedEntity_t *ent, sharedEntity_t *touch) { //figure something ou
 	if (!sv_snapShotDuelCull->integer)
 		return 0;
 
+	if (isNPC(flatten(ent)) || isNPC(flatten(touch))) {
+		return 0;
+	}
+
 	if (isActor(ent) && isActor(touch)) {
 		if (!isDueling(ent) && !isDueling(touch)) { //2 players in ffa
 			return 0; //don't cull

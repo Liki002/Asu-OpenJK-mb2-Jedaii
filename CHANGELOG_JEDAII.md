@@ -1,9 +1,28 @@
 # Jedaii Ranked OpenJK Fork
-**Date**: 2026-05-11
+**Date**: 2026-06-13
 
 This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/OpenJK) modified for the **Jedaii Ranked Duel** server.
 
 ## Added Features (Jedaii Ranked)
+
+---
+
+### Session: 2026-06-13 — Exempt NPCs from Duel Culling & Fix Bone Remapping
+
+This session focused on fixing two major NPC-related issues: invisible NPCs and disappearing NPCs on spawning.
+
+#### 1. Exempt NPCs from Duel Culling
+- **NPC Culling Exemption**: Modified `DuelCull` in `codemp/server/duel_cull.cpp` to return `0` (do not cull, do not disable collision) if either entity is an NPC (`isNPC(flatten(ent)) || isNPC(flatten(touch))`).
+- **Rationale**: Prior to this fix, when a player entered a duel, the server's snapshot duel culling would identify NPCs as non-dueling actors and filter them out of the dueling player's snapshots. This caused NPCs to disappear immediately after spawning or starting a duel. This fix keeps NPCs visible and interactive for all players, regardless of their dueling state.
+
+#### 2. Revert Bone Remapping Commit
+- **Reverted 31304c14**: Reverted the bone-remapping commit which corrupted skeleton structures on 72-bone humanoid models for dedicated servers, causing all NPCs to become invisible.
+
+#### Files Modified
+- `codemp/server/duel_cull.cpp` (Exempt NPCs from Duel Culling)
+- `codemp/rd-dedicated/tr_model.cpp` (Revert bone remapping)
+- `codemp/rd-rend2/tr_model.cpp` (Revert bone remapping)
+- `codemp/rd-vanilla/tr_model.cpp` (Revert bone remapping)
 
 ---
 
