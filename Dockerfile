@@ -1,5 +1,5 @@
 # Builder image
-FROM ubuntu:18.04 as builder
+FROM debian:bookworm-slim AS builder
 
 # Install build tools and libraries
 RUN dpkg --add-architecture i386 &&\
@@ -17,6 +17,7 @@ RUN mkdir /usr/src/openjk/build.i386 &&\
 		-DCMAKE_INSTALL_PREFIX=/opt \
 		-DBuildMPCGame=OFF -DBuildMPEngine=OFF -DBuildMPRdVanilla=OFF -DBuildMPUI=OFF \
 		-DBuildSPEngine=OFF -DBuildSPGame=OFF -DBuildSPRdVanilla=OFF -DBuildMPRend2=OFF \
+		-DCMAKE_BUILD_TYPE=Release \
 		.. &&\
 	make &&\
 	make install
@@ -27,13 +28,14 @@ RUN mkdir /usr/src/openjk/build.x86_64 &&\
 	cmake -DCMAKE_INSTALL_PREFIX=/opt \
 		-DBuildMPCGame=OFF -DBuildMPEngine=OFF -DBuildMPRdVanilla=OFF -DBuildMPUI=OFF \
 		-DBuildSPEngine=OFF -DBuildSPGame=OFF -DBuildSPRdVanilla=OFF -DBuildMPRend2=OFF \
+		-DCMAKE_BUILD_TYPE=Release \
 		.. &&\
 	make &&\
 	make install
 
 
 # Server image
-FROM ubuntu:18.04
+FROM debian:bookworm-slim
 
 # Install utilities and libraries
 RUN dpkg --add-architecture i386 &&\
