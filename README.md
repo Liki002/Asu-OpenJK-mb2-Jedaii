@@ -1,6 +1,6 @@
 # Jedaii Ranked OpenJK Fork
 
-This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/OpenJK) modified for the **Jedaii Ranked Duel** server.
+This repository is a fork of [asutechio/OpenJK on GitLab](https://gitlab.com/asutechio/OpenJK/-/tree/Asutech) modified for the **Jedaii Ranked Duel** server.
 
 ## Features (Jedaii Ranked)
 
