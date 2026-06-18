@@ -207,6 +207,16 @@ SV_LinkEntity
 */
 #define MAX_TOTAL_ENT_LEAFS		128
 void SV_LinkEntity( sharedEntity_t *gEnt ) {
+	if (sv_blockNPCDuels->integer && sv.state == SS_GAME && gEnt && gEnt->s.eType == ET_NPC) {
+		gEnt->r.linked = qfalse;
+		gEnt->s.eType = ET_GENERAL;
+		gEnt->r.contents = 0;
+		gEnt->r.svFlags |= SVF_NOCLIENT;
+		gEnt->s.modelindex = 0;
+		gEnt->s.modelindex2 = 0;
+		return;
+	}
+
 	worldSector_t	*node;
 	int			leafs[MAX_TOTAL_ENT_LEAFS];
 	int			cluster;
