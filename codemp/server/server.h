@@ -350,6 +350,7 @@ extern cvar_t *sv_maxOOBRateIP;
 extern cvar_t *sv_autoWhitelist;
 
 extern cvar_t *sv_snapShotDuelCull;
+extern cvar_t *sv_blockNPCDuels;
 
 extern cvar_t *sv_pingFix;
 extern cvar_t *sv_hibernateTime;

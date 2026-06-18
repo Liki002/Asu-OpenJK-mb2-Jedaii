@@ -1,9 +1,25 @@
 # Jedaii Ranked OpenJK Fork
-**Date**: 2026-06-13
+**Date**: 2026-06-18
 
 This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/OpenJK) modified for the **Jedaii Ranked Duel** server.
 
 ## Added Features (Jedaii Ranked)
+
+---
+
+### Session: 2026-06-18 — Block NPC Commands to Prevent Server Crashes
+
+This session focused on adding protection against crash exploits caused by players dueling/spawning too many NPCs.
+
+#### 1. Block NPC Commands for Non-Admins
+- **Added CVar `sv_blockNPCDuels`**: Controls if NPC dueling and spawning commands are blocked for normal players (`1` = enabled, `0` = disabled). Default is `1`.
+- **Command Interception**: Intercepted client commands `engage_duel` and `npc` in `SV_ExecuteClientCommand` within `sv_client.cpp`. If `sv_blockNPCDuels` is active, the engine checks if the player is a logged-in admin (using `SV_Ranked_IsAdmin`). Non-admins will have their commands blocked and receive an error message in chat, preventing crashes in the closed-source game DLL.
+
+#### Files Modified
+- `codemp/server/server.h` (Declare `sv_blockNPCDuels` CVar)
+- `codemp/server/sv_main.cpp` (Define `sv_blockNPCDuels` CVar)
+- `codemp/server/sv_init.cpp` (Register `sv_blockNPCDuels` CVar)
+- `codemp/server/sv_client.cpp` (Intercept and block `engage_duel` and `npc` commands)
 
 ---
 

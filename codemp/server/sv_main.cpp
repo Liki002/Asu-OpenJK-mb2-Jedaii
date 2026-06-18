@@ -81,6 +81,7 @@ cvar_t *sv_maxOOBRateIP;
 cvar_t *sv_autoWhitelist;
 
 cvar_t *sv_snapShotDuelCull;
+cvar_t *sv_blockNPCDuels;
 
 cvar_t *sv_pingFix;
 cvar_t *sv_hibernateTime;

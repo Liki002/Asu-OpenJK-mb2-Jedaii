@@ -1785,6 +1785,18 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
   }
   // ----------------------------------------
 
+  // Block NPC duels / NPC spawns to prevent crash exploits
+  if (sv_blockNPCDuels->integer) {
+    const char *clientCmd = Cmd_Argv(0);
+    if (!Q_stricmp(clientCmd, "engage_duel") || !Q_stricmp(clientCmd, "npc")) {
+      extern qboolean SV_Ranked_IsAdmin(client_t *cl);
+      if (!SV_Ranked_IsAdmin(cl)) {
+        SV_SendServerCommand(cl, "chat \"^1Error: NPC duels and spawns are disabled on this server to prevent crashes.\"");
+        return;
+      }
+    }
+  }
+
   cmd = Cmd_Argv(0);
   arg1 = Cmd_Argv(1);
   arg2 = Cmd_Argv(2);
