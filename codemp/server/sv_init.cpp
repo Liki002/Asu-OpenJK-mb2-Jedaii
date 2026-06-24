@@ -1070,8 +1070,6 @@ void SV_Init(void) {
 
   sv_snapShotDuelCull = Cvar_Get("sv_snapShotDuelCull", "1", CVAR_NONE,
                                  "Snapshot-based duel isolation");
-  sv_blockNPCDuels = Cvar_Get("sv_blockNPCDuels", "1", CVAR_ARCHIVE,
-                              "Block NPC dueling and spawning commands for non-admins");
   sv_sessionStrict = Cvar_Get("sv_sessionStrict", "1", CVAR_ARCHIVE,
                               "Enforce strict IP session matching (1) or trust "
                               "GUID blindly (0)"); // RANKED
