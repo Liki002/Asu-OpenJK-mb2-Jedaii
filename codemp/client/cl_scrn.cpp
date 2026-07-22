@@ -595,10 +595,18 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float panelW = 178.0f;
 	float panelH = 42.0f;
 
-	// Translucent dark glass panel with smooth rounded corners & glowing cyan border
-	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.45f };
-	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.75f };
-	SCR_DrawRoundedGlassPanel( panelX, panelY, panelW, panelH, 4.0f, bgColor, borderColor );
+	// Render HD 32-bit Anti-Aliased Glass Panel Texture from PK3 if available
+	qhandle_t hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
+	if ( !hBox ) hBox = re->RegisterShader( "gfx/hud/rpg_hud_box.tga" );
+
+	if ( hBox ) {
+		SCR_DrawPic( panelX, panelY, panelW, panelH, hBox );
+	} else {
+		// Translucent dark glass panel with smooth rounded corners & glowing cyan border fallback
+		vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.45f };
+		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.75f };
+		SCR_DrawRoundedGlassPanel( panelX, panelY, panelW, panelH, 4.0f, bgColor, borderColor );
+	}
 
 	// Avatar Box (21x21)
 	float avatarX = panelX + 4.0f;
@@ -698,12 +706,19 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float barW = panelX + panelW - barX - 4.0f;
 	float barH = 10.0f;
 
-	// Progress Bar Container
-	vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.60f };
-	vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.85f };
-	SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
+	// Progress Bar Container (HD TGA or code fallback)
+	qhandle_t hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
+	if ( !hBarBg ) hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg.tga" );
 
-	// Dynamic Fill Bar
+	if ( hBarBg ) {
+		SCR_DrawPic( barX, barY, barW, barH, hBarBg );
+	} else {
+		vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.60f };
+		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.85f };
+		SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
+	}
+
+	// Dynamic Fill Bar (HD TGA or code fallback)
 	float fillX = barX + 1.0f;
 	float fillY = barY + 1.0f;
 	float maxFillW = barW - 2.0f;
@@ -711,8 +726,15 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float fillH = barH - 2.0f;
 
 	if ( fillW > 0.0f ) {
-		vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-		SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
+		qhandle_t hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill" );
+		if ( !hBarFill ) hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill.tga" );
+
+		if ( hBarFill ) {
+			SCR_DrawPic( fillX, fillY, fillW, fillH, hBarFill );
+		} else {
+			vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
+			SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
+		}
 	}
 
 	// XP Numeric Readout (Green text over progress bar)
