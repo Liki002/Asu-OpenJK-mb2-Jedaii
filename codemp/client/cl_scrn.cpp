@@ -573,7 +573,7 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 			continue;
 		}
 		SCR_DrawChar( (int)xx, (int)y, charSize, *s );
-		xx += (charSize * 0.62f);
+		xx += (charSize * 0.60f);
 		s++;
 	}
 	re->SetColor( NULL );
@@ -587,8 +587,15 @@ Renders client-side RPG HUD Overlay (Supports Style 0 Classic & Style 1 Bottom S
 ==================
 */
 static float s_visualXP = -1.0f;
+static qhandle_t s_hBox = 0;
+static qhandle_t s_hBarBg = 0;
+static qhandle_t s_hBarFill = 0;
+static qhandle_t s_hAvatar = 0;
 
 void SCR_DrawRPGHUDOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) {
+		return;
+	}
 	if ( !cg_drawRPGHUD || !cg_drawRPGHUD->integer ) {
 		return;
 	}
@@ -642,6 +649,11 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
+	// Cache shaders once
+	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
+	if ( !s_hBarBg ) s_hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
+	if ( !s_hBarFill ) s_hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill" );
+
 	// ========================================================
 	// STYLE 1: BOTTOM SLEEK BAR (Borderless Circular Avatar & Floating Elements)
 	// ========================================================
@@ -649,31 +661,20 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float panelW = 220.0f;
 		float panelH = 40.0f;
 
-		// Circular Profile Picture Frame (Direct circular rendering, 100% transparent outside circle)
+		// Circular Profile Picture Frame (Direct circular rendering)
 		float avatarX = panelX + 4.0f;
 		float avatarY = panelY + 2.0f;
 		float avatarSize = 24.0f;
 
 		qboolean avatarDrawn = qfalse;
-		const char *avatarPaths[8] = {
-			(cg_rpg_avatar && cg_rpg_avatar->string[0]) ? cg_rpg_avatar->string : "gfx/hud/avatar_default",
-			"gfx/hud/avatar_default",
-			"gfx/hud/avatar_default.jpg",
-			"gfx/hud/avatar_default.tga",
-			"gfx/hud/avatar_sith.jpg",
-			"gfx/hud/avatar_sith.tga",
-			"gfx/rpg/avatar_default",
-			"gfx/2d/logos/mb_jedaii"
-		};
+		if ( !s_hAvatar ) {
+			s_hAvatar = re->RegisterShader( (cg_rpg_avatar && cg_rpg_avatar->string[0]) ? cg_rpg_avatar->string : "gfx/hud/avatar_default" );
+			if ( !s_hAvatar ) s_hAvatar = re->RegisterShader( "gfx/hud/avatar_default" );
+		}
 
-		for ( int i = 0; i < 8; i++ ) {
-			if ( !avatarPaths[i] || !avatarPaths[i][0] ) continue;
-			qhandle_t hAvatar = re->RegisterShader( avatarPaths[i] );
-			if ( hAvatar ) {
-				SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, hAvatar );
-				avatarDrawn = qtrue;
-				break;
-			}
+		if ( s_hAvatar ) {
+			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
+			avatarDrawn = qtrue;
 		}
 
 		if ( !avatarDrawn ) {
@@ -705,11 +706,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float barW = panelX + panelW - barX - 4.0f;
 		float barH = 10.0f;
 
-		qhandle_t hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
-		if ( !hBarBg ) hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg.tga" );
-
-		if ( hBarBg ) {
-			SCR_DrawPic( barX, barY, barW, barH, hBarBg );
+		if ( s_hBarBg ) {
+			SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
 		} else {
 			vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
 			vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
@@ -723,11 +721,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float fillH = barH - 2.0f;
 
 		if ( fillW > 0.0f ) {
-			qhandle_t hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill" );
-			if ( !hBarFill ) hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill.tga" );
-
-			if ( hBarFill ) {
-				SCR_DrawPic( fillX, fillY, fillW, fillH, hBarFill );
+			if ( s_hBarFill ) {
+				SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
 			} else {
 				vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
 				SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
@@ -750,44 +745,28 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float panelW = 178.0f;
 	float panelH = 42.0f;
 
-	// Render HD 32-bit Anti-Aliased Glass Panel Texture from PK3 if available
-	qhandle_t hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
-	if ( !hBox ) hBox = re->RegisterShader( "gfx/hud/rpg_hud_box.tga" );
-
-	if ( hBox ) {
-		SCR_DrawPic( panelX, panelY, panelW, panelH, hBox );
+	if ( s_hBox ) {
+		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hBox );
 	} else {
-		// Ultra-subtle translucent glass (20% opacity) with thin 1px cyan border (40% alpha glow)
 		vec4_t bgColor     = { 0.02f, 0.05f, 0.10f, 0.20f };
 		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.40f };
 		SCR_DrawRoundedGlassPanel( panelX, panelY, panelW, panelH, 4.0f, bgColor, borderColor );
 	}
 
-	// Avatar Circle Frame (Clean circular rendering without chunky square inner box)
+	// Avatar Circle Frame
 	float avatarX = panelX + 4.0f;
 	float avatarY = panelY + 3.0f;
 	float avatarSize = 22.0f;
 
 	qboolean avatarDrawn = qfalse;
-	const char *avatarPaths[8] = {
-		(cg_rpg_avatar && cg_rpg_avatar->string[0]) ? cg_rpg_avatar->string : "gfx/hud/avatar_default",
-		"gfx/hud/avatar_default",
-		"gfx/hud/avatar_default.jpg",
-		"gfx/hud/avatar_default.tga",
-		"gfx/hud/avatar_sith.jpg",
-		"gfx/hud/avatar_sith.tga",
-		"gfx/rpg/avatar_default",
-		"gfx/2d/logos/mb_jedaii"
-	};
+	if ( !s_hAvatar ) {
+		s_hAvatar = re->RegisterShader( (cg_rpg_avatar && cg_rpg_avatar->string[0]) ? cg_rpg_avatar->string : "gfx/hud/avatar_default" );
+		if ( !s_hAvatar ) s_hAvatar = re->RegisterShader( "gfx/hud/avatar_default" );
+	}
 
-	for ( int i = 0; i < 8; i++ ) {
-		if ( !avatarPaths[i] || !avatarPaths[i][0] ) continue;
-		qhandle_t hAvatar = re->RegisterShader( avatarPaths[i] );
-		if ( hAvatar ) {
-			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, hAvatar );
-			avatarDrawn = qtrue;
-			break;
-		}
+	if ( s_hAvatar ) {
+		SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
+		avatarDrawn = qtrue;
 	}
 
 	if ( !avatarDrawn ) {
@@ -800,17 +779,17 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		SCR_FillRect( cx + 3.0f, cy - 7.0f, 2.0f, 14.0f, saberCyan );
 	}
 
-	// Level Badge (placed under Avatar circle)
+	// Level Badge
 	char levelStr[32];
 	Com_sprintf( levelStr, sizeof(levelStr), "^3Lv %d", level );
 	float levelX = avatarX + 1.0f;
 	float levelY = avatarY + avatarSize + 2.0f;
 	SCR_DrawVirtualString( levelX, levelY, 4.2f, levelStr, whiteColor );
 
-	// Right Content Column (Name, Rank | FR, XP Bar)
+	// Right Content Column
 	float textX = avatarX + avatarSize + 5.0f;
 
-	// Line 1: Player Name (Crisp white text)
+	// Line 1: Player Name
 	char nameStr[96];
 	Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 3.0f, 5.2f, nameStr, whiteColor );
@@ -820,25 +799,20 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d FR", rankTitle, fr );
 	SCR_DrawVirtualString( textX, panelY + 14.5f, 4.3f, rankStr, whiteColor );
 
-	// Line 3: Dynamic XP Progress Bar & Smooth Animated Fill
+	// Line 3: Dynamic XP Progress Bar
 	float barX = textX;
 	float barY = panelY + 26.5f;
 	float barW = panelX + panelW - barX - 4.0f;
 	float barH = 10.0f;
 
-	// Progress Bar Container (HD TGA or code fallback)
-	qhandle_t hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
-	if ( !hBarBg ) hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg.tga" );
-
-	if ( hBarBg ) {
-		SCR_DrawPic( barX, barY, barW, barH, hBarBg );
+	if ( s_hBarBg ) {
+		SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
 	} else {
 		vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.60f };
 		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.85f };
 		SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
 	}
 
-	// Dynamic Fill Bar (HD TGA or code fallback)
 	float fillX = barX + 1.0f;
 	float fillY = barY + 1.0f;
 	float maxFillW = barW - 2.0f;
@@ -846,26 +820,21 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float fillH = barH - 2.0f;
 
 	if ( fillW > 0.0f ) {
-		qhandle_t hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill" );
-		if ( !hBarFill ) hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill.tga" );
-
-		if ( hBarFill ) {
-			SCR_DrawPic( fillX, fillY, fillW, fillH, hBarFill );
+		if ( s_hBarFill ) {
+			SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
 		} else {
 			vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
 			SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
 		}
 	}
 
-	// XP Numeric Readout (Green text over progress bar)
 	char xpText[64];
 	Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", (int)s_visualXP, xpMax );
-	float textWidthPixels = (strlen(xpText) * 3.8f * 0.62f);
+	float textWidthPixels = (strlen(xpText) * 3.8f * 0.60f);
 	float xpTextX = barX + barW - textWidthPixels - 3.0f;
 	if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
 	SCR_DrawVirtualString( xpTextX, barY + 1.5f, 3.8f, xpText, whiteColor );
 }
-
 
 topLeaderboardEntry_t g_topLeaderboard[10];
 int g_topLeaderboardCount = 0;
@@ -878,6 +847,9 @@ Renders sleek modal popup window showing top 10 ranked players with smooth round
 ==================
 */
 void SCR_DrawLeaderboardOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) {
+		return;
+	}
 	if ( !cg_drawLeaderboard || !cg_drawLeaderboard->integer ) {
 		return;
 	}
@@ -918,45 +890,39 @@ void SCR_DrawLeaderboardOverlay( void ) {
 	SCR_DrawVirtualString( winX + 325.0f, colY, 5.5f, "^5FR ELO", whiteColor );
 
 	// Render Rows
-	float rowY = colY + 18.0f;
-	float rowH = 21.0f;
+	float rowStartY = colY + 18.0f;
+	float rowHeight = 22.0f;
 
-	if ( g_topLeaderboardCount == 0 ) {
-		SCR_DrawVirtualString( winX + 100.0f, rowY + 40.0f, 6.0f, "^7Loading leaderboard data...", whiteColor );
-	} else {
-		for ( int i = 0; i < g_topLeaderboardCount && i < 10; i++ ) {
+	for ( int i = 0; i < 10; i++ ) {
+		float currentY = rowStartY + (i * rowHeight);
+
+		// Alternating row background highlight
+		if ( i % 2 == 0 ) {
+			vec4_t rowBg = { 0.05f, 0.12f, 0.25f, 0.35f };
+			SCR_DrawRoundedGlassPanel( winX + 6.0f, currentY, winW - 12.0f, rowHeight - 2.0f, 2.0f, rowBg, NULL );
+		}
+
+		if ( i < g_topLeaderboardCount ) {
 			topLeaderboardEntry_t *e = &g_topLeaderboard[i];
-			float currentY = rowY + (i * rowH);
 
-			// Alternating row background tint with rounded edges
-			if ( i % 2 == 0 ) {
-				vec4_t rowBg = { 0.06f, 0.14f, 0.26f, 0.35f };
-				SCR_DrawRoundedGlassPanel( winX + 5.0f, currentY - 1.0f, winW - 10.0f, 19.0f, 2.0f, rowBg, NULL );
-			}
-
-			// Rank Badge Color
-			char rankBadge[16];
-			if ( e->rank == 1 ) Com_sprintf( rankBadge, sizeof(rankBadge), "^3%2d.", e->rank );      // Gold
-			else if ( e->rank == 2 ) Com_sprintf( rankBadge, sizeof(rankBadge), "^7%2d.", e->rank ); // Silver
-			else if ( e->rank == 3 ) Com_sprintf( rankBadge, sizeof(rankBadge), "^1%2d.", e->rank ); // Bronze
-			else Com_sprintf( rankBadge, sizeof(rankBadge), "^5%2d.", e->rank );
-
-			// Rank #
-			SCR_DrawVirtualString( winX + 12.0f, currentY + 2.0f, 5.2f, rankBadge, whiteColor );
+			// Rank position #
+			char numStr[16];
+			Com_sprintf( numStr, sizeof(numStr), (i < 3) ? "^3#%d" : "^7#%d", i + 1 );
+			SCR_DrawVirtualString( winX + 14.0f, currentY + 2.0f, 5.2f, numStr, whiteColor );
 
 			// Player Name
-			char nameStr[64];
-			Com_sprintf( nameStr, sizeof(nameStr), "^7%.18s", e->displayName );
-			SCR_DrawVirtualString( winX + 38.0f, currentY + 2.0f, 5.2f, nameStr, whiteColor );
+			char pNameStr[64];
+			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%.16s", e->displayName );
+			SCR_DrawVirtualString( winX + 38.0f, currentY + 2.0f, 5.2f, pNameStr, whiteColor );
 
-			// Level Badge
+			// Level
 			char lvlStr[16];
-			Com_sprintf( lvlStr, sizeof(lvlStr), "^3Lv %d", e->level );
-			SCR_DrawVirtualString( winX + 195.0f, currentY + 2.0f, 5.0f, lvlStr, whiteColor );
+			Com_sprintf( lvlStr, sizeof(lvlStr), "^3%d", e->level );
+			SCR_DrawVirtualString( winX + 195.0f, currentY + 2.0f, 5.2f, lvlStr, whiteColor );
 
-			// Rank Title (Full rank title: "Grand Master" fits cleanly!)
+			// Rank title
 			char titleStr[32];
-			Com_sprintf( titleStr, sizeof(titleStr), "^3%.16s", e->rankTitle );
+			Com_sprintf( titleStr, sizeof(titleStr), "^3%.10s", e->rankTitle );
 			SCR_DrawVirtualString( winX + 235.0f, currentY + 2.0f, 5.0f, titleStr, whiteColor );
 
 			// FR ELO
@@ -1029,7 +995,6 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			CL_CGameRendering( stereoFrame );
 			SCR_DrawRPGHUDOverlay();
 			SCR_DrawDemoRecording();
-			SCR_DrawRPGHUDOverlay();
 			SCR_DrawLeaderboardOverlay();
 			break;
 		}
