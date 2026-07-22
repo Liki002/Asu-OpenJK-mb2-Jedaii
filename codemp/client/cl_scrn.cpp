@@ -98,7 +98,7 @@ void SCR_DrawPic( float x, float y, float width, float height, qhandle_t hShader
 
 /*
 ** SCR_DrawChar
-** chars are drawn at 640*480 virtual screen size
+** chars are drawn at 640*480 virtual screen size with clean 0.60 width ratio
 */
 static void SCR_DrawChar( int x, int y, float size, int ch ) {
 	int row, col;
@@ -117,7 +117,7 @@ static void SCR_DrawChar( int x, int y, float size, int ch ) {
 
 	ax = x;
 	ay = y;
-	aw = size;
+	aw = size * 0.60f; // Proportional 0.60 width matching font step
 	ah = size;
 
 	row = ch>>4;
@@ -799,44 +799,44 @@ void SCR_DrawLeaderboardOverlay( void ) {
 		return;
 	}
 
-	// Modal Window Dimensions (Sleek 380x290 centered modal)
-	float winX = 130.0f;
-	float winY = 80.0f;
-	float winW = 380.0f;
-	float winH = 290.0f;
+	// Modal Window Dimensions (Expanded 480x320 centered modal)
+	float winX = 80.0f;
+	float winY = 65.0f;
+	float winW = 480.0f;
+	float winH = 320.0f;
 
 	// Translucent dark glass panel with smooth rounded corners & glowing cyan border
-	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.85f };
+	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.88f };
 	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
 	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
 
 	// Header background bar with rounded top corners
-	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.85f };
-	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
+	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.88f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, 3.0f, headerBg, NULL );
 
 	// Title
 	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	SCR_DrawVirtualString( winX + 100.0f, winY + 8.0f, 6.8f, "^3TOP RANKED DUELISTS", yellowCol );
+	SCR_DrawVirtualString( winX + 140.0f, winY + 8.0f, 7.2f, "^3TOP RANKED DUELISTS", yellowCol );
 
 	// Close Button instruction
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 8.0f, 5.5f, "^1[ESC]", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 45.0f, winY + 8.0f, 5.8f, "^1[ESC]", yellowCol );
 
 	// Column Headers Divider line
 	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.70f };
-	float colY = winY + 34.0f;
-	SCR_FillRect( winX + 6.0f, colY + 14.0f, winW - 12.0f, 1.0f, divColor );
+	float colY = winY + 36.0f;
+	SCR_FillRect( winX + 6.0f, colY + 16.0f, winW - 12.0f, 1.0f, divColor );
 
-	// Column Headers: # | PLAYER NAME | LVL | RANK | FR ELO
-	SCR_DrawVirtualString( winX + 14.0f, colY, 5.5f, "^5#", whiteColor );
-	SCR_DrawVirtualString( winX + 38.0f, colY, 5.5f, "^5PLAYER NAME", whiteColor );
-	SCR_DrawVirtualString( winX + 195.0f, colY, 5.5f, "^5LVL", whiteColor );
-	SCR_DrawVirtualString( winX + 235.0f, colY, 5.5f, "^5RANK", whiteColor );
-	SCR_DrawVirtualString( winX + 325.0f, colY, 5.5f, "^5FR ELO", whiteColor );
+	// Column Headers: # | PLAYER NAME | LVL | RANK TITLE | FR ELO
+	SCR_DrawVirtualString( winX + 16.0f, colY, 5.8f, "^5#", whiteColor );
+	SCR_DrawVirtualString( winX + 48.0f, colY, 5.8f, "^5PLAYER NAME", whiteColor );
+	SCR_DrawVirtualString( winX + 230.0f, colY, 5.8f, "^5LVL", whiteColor );
+	SCR_DrawVirtualString( winX + 280.0f, colY, 5.8f, "^5RANK TITLE", whiteColor );
+	SCR_DrawVirtualString( winX + 400.0f, colY, 5.8f, "^5FR ELO", whiteColor );
 
 	// Render Rows
-	float rowStartY = colY + 18.0f;
-	float rowHeight = 22.0f;
+	float rowStartY = colY + 20.0f;
+	float rowHeight = 23.0f;
 
 	for ( int i = 0; i < 10; i++ ) {
 		float currentY = rowStartY + (i * rowHeight);
@@ -853,32 +853,32 @@ void SCR_DrawLeaderboardOverlay( void ) {
 			// Rank position #
 			char numStr[16];
 			Com_sprintf( numStr, sizeof(numStr), (i < 3) ? "^3#%d" : "^7#%d", i + 1 );
-			SCR_DrawVirtualString( winX + 14.0f, currentY + 2.0f, 5.2f, numStr, whiteColor );
+			SCR_DrawVirtualString( winX + 16.0f, currentY + 2.0f, 5.5f, numStr, whiteColor );
 
-			// Player Name
+			// Player Name (up to 20 characters)
 			char pNameStr[64];
-			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%.16s", e->displayName );
-			SCR_DrawVirtualString( winX + 38.0f, currentY + 2.0f, 5.2f, pNameStr, whiteColor );
+			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%.20s", e->displayName );
+			SCR_DrawVirtualString( winX + 48.0f, currentY + 2.0f, 5.5f, pNameStr, whiteColor );
 
 			// Level
 			char lvlStr[16];
 			Com_sprintf( lvlStr, sizeof(lvlStr), "^3%d", e->level );
-			SCR_DrawVirtualString( winX + 195.0f, currentY + 2.0f, 5.2f, lvlStr, whiteColor );
+			SCR_DrawVirtualString( winX + 230.0f, currentY + 2.0f, 5.5f, lvlStr, whiteColor );
 
-			// Rank title
+			// Rank title (Full titles up to 20 characters: "Grand Master" fits cleanly!)
 			char titleStr[32];
-			Com_sprintf( titleStr, sizeof(titleStr), "^3%.10s", e->rankTitle );
-			SCR_DrawVirtualString( winX + 235.0f, currentY + 2.0f, 5.0f, titleStr, whiteColor );
+			Com_sprintf( titleStr, sizeof(titleStr), "^3%.20s", e->rankTitle );
+			SCR_DrawVirtualString( winX + 280.0f, currentY + 2.0f, 5.2f, titleStr, whiteColor );
 
 			// FR ELO
 			char frStr[32];
 			Com_sprintf( frStr, sizeof(frStr), "^2%d", e->fr );
-			SCR_DrawVirtualString( winX + 325.0f, currentY + 2.0f, 5.2f, frStr, whiteColor );
+			SCR_DrawVirtualString( winX + 400.0f, currentY + 2.0f, 5.5f, frStr, whiteColor );
 		}
 	}
 
 	// Footer instruction
-	SCR_DrawVirtualString( winX + 85.0f, winY + winH - 14.0f, 5.0f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!top^7 to close", whiteColor );
+	SCR_DrawVirtualString( winX + 120.0f, winY + winH - 15.0f, 5.2f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!top^7 to close", whiteColor );
 }
 
 //=======================================================
