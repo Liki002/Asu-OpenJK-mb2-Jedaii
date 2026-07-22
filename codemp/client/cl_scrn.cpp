@@ -681,12 +681,14 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		}
 
 		if ( !avatarDrawn ) {
-			vec4_t emblemGold = { 0.95f, 0.80f, 0.20f, 0.95f };
-			vec4_t emblemCyan = { 0.20f, 0.85f, 1.00f, 0.95f };
+			vec4_t whiteVector = { 0.95f, 0.95f, 0.95f, 0.90f };
+			vec4_t saberCyan   = { 0.00f, 0.85f, 1.00f, 0.95f };
 			float cx = avatarX + avatarSize * 0.5f;
 			float cy = avatarY + avatarSize * 0.5f;
-			SCR_FillRect( cx - 1.0f, cy - 6.0f, 2.0f, 12.0f, emblemCyan );
-			SCR_FillRect( cx - 5.0f, cy - 2.0f, 10.0f, 2.0f, emblemGold );
+			// Minimalist monochrome vector hooded Jedi silhouette & saber
+			SCR_FillRect( cx - 4.0f, cy - 6.0f, 8.0f, 4.0f, whiteVector );  // Hood top
+			SCR_FillRect( cx - 5.0f, cy - 2.0f, 10.0f, 7.0f, whiteVector );  // Robe body
+			SCR_FillRect( cx + 3.0f, cy - 8.0f, 2.0f, 16.0f, saberCyan );   // Glowing lightsaber blade
 		}
 
 		// Player Info Column next to Circular Avatar
