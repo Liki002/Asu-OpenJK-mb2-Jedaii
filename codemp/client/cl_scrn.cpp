@@ -589,10 +589,10 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		}
 	}
 
-	// Dynamic position & compact scaled dimensions (158x42 virtual 640x480 coordinates)
+	// Dynamic position & compact scaled dimensions (178x42 virtual 640x480 coordinates)
 	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : defaultX;
 	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : defaultY;
-	float panelW = 158.0f;
+	float panelW = 178.0f;
 	float panelH = 42.0f;
 
 	// Translucent dark glass panel with smooth rounded corners & glowing cyan border
@@ -667,9 +667,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 3.5f, 5.0f, nameStr, whiteColor );
 
-	// Line 2: Rank Title & Force Rating ELO
+	// Line 2: Rank Title & Force Rating ELO (Full rank titles up to 20 characters)
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.12s ^7|^2 %d FR", rankTitle, fr );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.20s ^7|^2 %d FR", rankTitle, fr );
 	SCR_DrawVirtualString( textX, panelY + 14.0f, 4.2f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar & Smooth Animated Fill
