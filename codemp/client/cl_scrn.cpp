@@ -581,6 +581,73 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 
 /*
 ==================
+SCR_DrawMBIICapsule
+
+Renders MBII-style metallic glass capsule matching bottom-left health & force gauges.
+==================
+*/
+static void SCR_DrawMBIICapsule( float x, float y, float w, float h, const float *bgColor, const float *borderColor ) {
+	if ( w <= 0 || h <= 0 ) return;
+
+	// Fill dark metallic capsule body
+	SCR_FillRect( x + 3.0f, y, w - 6.0f, h, bgColor );
+	SCR_FillRect( x + 1.0f, y + 2.0f, 2.0f, h - 4.0f, bgColor );
+	SCR_FillRect( x + w - 3.0f, y + 2.0f, 2.0f, h - 4.0f, bgColor );
+
+	// Thin glowing cyan capsule border
+	if ( borderColor ) {
+		SCR_FillRect( x + 3.0f, y, w - 6.0f, 1.0f, borderColor );             // Top
+		SCR_FillRect( x + 3.0f, y + h - 1.0f, w - 6.0f, 1.0f, borderColor ); // Bottom
+		SCR_FillRect( x, y + 3.0f, 1.0f, h - 6.0f, borderColor );             // Left cap
+		SCR_FillRect( x + w - 1.0f, y + 3.0f, 1.0f, h - 6.0f, borderColor ); // Right cap
+
+		// Stepped corner caps
+		SCR_FillRect( x + 1.0f, y + 1.0f, 2.0f, 1.0f, borderColor );
+		SCR_FillRect( x + 1.0f, y + 1.0f, 1.0f, 2.0f, borderColor );
+
+		SCR_FillRect( x + w - 3.0f, y + 1.0f, 2.0f, 1.0f, borderColor );
+		SCR_FillRect( x + w - 2.0f, y + 1.0f, 1.0f, 2.0f, borderColor );
+
+		SCR_FillRect( x + 1.0f, y + h - 2.0f, 2.0f, 1.0f, borderColor );
+		SCR_FillRect( x + 1.0f, y + h - 3.0f, 1.0f, 2.0f, borderColor );
+
+		SCR_FillRect( x + w - 3.0f, y + h - 2.0f, 2.0f, 1.0f, borderColor );
+		SCR_FillRect( x + w - 2.0f, y + h - 3.0f, 1.0f, 2.0f, borderColor );
+	}
+}
+
+/*
+==================
+SCR_DrawJediVectorEmblem
+
+Renders sharp Jedi Order lightsaber wings emblem inside a circular ring.
+==================
+*/
+static void SCR_DrawJediVectorEmblem( float cx, float cy, float radius ) {
+	vec4_t ringCyan  = { 0.00f, 0.70f, 1.00f, 0.75f };
+	vec4_t innerBg   = { 0.04f, 0.10f, 0.20f, 0.65f };
+	vec4_t saberGold = { 1.00f, 0.85f, 0.20f, 0.95f };
+	vec4_t saberCyan = { 0.20f, 0.90f, 1.00f, 0.95f };
+
+	// Inner dark circle fill
+	SCR_FillRect( cx - radius + 2.0f, cy - radius + 2.0f, (radius - 2.0f) * 2.0f, (radius - 2.0f) * 2.0f, innerBg );
+
+	// Circular ring border
+	SCR_FillRect( cx - radius + 3.0f, cy - radius, radius * 2.0f - 6.0f, 1.0f, ringCyan );
+	SCR_FillRect( cx - radius + 3.0f, cy + radius - 1.0f, radius * 2.0f - 6.0f, 1.0f, ringCyan );
+	SCR_FillRect( cx - radius, cy - radius + 3.0f, 1.0f, radius * 2.0f - 6.0f, ringCyan );
+	SCR_FillRect( cx + radius - 1.0f, cy - radius + 3.0f, 1.0f, radius * 2.0f - 6.0f, ringCyan );
+
+	// Jedi Lightsaber Wings & Central Blade
+	SCR_FillRect( cx - 1.0f, cy - radius + 3.0f, 2.0f, radius * 2.0f - 6.0f, saberCyan ); // Vertical blade
+	SCR_FillRect( cx - 5.0f, cy, 10.0f, 1.5f, saberGold );                                // Crossguard
+	SCR_FillRect( cx - 7.0f, cy - 3.0f, 3.0f, 1.5f, saberGold );                          // Left wing tip
+	SCR_FillRect( cx + 4.0f, cy - 3.0f, 3.0f, 1.5f, saberGold );                          // Right wing tip
+	SCR_FillRect( cx - 3.0f, cy + 3.0f, 6.0f, 1.5f, saberGold );                          // Hilt base
+}
+
+/*
+==================
 SCR_DrawRPGHUDOverlay
 
 Renders client-side RPG HUD Overlay (Supports Style 0 Classic & Style 1 Bottom Sleek Bar)
@@ -646,23 +713,19 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
 	// ========================================================
-	// STYLE 1: BOTTOM SLEEK BAR (Borderless Floating Elements)
+	// STYLE 1: BOTTOM SLEEK BAR (MBII Capsule Floating Elements)
 	// ========================================================
 	if ( style == 1 ) {
 		float panelW = 220.0f;
 
-		// Circular Avatar Frame (Vector Hooded Jedi Emblem)
+		// Circular Avatar Frame (Jedi Order Wings Emblem)
 		float avatarX = panelX + 4.0f;
 		float avatarY = panelY + 2.0f;
 		float avatarSize = 24.0f;
 
-		vec4_t whiteVector = { 0.95f, 0.95f, 0.95f, 0.90f };
-		vec4_t saberCyan   = { 0.00f, 0.85f, 1.00f, 0.95f };
 		float cx = avatarX + avatarSize * 0.5f;
 		float cy = avatarY + avatarSize * 0.5f;
-		SCR_FillRect( cx - 4.0f, cy - 6.0f, 8.0f, 4.0f, whiteVector );
-		SCR_FillRect( cx - 5.0f, cy - 2.0f, 10.0f, 7.0f, whiteVector );
-		SCR_FillRect( cx + 3.0f, cy - 8.0f, 2.0f, 16.0f, saberCyan );
+		SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
 
 		// Player Info Column next to Circular Avatar
 		float textX = avatarX + avatarSize + 6.0f;
@@ -677,7 +740,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		Com_sprintf( rankStr, sizeof(rankStr), "^3%.14s ^7|^2 %d FR", rankTitle, fr );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
 
-		// Line 3: Sleek Horizontal XP Bar (Floating MBII style track & cyan fill)
+		// Line 3: Sleek Horizontal XP Bar (Floating MBII style capsule track & cyan fill)
 		float barX = textX;
 		float barY = panelY + 25.0f;
 		float barW = panelX + panelW - barX - 4.0f;
@@ -685,7 +748,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
 		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
-		SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
+		SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
 
 		float fillX = barX + 1.0f;
 		float fillY = barY + 1.0f;
@@ -695,7 +758,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		if ( fillW > 0.0f ) {
 			vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-			SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
+			SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
 		}
 
 		// XP Numeric Readout Overlay
@@ -709,58 +772,54 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// ========================================================
-	// STYLE 0: CLASSIC GLASS PANEL CARD (Ultra-Transparent & Thin Cyan Border)
+	// STYLE 0: CLASSIC GLASS PANEL CARD (MBII Capsule Aesthetics & Thin Cyan Border)
 	// ========================================================
-	float panelW = 178.0f;
-	float panelH = 42.0f;
+	float panelW = 195.0f;
+	float panelH = 46.0f;
 
-	// Ultra-subtle translucent glass (20% opacity) with thin 1px cyan border (40% alpha glow)
+	// Ultra-subtle MBII dark glass capsule (20% opacity) with thin 1px cyan border (40% alpha glow)
 	vec4_t bgColor     = { 0.02f, 0.05f, 0.10f, 0.20f };
 	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.40f };
-	SCR_DrawRoundedGlassPanel( panelX, panelY, panelW, panelH, 4.0f, bgColor, borderColor );
+	SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, bgColor, borderColor );
 
 	// Avatar Circle Frame
-	float avatarX = panelX + 4.0f;
-	float avatarY = panelY + 3.0f;
+	float avatarX = panelX + 5.0f;
+	float avatarY = panelY + 4.0f;
 	float avatarSize = 22.0f;
 
-	vec4_t whiteVector = { 0.95f, 0.95f, 0.95f, 0.90f };
-	vec4_t saberCyan   = { 0.00f, 0.85f, 1.00f, 0.95f };
 	float cx = avatarX + avatarSize * 0.5f;
 	float cy = avatarY + avatarSize * 0.5f;
-	SCR_FillRect( cx - 4.0f, cy - 5.0f, 8.0f, 4.0f, whiteVector );
-	SCR_FillRect( cx - 5.0f, cy - 1.0f, 10.0f, 6.0f, whiteVector );
-	SCR_FillRect( cx + 3.0f, cy - 7.0f, 2.0f, 14.0f, saberCyan );
+	SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
 
 	// Level Badge
 	char levelStr[32];
 	Com_sprintf( levelStr, sizeof(levelStr), "^3Lv %d", level );
-	float levelX = avatarX + 1.0f;
+	float levelX = avatarX;
 	float levelY = avatarY + avatarSize + 2.0f;
 	SCR_DrawVirtualString( levelX, levelY, 4.2f, levelStr, whiteColor );
 
 	// Right Content Column
-	float textX = avatarX + avatarSize + 5.0f;
+	float textX = avatarX + avatarSize + 6.0f;
 
 	// Line 1: Player Name
 	char nameStr[96];
 	Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", playerName );
-	SCR_DrawVirtualString( textX, panelY + 3.0f, 5.2f, nameStr, whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
 
 	// Line 2: Rank Title & Force Rating ELO
 	char rankStr[96];
 	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d FR", rankTitle, fr );
-	SCR_DrawVirtualString( textX, panelY + 14.5f, 4.3f, rankStr, whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.3f, rankStr, whiteColor );
 
-	// Line 3: Dynamic XP Progress Bar
+	// Line 3: Dynamic XP Progress Bar Capsule
 	float barX = textX;
-	float barY = panelY + 26.5f;
-	float barW = panelX + panelW - barX - 4.0f;
+	float barY = panelY + 28.5f;
+	float barW = panelX + panelW - barX - 5.0f;
 	float barH = 10.0f;
 
 	vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
 	vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
-	SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
+	SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
 
 	float fillX = barX + 1.0f;
 	float fillY = barY + 1.0f;
@@ -770,7 +829,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	if ( fillW > 0.0f ) {
 		vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-		SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
+		SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
 	}
 
 	char xpText[64];
