@@ -407,6 +407,51 @@ void SCR_DrawDebugGraph (void)
 SCR_Init
 ==================
 */
+cvar_t		*cg_rpg_pos;
+
+/*
+==================
+SCR_RPGHUDPos_f
+
+Console command: rpg_hud_pos <left|right|bottomright|bottomleft>
+==================
+*/
+static void SCR_RPGHUDPos_f( void ) {
+	if ( Cmd_Argc() < 2 ) {
+		Com_Printf( "^3Usage: ^7rpg_hud_pos <left | right | bottomright | bottomleft>\n" );
+		Com_Printf( "^3Current position: ^7%s (x: %.0f, y: %.0f)\n",
+			(cg_rpg_pos && cg_rpg_pos->string[0]) ? cg_rpg_pos->string : "left",
+			cg_rpg_x ? cg_rpg_x->value : 20.0f,
+			cg_rpg_y ? cg_rpg_y->value : 20.0f );
+		return;
+	}
+
+	const char *pos = Cmd_Argv( 1 );
+	if ( !Q_stricmp( pos, "left" ) || !Q_stricmp( pos, "topleft" ) ) {
+		Cvar_Set( "cg_rpg_pos", "left" );
+		Cvar_Set( "cg_rpg_x", "20" );
+		Cvar_Set( "cg_rpg_y", "20" );
+		Com_Printf( "^2RPG HUD set to LEFT side (x: 20, y: 20)\n" );
+	} else if ( !Q_stricmp( pos, "right" ) || !Q_stricmp( pos, "topright" ) ) {
+		Cvar_Set( "cg_rpg_pos", "right" );
+		Cvar_Set( "cg_rpg_x", "390" );
+		Cvar_Set( "cg_rpg_y", "20" );
+		Com_Printf( "^2RPG HUD set to RIGHT side (x: 390, y: 20)\n" );
+	} else if ( !Q_stricmp( pos, "bottomright" ) ) {
+		Cvar_Set( "cg_rpg_pos", "bottomright" );
+		Cvar_Set( "cg_rpg_x", "390" );
+		Cvar_Set( "cg_rpg_y", "343" );
+		Com_Printf( "^2RPG HUD set to BOTTOM RIGHT (x: 390, y: 343)\n" );
+	} else if ( !Q_stricmp( pos, "bottomleft" ) ) {
+		Cvar_Set( "cg_rpg_pos", "bottomleft" );
+		Cvar_Set( "cg_rpg_x", "20" );
+		Cvar_Set( "cg_rpg_y", "343" );
+		Com_Printf( "^2RPG HUD set to BOTTOM LEFT (x: 20, y: 343)\n" );
+	} else {
+		Com_Printf( "^1Unknown position '%s'. Use ^3left^1, ^3right^1, ^3bottomright^1, or ^3bottomleft^1.\n", pos );
+	}
+}
+
 void SCR_Init( void ) {
 	cl_timegraph = Cvar_Get ("timegraph", "0", CVAR_CHEAT);
 	cl_debuggraph = Cvar_Get ("debuggraph", "0", CVAR_CHEAT);
@@ -415,8 +460,9 @@ void SCR_Init( void ) {
 	cl_graphshift = Cvar_Get ("graphshift", "0", CVAR_CHEAT);
 
 	cg_drawRPGHUD = Cvar_Get ("cg_drawRPGHUD", "1", CVAR_ARCHIVE);
-	cg_rpg_x = Cvar_Get ("cg_rpg_x", "450", CVAR_ARCHIVE);
-	cg_rpg_y = Cvar_Get ("cg_rpg_y", "342", CVAR_ARCHIVE);
+	cg_rpg_pos = Cvar_Get ("cg_rpg_pos", "left", CVAR_ARCHIVE);
+	cg_rpg_x = Cvar_Get ("cg_rpg_x", "20", CVAR_ARCHIVE);
+	cg_rpg_y = Cvar_Get ("cg_rpg_y", "20", CVAR_ARCHIVE);
 	cg_rpg_level = Cvar_Get ("cg_rpg_level", "1", 0);
 	cg_rpg_xp = Cvar_Get ("cg_rpg_xp", "0", 0);
 	cg_rpg_xp_max = Cvar_Get ("cg_rpg_xp_max", "1000", 0);
@@ -425,6 +471,8 @@ void SCR_Init( void ) {
 	cg_rpg_name = Cvar_Get ("cg_rpg_name", "", 0);
 	cg_rpg_rank = Cvar_Get ("cg_rpg_rank", "Padawan", 0);
 	cg_drawLeaderboard = Cvar_Get ("cg_drawLeaderboard", "0", 0);
+
+	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft" );
 
 	scr_initialized = qtrue;
 }
