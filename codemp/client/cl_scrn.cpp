@@ -643,17 +643,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
 	// ========================================================
-	// STYLE 1: BOTTOM SLEEK BAR (Borderless Circular Avatar & Bottom XP Bar)
+	// STYLE 1: BOTTOM SLEEK BAR (Borderless Circular Avatar & Floating Elements)
 	// ========================================================
 	if ( style == 1 ) {
 		float panelW = 220.0f;
 		float panelH = 40.0f;
 
-		// Subtle glass backdrop for bottom bar
-		vec4_t barGlass = { 0.02f, 0.05f, 0.10f, 0.35f };
-		SCR_FillRect( panelX, panelY, panelW, panelH, barGlass );
-
-		// Circular Profile Picture Frame (No square box border!)
+		// Circular Profile Picture Frame (Direct circular rendering, 100% transparent outside circle)
 		float avatarX = panelX + 4.0f;
 		float avatarY = panelY + 2.0f;
 		float avatarSize = 24.0f;
@@ -685,10 +681,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 			vec4_t saberCyan   = { 0.00f, 0.85f, 1.00f, 0.95f };
 			float cx = avatarX + avatarSize * 0.5f;
 			float cy = avatarY + avatarSize * 0.5f;
-			// Minimalist monochrome vector hooded Jedi silhouette & saber
-			SCR_FillRect( cx - 4.0f, cy - 6.0f, 8.0f, 4.0f, whiteVector );  // Hood top
-			SCR_FillRect( cx - 5.0f, cy - 2.0f, 10.0f, 7.0f, whiteVector );  // Robe body
-			SCR_FillRect( cx + 3.0f, cy - 8.0f, 2.0f, 16.0f, saberCyan );   // Glowing lightsaber blade
+			SCR_FillRect( cx - 4.0f, cy - 6.0f, 8.0f, 4.0f, whiteVector );
+			SCR_FillRect( cx - 5.0f, cy - 2.0f, 10.0f, 7.0f, whiteVector );
+			SCR_FillRect( cx + 3.0f, cy - 8.0f, 2.0f, 16.0f, saberCyan );
 		}
 
 		// Player Info Column next to Circular Avatar
@@ -704,15 +699,22 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		Com_sprintf( rankStr, sizeof(rankStr), "^3%.14s ^7|^2 %d FR", rankTitle, fr );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
 
-		// Line 3: Sleek Horizontal XP Bar (Underneath Info Text)
+		// Line 3: Sleek Horizontal XP Bar (Floating MBII style track & cyan fill)
 		float barX = textX;
 		float barY = panelY + 25.0f;
 		float barW = panelX + panelW - barX - 4.0f;
 		float barH = 10.0f;
 
-		vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.60f };
-		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.85f };
-		SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
+		qhandle_t hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
+		if ( !hBarBg ) hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg.tga" );
+
+		if ( hBarBg ) {
+			SCR_DrawPic( barX, barY, barW, barH, hBarBg );
+		} else {
+			vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
+			vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
+			SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
+		}
 
 		float fillX = barX + 1.0f;
 		float fillY = barY + 1.0f;
@@ -735,7 +737,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		// XP Numeric Readout Overlay
 		char xpText[64];
 		Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", (int)s_visualXP, xpMax );
-		float textWidthPixels = (strlen(xpText) * 3.8f * 0.62f);
+		float textWidthPixels = (strlen(xpText) * 3.8f * 0.60f);
 		float xpTextX = barX + barW - textWidthPixels - 3.0f;
 		if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
 		SCR_DrawVirtualString( xpTextX, barY + 1.5f, 3.8f, xpText, whiteColor );
@@ -743,7 +745,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// ========================================================
-	// STYLE 0: CLASSIC GLASS PANEL CARD
+	// STYLE 0: CLASSIC GLASS PANEL CARD (Ultra-Transparent & Thin Cyan Border)
 	// ========================================================
 	float panelW = 178.0f;
 	float panelH = 42.0f;
@@ -755,19 +757,16 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	if ( hBox ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, hBox );
 	} else {
-		vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.45f };
-		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.75f };
+		// Ultra-subtle translucent glass (20% opacity) with thin 1px cyan border (40% alpha glow)
+		vec4_t bgColor     = { 0.02f, 0.05f, 0.10f, 0.20f };
+		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.40f };
 		SCR_DrawRoundedGlassPanel( panelX, panelY, panelW, panelH, 4.0f, bgColor, borderColor );
 	}
 
-	// Avatar Box (21x21)
+	// Avatar Circle Frame (Clean circular rendering without chunky square inner box)
 	float avatarX = panelX + 4.0f;
-	float avatarY = panelY + 4.0f;
-	float avatarSize = 21.0f;
-
-	vec4_t avatarBg = { 0.08f, 0.14f, 0.26f, 0.60f };
-	vec4_t avatarBorder = { 0.15f, 0.65f, 0.95f, 0.60f };
-	SCR_DrawRoundedGlassPanel( avatarX, avatarY, avatarSize, avatarSize, 2.0f, avatarBg, avatarBorder );
+	float avatarY = panelY + 3.0f;
+	float avatarSize = 22.0f;
 
 	qboolean avatarDrawn = qfalse;
 	const char *avatarPaths[8] = {
@@ -785,28 +784,23 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		if ( !avatarPaths[i] || !avatarPaths[i][0] ) continue;
 		qhandle_t hAvatar = re->RegisterShader( avatarPaths[i] );
 		if ( hAvatar ) {
-			SCR_DrawPic( avatarX + 1.0f, avatarY + 1.0f, avatarSize - 2.0f, avatarSize - 2.0f, hAvatar );
+			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, hAvatar );
 			avatarDrawn = qtrue;
 			break;
 		}
 	}
 
-	// Fallback procedural vector crest
 	if ( !avatarDrawn ) {
-		vec4_t crestBg = { 0.06f, 0.12f, 0.24f, 0.80f };
-		SCR_FillRect( avatarX + 1.0f, avatarY + 1.0f, avatarSize - 2.0f, avatarSize - 2.0f, crestBg );
-
-		vec4_t emblemGold = { 0.95f, 0.80f, 0.20f, 0.95f };
-		vec4_t emblemCyan = { 0.20f, 0.85f, 1.00f, 0.95f };
+		vec4_t whiteVector = { 0.95f, 0.95f, 0.95f, 0.90f };
+		vec4_t saberCyan   = { 0.00f, 0.85f, 1.00f, 0.95f };
 		float cx = avatarX + avatarSize * 0.5f;
 		float cy = avatarY + avatarSize * 0.5f;
-
-		SCR_FillRect( cx - 1.0f, cy - 5.0f, 2.0f, 10.0f, emblemCyan );
-		SCR_FillRect( cx - 4.0f, cy - 2.0f, 8.0f, 2.0f, emblemGold );
-		SCR_FillRect( cx - 2.0f, cy + 2.0f, 4.0f, 2.0f, emblemGold );
+		SCR_FillRect( cx - 4.0f, cy - 5.0f, 8.0f, 4.0f, whiteVector );
+		SCR_FillRect( cx - 5.0f, cy - 1.0f, 10.0f, 6.0f, whiteVector );
+		SCR_FillRect( cx + 3.0f, cy - 7.0f, 2.0f, 14.0f, saberCyan );
 	}
 
-	// Level Badge (placed under Avatar frame)
+	// Level Badge (placed under Avatar circle)
 	char levelStr[32];
 	Com_sprintf( levelStr, sizeof(levelStr), "^3Lv %d", level );
 	float levelX = avatarX + 1.0f;
@@ -816,15 +810,15 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// Right Content Column (Name, Rank | FR, XP Bar)
 	float textX = avatarX + avatarSize + 5.0f;
 
-	// Line 1: Player Name
+	// Line 1: Player Name (Crisp white text)
 	char nameStr[96];
 	Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", playerName );
-	SCR_DrawVirtualString( textX, panelY + 3.5f, 5.0f, nameStr, whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 3.0f, 5.2f, nameStr, whiteColor );
 
-	// Line 2: Rank Title & Force Rating ELO (Full rank titles up to 20 characters)
+	// Line 2: Rank Title & Force Rating ELO
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.20s ^7|^2 %d FR", rankTitle, fr );
-	SCR_DrawVirtualString( textX, panelY + 14.0f, 4.2f, rankStr, whiteColor );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d FR", rankTitle, fr );
+	SCR_DrawVirtualString( textX, panelY + 14.5f, 4.3f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar & Smooth Animated Fill
 	float barX = textX;
