@@ -45,7 +45,15 @@ static const shopItem_t sv_shopItems[] = {
     {"jedaii_secret", "^5Jedaii Secret     ^7(forbidden knowledge...)", 1000000,
      0},
     {"win_msg", "^5Custom Win Msg    ^7(Unlock !setwinmsg)", 20000, 0},
-    {"win_snd", "^5Custom Win Snd    ^7(Unlock !setwinsnd)", 20000, 0},
+    {"wp_pistol", "^5Bryar Pistol     ^7(Equip Bryar Pistol)", 1000, 400},
+    {"wp_blaster", "^5E-11 Blaster     ^7(Equip Blaster Rifle)", 1500, 600},
+    {"wp_disruptor", "^5Disruptor Rifle  ^7(Equip Disruptor)", 2500, 1000},
+    {"wp_bowcaster", "^5Bowcaster        ^7(Equip Bowcaster)", 2000, 800},
+    {"wp_repeater", "^5Heavy Repeater   ^7(Equip Heavy Repeater)", 2500, 1000},
+    {"wp_demp2", "^5DEMP2            ^7(Equip DEMP2 Pistol)", 2000, 800},
+    {"wp_flechette", "^5Flechette        ^7(Equip Golan Flechette)", 3000, 1200},
+    {"wp_rocket", "^5Rocket Launcher  ^7(Equip Rocket Launcher)", 5000, 2000},
+    {"wp_concussion", "^5Concussion       ^7(Equip Concussion Rifle)", 4000, 1600},
     {NULL, NULL, 0, 0}};
 
 cJSON *accountsDB = NULL; // exported (referenced by sv_ranked_logic/cmds)
@@ -728,6 +736,7 @@ void SV_Ranked_LoginOrRegister(client_t *cl, const char *username,
   r->loggedIn = qtrue;
   r->isTemp = qfalse;
   Q_strncpyz(r->username, key, sizeof(r->username));
+  SV_Ranked_SyncClientRPG(cl);
 
   cJSON *modes = cJSON_GetObjectItemCaseSensitive(acc, "modes");
   cJSON *duel = modes ? cJSON_GetObjectItemCaseSensitive(modes, "duel") : NULL;
@@ -864,6 +873,7 @@ void SV_Ranked_AutoRegisterByGUID(client_t *cl) {
     SV_Ranked_Log("AUTO-LOGIN: user='%s' GUID='%s' ip='%s'", r->username, guid,
                   Info_ValueForKey(cl->userinfo, "ip"));
     SV_Ranked_CheckAndRefreshDailyQuests(r->username, cl);
+    SV_Ranked_SyncClientRPG(cl);
 
   } else {
     // --- AUTO-REGISTER (new GUID) ---
@@ -912,6 +922,7 @@ void SV_Ranked_AutoRegisterByGUID(client_t *cl) {
     SV_Ranked_Log("AUTO-REGISTER: user='%s' GUID='%s' ip='%s'", newUser, guid,
                   Info_ValueForKey(cl->userinfo, "ip"));
     SV_Ranked_CheckAndRefreshDailyQuests(r->username, cl);
+    SV_Ranked_SyncClientRPG(cl);
   }
 }
 
@@ -1843,18 +1854,42 @@ void SV_Ranked_ShowTop(client_t *cl) {
 
   SV_SendServerCommand(cl, "print \"\n^5--- ^7TOP 10 PLAYERS (^3%s^7) ^5---\n\"",
                        mode);
-  SV_SendServerCommand(cl, "print \"^2#  Name                     FR    W/L      Ratio   Rank\n\"");
-  SV_SendServerCommand(cl, "print \"^2-- ------------------------ ----- -------- ------- -----------\n\"");
+  SV_SendServerCommand(cl, "print \"^2#  Name                             FR     W/L      Ratio   Rank\n\"");
+  SV_SendServerCommand(cl, "print \"^2-- ---------------------------- ------ -------- ------- -----------\n\"");
 
   const int max = (int)std::min<size_t>(10, list.size());
   for (int i = 0; i < max; ++i) {
     char name[32];
     Q_strncpyz(name, list[i].displayName.c_str(), sizeof(name));
     
-    SV_SendServerCommand(cl, "print \"^3%2d. ^7%-24s ^5%4d  ^2%3d^7/^1%3d  ^3%6.2f  ^7%s\n\"", 
-                         i + 1, name, list[i].value, list[i].wins, list[i].losses, list[i].ratio, list[i].rankTitle.c_str());
+    // Calculate the rendered length (excluding color codes)
+    int renderedLen = 0;
+    for (int j = 0; name[j] != '\0'; j++) {
+      if (name[j] == '^' && name[j + 1] != '\0') {
+        j++;
+      } else {
+        renderedLen++;
+      }
+    }
+    
+    // Pad to 28 characters
+    int padSpaces = 28 - renderedLen;
+    if (padSpaces < 1) {
+      padSpaces = 1;
+    }
+    
+    char paddedName[128];
+    Q_strncpyz(paddedName, name, sizeof(paddedName));
+    int nameLen = strlen(paddedName);
+    for (int j = 0; j < padSpaces && nameLen < (int)sizeof(paddedName) - 1; j++) {
+      paddedName[nameLen++] = ' ';
+    }
+    paddedName[nameLen] = '\0';
+    
+    SV_SendServerCommand(cl, va("print \"^3%2d. ^7%s ^5%5d  ^2%3d^7/^1%3d  ^3%6.2f  ^7%s\n\"", 
+                         i + 1, paddedName, list[i].value, list[i].wins, list[i].losses, list[i].ratio, list[i].rankTitle.c_str()));
   }
-  SV_SendServerCommand(cl, "print \"^5------------------------------------------------------------\n\n\"");
+  SV_SendServerCommand(cl, "print \"^5--------------------------------------------------------------------\n\n\"");
 }
 
 void SV_Ranked_ShowRank(client_t *cl) {
@@ -2762,6 +2797,11 @@ void SV_Ranked_ShopBuy(client_t *cl, const char *itemName) {
   SV_Ranked_SaveAccounts();
   SV_SendServerCommand(cl, "chat \"^2Purchased ^5%s ^7for ^5%d Credits^7!\"",
                        item->display, price);
+
+  // Give immediate weapon if it is a weapon (key starts with "wp_")
+  if (!Q_stricmpn(item->key, "wp_", 3)) {
+    SV_Ranked_GiveWeapon(cl, item->key, qtrue);
+  }
 }
 
 /*
@@ -2907,6 +2947,8 @@ void SV_Ranked_ShopUse(client_t *cl, const char *itemName) {
     r->activeEloBoost = 1;
     SV_SendServerCommand(cl, "chat \"^5Elo Boost activated! ^7+15%% FR "
                              "for your next duel win.\"");
+  } else if (!Q_stricmpn(item->key, "wp_", 3)) {
+    SV_Ranked_GiveWeapon(cl, item->key, qtrue);
   } else {
     SV_SendServerCommand(cl, "chat \"^3Item used.\"");
   }

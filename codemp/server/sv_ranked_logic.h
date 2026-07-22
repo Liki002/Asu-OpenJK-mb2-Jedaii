@@ -18,6 +18,7 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam);
 
 // Name Updating
 void SV_Ranked_UpdateDisplayName(int clientNum, const char* newName);
+qboolean SV_Ranked_IsNameInvalidOrOffensive(const char *name);
 
 // Duel hooks
 void SV_Ranked_DuelStart(int p1, int p2);
@@ -50,5 +51,10 @@ void SV_Ranked_HotPotatoDisconnect(int clientNum);
 void SV_Ranked_HotPotatoHandleKill(int killerId, int victimId);
 void SV_Ranked_Vote_Frame(void);
 void SV_Ranked_MapChange(void);
+qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean showMsg);
+
+// RPG Client Data Sync
+void SV_Ranked_SyncClientRPG(client_t *cl);
+void SV_Ranked_SyncClientRPGByName(const char *username);
 
 #endif // SV_RANKED_LOGIC_H

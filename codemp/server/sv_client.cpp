@@ -1467,7 +1467,8 @@ void SV_UserinfoChanged(client_t *cl) {
   }
 
   // Sanitization check for vstr and rconpass in names (MBII parity & security fix)
-  if (Q_stristr(cl->name, "vstr") || Q_stristr(cl->name, "rconpass")) {
+  // Also check for invalid, empty/caret-only, or offensive names
+  if (Q_stristr(cl->name, "vstr") || Q_stristr(cl->name, "rconpass") || SV_Ranked_IsNameInvalidOrOffensive(cl->name)) {
     Q_strncpyz(cl->name, "Padawan", sizeof(cl->name));
     Info_SetValueForKey(cl->userinfo, "name", "Padawan");
   }

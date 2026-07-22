@@ -796,6 +796,28 @@ void CL_ParseCommandString( msg_t *msg ) {
 	}
 	*/
 	Q_strncpyz( clc.serverCommands[ index ], s, sizeof( clc.serverCommands[ index ] ) );
+
+	// RPG Client Data Sync Parser
+	if ( !Q_strncmp( s, "rpg_sync", 8 ) ) {
+		int currentXP = 0, maxXP = 1000, level = 1, fr = 1000;
+		char rankBuf[64] = "";
+		char nameBuf[64] = "";
+		int numParsed = sscanf( s, "rpg_sync %d %d %d %d \"%63[^\"]\" \"%63[^\"]\"", &currentXP, &maxXP, &level, &fr, rankBuf, nameBuf );
+		if ( numParsed >= 3 ) {
+			Cvar_Set( "cg_rpg_xp", va( "%d", currentXP ) );
+			Cvar_Set( "cg_rpg_xp_max", va( "%d", maxXP ) );
+			Cvar_Set( "cg_rpg_level", va( "%d", level ) );
+			if ( numParsed >= 4 ) {
+				Cvar_Set( "cg_rpg_fr", va( "%d", fr ) );
+			}
+			if ( numParsed >= 5 && rankBuf[0] ) {
+				Cvar_Set( "cg_rpg_rank", rankBuf );
+			}
+			if ( numParsed >= 6 && nameBuf[0] ) {
+				Cvar_Set( "cg_rpg_name", nameBuf );
+			}
+		}
+	}
 }
 
 

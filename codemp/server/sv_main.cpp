@@ -1306,6 +1306,9 @@ void SV_Frame(int msec) {
   if (com_dedicated->integer)
     SV_BotFrame(sv.time);
 
+  // drive Hot Potato ticks and any other per-frame ranked logic (enforces weapons/force powers before game VM think)
+  SV_Ranked_Logic_Frame();
+
   // run the game simulation in chunks
   while (sv.timeResidual >= frameMsec) {
     sv.timeResidual -= frameMsec;
@@ -1326,9 +1329,6 @@ void SV_Frame(int msec) {
 
   // check timeouts
   SV_CheckTimeouts();
-
-  // drive Hot Potato ticks and any other per-frame ranked logic
-  SV_Ranked_Logic_Frame();
 
   // send messages back to the clients
   SV_SendClientMessages();
