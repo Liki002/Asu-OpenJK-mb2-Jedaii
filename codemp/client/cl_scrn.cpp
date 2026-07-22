@@ -654,6 +654,12 @@ Renders client-side RPG HUD Overlay (Supports Style 0 Classic & Style 1 Bottom S
 ==================
 */
 static float s_visualXP = -1.0f;
+static int s_lastState = -1;
+static qhandle_t s_hBox = 0;
+static qhandle_t s_hBarBg = 0;
+static qhandle_t s_hBarFill = 0;
+static qhandle_t s_hAvatar = 0;
+static qhandle_t s_hModalBg = 0;
 
 void SCR_DrawRPGHUDOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) {
@@ -663,21 +669,38 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		return;
 	}
 
+	// Flush handles on map/state transitions to prevent stale renderer pointer crashes
+	if ( cls.state != s_lastState ) {
+		s_hBox = 0;
+		s_hBarBg = 0;
+		s_hBarFill = 0;
+		s_hAvatar = 0;
+		s_hModalBg = 0;
+		s_lastState = cls.state;
+	}
+
+	// Register HD TGA Shaders dynamically once active
+	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
+	if ( !s_hBarBg ) s_hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
+	if ( !s_hBarFill ) s_hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill" );
+	if ( !s_hAvatar ) s_hAvatar = re->RegisterShader( "gfx/hud/avatar_default" );
+	if ( !s_hModalBg ) s_hModalBg = re->RegisterShader( "gfx/hud/rpg_modal_bg" );
+
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
 
 	// Preset position defaults
-	float defaultX = (style == 1) ? 210.0f : 14.0f;
+	float defaultX = (style == 1) ? 190.0f : 14.0f;
 	float defaultY = (style == 1) ? 428.0f : 14.0f;
 
 	if ( cg_rpg_pos && cg_rpg_pos->string[0] ) {
 		if ( !Q_stricmp( cg_rpg_pos->string, "right" ) || !Q_stricmp( cg_rpg_pos->string, "topright" ) ) {
-			defaultX = 468.0f; defaultY = 14.0f;
+			defaultX = 428.0f; defaultY = 14.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomright" ) ) {
-			defaultX = 468.0f; defaultY = 345.0f;
+			defaultX = 428.0f; defaultY = 345.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomleft" ) ) {
 			defaultX = 14.0f; defaultY = 345.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomcenter" ) || !Q_stricmp( cg_rpg_pos->string, "center" ) ) {
-			defaultX = 210.0f; defaultY = 428.0f;
+			defaultX = 190.0f; defaultY = 428.0f;
 		}
 	}
 
@@ -713,31 +736,35 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 
 	// ========================================================
-	// STYLE 1: BOTTOM SLEEK BAR (MBII Capsule Floating Elements)
+	// STYLE 1: BOTTOM SLEEK BAR (Expanded 260px Floating Elements)
 	// ========================================================
 	if ( style == 1 ) {
-		float panelW = 220.0f;
+		float panelW = 260.0f;
 
-		// Circular Avatar Frame (Jedi Order Wings Emblem)
+		// Circular Avatar Picture Frame
 		float avatarX = panelX + 4.0f;
 		float avatarY = panelY + 2.0f;
-		float avatarSize = 24.0f;
+		float avatarSize = 26.0f;
 
-		float cx = avatarX + avatarSize * 0.5f;
-		float cy = avatarY + avatarSize * 0.5f;
-		SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
+		if ( s_hAvatar ) {
+			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
+		} else {
+			float cx = avatarX + avatarSize * 0.5f;
+			float cy = avatarY + avatarSize * 0.5f;
+			SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
+		}
 
 		// Player Info Column next to Circular Avatar
 		float textX = avatarX + avatarSize + 6.0f;
 
 		// Line 1: Player Name + Level Badge
 		char nameLvlStr[96];
-		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%.18s ^3Lv %d", playerName, level );
+		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%.22s ^3Lv %d", playerName, level );
 		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, nameLvlStr, whiteColor );
 
 		// Line 2: Rank Title & Force Rating ELO
 		char rankStr[96];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%.14s ^7|^2 %d FR", rankTitle, fr );
+		Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d FR", rankTitle, fr );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
 
 		// Line 3: Sleek Horizontal XP Bar (Floating MBII style capsule track & cyan fill)
@@ -746,9 +773,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float barW = panelX + panelW - barX - 4.0f;
 		float barH = 10.0f;
 
-		vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
-		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
-		SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
+		if ( s_hBarBg ) {
+			SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
+		} else {
+			vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
+			vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
+			SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
+		}
 
 		float fillX = barX + 1.0f;
 		float fillY = barY + 1.0f;
@@ -757,8 +788,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float fillH = barH - 2.0f;
 
 		if ( fillW > 0.0f ) {
-			vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-			SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
+			if ( s_hBarFill ) {
+				SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
+			} else {
+				vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
+				SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
+			}
 		}
 
 		// XP Numeric Readout Overlay
@@ -772,24 +807,31 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// ========================================================
-	// STYLE 0: CLASSIC GLASS PANEL CARD (MBII Capsule Aesthetics & Thin Cyan Border)
+	// STYLE 0: CLASSIC GLASS PANEL CARD (HD TGA Card & Thin Cyan Border)
 	// ========================================================
-	float panelW = 195.0f;
+	float panelW = 205.0f;
 	float panelH = 46.0f;
 
-	// Ultra-subtle MBII dark glass capsule (20% opacity) with thin 1px cyan border (40% alpha glow)
-	vec4_t bgColor     = { 0.02f, 0.05f, 0.10f, 0.20f };
-	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.40f };
-	SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, bgColor, borderColor );
+	if ( s_hBox ) {
+		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hBox );
+	} else {
+		vec4_t bgColor     = { 0.02f, 0.05f, 0.10f, 0.20f };
+		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.40f };
+		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, bgColor, borderColor );
+	}
 
 	// Avatar Circle Frame
 	float avatarX = panelX + 5.0f;
 	float avatarY = panelY + 4.0f;
-	float avatarSize = 22.0f;
+	float avatarSize = 24.0f;
 
-	float cx = avatarX + avatarSize * 0.5f;
-	float cy = avatarY + avatarSize * 0.5f;
-	SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
+	if ( s_hAvatar ) {
+		SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
+	} else {
+		float cx = avatarX + avatarSize * 0.5f;
+		float cy = avatarY + avatarSize * 0.5f;
+		SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
+	}
 
 	// Level Badge
 	char levelStr[32];
@@ -817,9 +859,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float barW = panelX + panelW - barX - 5.0f;
 	float barH = 10.0f;
 
-	vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
-	vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
-	SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
+	if ( s_hBarBg ) {
+		SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
+	} else {
+		vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
+		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
+		SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
+	}
 
 	float fillX = barX + 1.0f;
 	float fillY = barY + 1.0f;
@@ -828,8 +874,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float fillH = barH - 2.0f;
 
 	if ( fillW > 0.0f ) {
-		vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-		SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
+		if ( s_hBarFill ) {
+			SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
+		} else {
+			vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
+			SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
+		}
 	}
 
 	char xpText[64];
@@ -847,7 +897,7 @@ int g_topLeaderboardCount = 0;
 ==================
 SCR_DrawLeaderboardOverlay
 
-Renders sleek modal popup window showing top 10 ranked players with smooth rounded glass aesthetic
+Renders sleek modal popup window showing top 10 ranked players with smooth HD glass backdrop
 ==================
 */
 void SCR_DrawLeaderboardOverlay( void ) {
@@ -864,14 +914,16 @@ void SCR_DrawLeaderboardOverlay( void ) {
 	float winW = 480.0f;
 	float winH = 320.0f;
 
-	// Translucent dark glass panel with smooth rounded corners & glowing cyan border
-	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.88f };
-	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
-	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	if ( s_hModalBg ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hModalBg );
+	} else {
+		vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.88f };
+		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
 
-	// Header background bar with rounded top corners
-	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.88f };
-	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, 3.0f, headerBg, NULL );
+		vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.88f };
+		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, 3.0f, headerBg, NULL );
+	}
 
 	// Title
 	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
