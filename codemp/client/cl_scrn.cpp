@@ -566,23 +566,15 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float panelW = 180.0f;
 	float panelH = 48.0f;
 
-	// Render Custom UI Frame Texture from PK3 if available
-	qhandle_t hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
-	if ( !hBox ) hBox = re->RegisterShader( "gfx/hud/rpg_hud_box.tga" );
+	// Sleek dark glass panel with a crisp 1px cyan border line (Zero yellow texture bleed)
+	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.90f };
+	vec4_t borderColor = { 0.00f, 0.65f, 0.95f, 0.80f };
 
-	if ( hBox ) {
-		SCR_DrawPic( panelX, panelY, panelW, panelH, hBox );
-	} else {
-		// Sleek dark panel with a crisp 1px blue border line (No yellow color bleed)
-		vec4_t bgColor     = { 0.04f, 0.07f, 0.14f, 0.90f };
-		vec4_t borderColor = { 0.15f, 0.65f, 0.95f, 0.85f };
-
-		SCR_FillRect( panelX, panelY, panelW, panelH, bgColor );
-		SCR_FillRect( panelX, panelY, panelW, 1.0f, borderColor );                 // Top
-		SCR_FillRect( panelX, panelY + panelH - 1.0f, panelW, 1.0f, borderColor );     // Bottom
-		SCR_FillRect( panelX, panelY, 1.0f, panelH, borderColor );                 // Left
-		SCR_FillRect( panelX + panelW - 1.0f, panelY, 1.0f, panelH, borderColor );     // Right
-	}
+	SCR_FillRect( panelX, panelY, panelW, panelH, bgColor );
+	SCR_FillRect( panelX, panelY, panelW, 1.0f, borderColor );                 // Top
+	SCR_FillRect( panelX, panelY + panelH - 1.0f, panelW, 1.0f, borderColor );     // Bottom
+	SCR_FillRect( panelX, panelY, 1.0f, panelH, borderColor );                 // Left
+	SCR_FillRect( panelX + panelW - 1.0f, panelY, 1.0f, panelH, borderColor );     // Right
 
 	// Avatar Box (25x25)
 	float avatarX = panelX + 4.0f;
@@ -682,18 +674,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float barH = 12.0f;
 
 	// Progress Bar Container
-	qhandle_t hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
-	if ( hBarBg ) {
-		SCR_DrawPic( barX, barY, barW, barH, hBarBg );
-	} else {
-		vec4_t barBorder = { 0.10f, 0.50f, 0.85f, 0.65f };
-		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.90f };
-		SCR_FillRect( barX, barY, barW, barH, barBg );
-		SCR_FillRect( barX, barY, barW, 1.0f, barBorder );
-		SCR_FillRect( barX, barY + barH - 1.0f, barW, 1.0f, barBorder );
-		SCR_FillRect( barX, barY, 1.0f, barH, barBorder );
-		SCR_FillRect( barX + barW - 1.0f, barY, 1.0f, barH, barBorder );
-	}
+	vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.65f };
+	vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.90f };
+	SCR_FillRect( barX, barY, barW, barH, barBg );
+	SCR_FillRect( barX, barY, barW, 1.0f, barBorder );
+	SCR_FillRect( barX, barY + barH - 1.0f, barW, 1.0f, barBorder );
+	SCR_FillRect( barX, barY, 1.0f, barH, barBorder );
+	SCR_FillRect( barX + barW - 1.0f, barY, 1.0f, barH, barBorder );
 
 	// Dynamic Fill Bar
 	float fillX = barX + 1.0f;
@@ -703,13 +690,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float fillH = barH - 2.0f;
 
 	if ( fillW > 0.0f ) {
-		qhandle_t hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill" );
-		if ( hBarFill ) {
-			SCR_DrawPic( fillX, fillY, fillW, fillH, hBarFill );
-		} else {
-			vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-			SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
-		}
+		vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
+		SCR_FillRect( fillX, fillY, fillW, fillH, cyanFill );
 	}
 
 	// XP Numeric Readout (Green text over progress bar)
@@ -743,21 +725,15 @@ void SCR_DrawLeaderboardOverlay( void ) {
 	float winW = 440.0f;
 	float winH = 340.0f;
 
-	// Render Custom High-Quality UI Frame Texture from PK3 if available
-	qhandle_t hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
-	if ( hBox ) {
-		SCR_DrawPic( winX, winY, winW, winH, hBox );
-	} else {
-		// Sleek dark glass panel with a crisp 1px blue border line (No yellow color bleed)
-		vec4_t bgColor     = { 0.04f, 0.07f, 0.14f, 0.94f };
-		vec4_t borderColor = { 0.15f, 0.65f, 0.95f, 0.85f };
+	// Sleek dark glass panel with a crisp 1px cyan border line (Zero yellow texture bleed)
+	vec4_t bgColor     = { 0.04f, 0.07f, 0.14f, 0.94f };
+	vec4_t borderColor = { 0.00f, 0.65f, 0.95f, 0.85f };
 
-		SCR_FillRect( winX, winY, winW, winH, bgColor );
-		SCR_FillRect( winX, winY, winW, 1.0f, borderColor );                 // Top
-		SCR_FillRect( winX, winY + winH - 1.0f, winW, 1.0f, borderColor );     // Bottom
-		SCR_FillRect( winX, winY, 1.0f, winH, borderColor );                 // Left
-		SCR_FillRect( winX + winW - 1.0f, winY, 1.0f, winH, borderColor );     // Right
-	}
+	SCR_FillRect( winX, winY, winW, winH, bgColor );
+	SCR_FillRect( winX, winY, winW, 1.0f, borderColor );                 // Top
+	SCR_FillRect( winX, winY + winH - 1.0f, winW, 1.0f, borderColor );     // Bottom
+	SCR_FillRect( winX, winY, 1.0f, winH, borderColor );                 // Left
+	SCR_FillRect( winX + winW - 1.0f, winY, 1.0f, winH, borderColor );     // Right
 
 	// Header background bar
 	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.90f };
