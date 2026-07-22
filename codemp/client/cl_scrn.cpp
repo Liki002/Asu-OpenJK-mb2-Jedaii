@@ -46,6 +46,7 @@ cvar_t		*cg_rpg_fr;
 cvar_t		*cg_rpg_avatar;
 cvar_t		*cg_rpg_name;
 cvar_t		*cg_rpg_rank;
+cvar_t		*cg_drawLeaderboard;
 
 /*
 ================
@@ -423,6 +424,7 @@ void SCR_Init( void ) {
 	cg_rpg_avatar = Cvar_Get ("cg_rpg_avatar", "gfx/hud/avatar_default", 0);
 	cg_rpg_name = Cvar_Get ("cg_rpg_name", "", 0);
 	cg_rpg_rank = Cvar_Get ("cg_rpg_rank", "Padawan", 0);
+	cg_drawLeaderboard = Cvar_Get ("cg_drawLeaderboard", "0", 0);
 
 	scr_initialized = qtrue;
 }
@@ -650,6 +652,119 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	SCR_DrawVirtualString( xpTextX, barY + 3.0f, 4.5f, xpText, whiteColor );
 }
 
+topLeaderboardEntry_t g_topLeaderboard[10];
+int g_topLeaderboardCount = 0;
+
+/*
+==================
+SCR_DrawLeaderboardOverlay
+
+Renders sleek modal popup window showing top 10 ranked players
+==================
+*/
+void SCR_DrawLeaderboardOverlay( void ) {
+	if ( !cg_drawLeaderboard || !cg_drawLeaderboard->integer ) {
+		return;
+	}
+
+	// Modal Window Dimensions (640x480 virtual coords centered on screen)
+	float winX = 140.0f;
+	float winY = 65.0f;
+	float winW = 360.0f;
+	float winH = 325.0f;
+	float rad = 5.0f;
+
+	// Render Custom High-Quality UI Frame Texture from PK3 if available
+	qhandle_t hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
+	if ( hBox ) {
+		SCR_DrawPic( winX, winY, winW, winH, hBox );
+	} else {
+		// Glowing outer border frame
+		vec4_t glowColor = { 0.10f, 0.60f, 1.00f, 0.40f };
+		SCR_FillRoundedRect( winX - 2.0f, winY - 2.0f, winW + 4.0f, winH + 4.0f, rad + 1.0f, glowColor );
+
+		// Dark semi-transparent glass body
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.88f };
+		SCR_FillRoundedRect( winX, winY, winW, winH, rad, bgColor );
+	}
+
+	// Header background bar
+	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.90f };
+	SCR_FillRoundedRect( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, 3.0f, headerBg );
+
+	// Title
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_DrawVirtualString( winX + 85.0f, winY + 9.0f, 7.5f, "^3TOP RANKED DUELISTS", yellowCol );
+
+	// Close Button instruction
+	SCR_DrawVirtualString( winX + winW - 35.0f, winY + 9.0f, 6.0f, "^1[ESC]", yellowCol );
+
+	// Column Headers Divider line
+	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.70f };
+	float colY = winY + 36.0f;
+	SCR_FillRect( winX + 8.0f, colY + 14.0f, winW - 16.0f, 1.0f, divColor );
+
+	// Column Headers: # | PLAYER NAME | LVL | RANK | FR ELO
+	SCR_DrawVirtualString( winX + 12.0f, colY, 6.0f, "^5#", whiteColor );
+	SCR_DrawVirtualString( winX + 32.0f, colY, 6.0f, "^5PLAYER NAME", whiteColor );
+	SCR_DrawVirtualString( winX + 190.0f, colY, 6.0f, "^5LVL", whiteColor );
+	SCR_DrawVirtualString( winX + 230.0f, colY, 6.0f, "^5RANK", whiteColor );
+	SCR_DrawVirtualString( winX + 295.0f, colY, 6.0f, "^5FR ELO", whiteColor );
+
+	// Render Rows
+	float rowY = colY + 18.0f;
+	float rowH = 24.0f;
+
+	if ( g_topLeaderboardCount == 0 ) {
+		SCR_DrawVirtualString( winX + 90.0f, rowY + 40.0f, 6.5f, "^7Loading leaderboard data...", whiteColor );
+	} else {
+		for ( int i = 0; i < g_topLeaderboardCount && i < 10; i++ ) {
+			topLeaderboardEntry_t *e = &g_topLeaderboard[i];
+			float currentY = rowY + (i * rowH);
+
+			// Alternating row background tint
+			if ( i % 2 == 0 ) {
+				vec4_t rowBg = { 0.06f, 0.12f, 0.22f, 0.40f };
+				SCR_FillRect( winX + 6.0f, currentY - 2.0f, winW - 12.0f, 22.0f, rowBg );
+			}
+
+			// Rank Badge Color
+			char rankBadge[16];
+			if ( e->rank == 1 ) Com_sprintf( rankBadge, sizeof(rankBadge), "^3%2d.", e->rank );      // Gold
+			else if ( e->rank == 2 ) Com_sprintf( rankBadge, sizeof(rankBadge), "^7%2d.", e->rank ); // Silver
+			else if ( e->rank == 3 ) Com_sprintf( rankBadge, sizeof(rankBadge), "^1%2d.", e->rank ); // Bronze
+			else Com_sprintf( rankBadge, sizeof(rankBadge), "^5%2d.", e->rank );
+
+			// Rank #
+			SCR_DrawVirtualString( winX + 10.0f, currentY + 2.0f, 6.0f, rankBadge, whiteColor );
+
+			// Player Name
+			char nameStr[64];
+			Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", e->displayName );
+			SCR_DrawVirtualString( winX + 32.0f, currentY + 2.0f, 6.0f, nameStr, whiteColor );
+
+			// Level Badge
+			char lvlStr[16];
+			Com_sprintf( lvlStr, sizeof(lvlStr), "^3Lv %d", e->level );
+			SCR_DrawVirtualString( winX + 188.0f, currentY + 2.0f, 5.5f, lvlStr, whiteColor );
+
+			// Rank Title
+			char titleStr[32];
+			Com_sprintf( titleStr, sizeof(titleStr), "^3%.10s", e->rankTitle );
+			SCR_DrawVirtualString( winX + 230.0f, currentY + 2.0f, 5.5f, titleStr, whiteColor );
+
+			// FR ELO
+			char frStr[32];
+			Com_sprintf( frStr, sizeof(frStr), "^2%d", e->fr );
+			SCR_DrawVirtualString( winX + 295.0f, currentY + 2.0f, 6.0f, frStr, whiteColor );
+		}
+	}
+
+	// Footer instruction
+	SCR_DrawVirtualString( winX + 75.0f, winY + winH - 16.0f, 5.5f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!top^7 to close", whiteColor );
+}
+
 
 //=======================================================
 
@@ -710,6 +825,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			CL_CGameRendering( stereoFrame );
 			SCR_DrawDemoRecording();
 			SCR_DrawRPGHUDOverlay();
+			SCR_DrawLeaderboardOverlay();
 			break;
 		}
 	}

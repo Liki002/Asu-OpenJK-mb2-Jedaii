@@ -593,3 +593,23 @@ void CL_WriteAVIVideoFrame( const byte *imageBuffer, int size );
 void CL_WriteAVIAudioFrame( const byte *pcmBuffer, int size );
 qboolean CL_CloseAVI( void );
 qboolean CL_VideoRecording( void );
+
+//
+// cl_scrn.cpp - RPG HUD & Leaderboard Overlay
+//
+extern cvar_t *cg_drawRPGHUD;
+extern cvar_t *cg_drawLeaderboard;
+
+typedef struct {
+	int rank;
+	int fr;
+	int level;
+	char rankTitle[32];
+	char displayName[64];
+} topLeaderboardEntry_t;
+
+extern topLeaderboardEntry_t g_topLeaderboard[10];
+extern int g_topLeaderboardCount;
+
+void SCR_DrawRPGHUDOverlay( void );
+void SCR_DrawLeaderboardOverlay( void );

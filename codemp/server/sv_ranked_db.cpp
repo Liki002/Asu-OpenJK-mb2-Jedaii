@@ -1223,6 +1223,7 @@ struct RankedListEntry {
   std::string displayName;
   std::string rankTitle;
   int value = 0; // ELO/FR
+  int level = 1;
   int wins = 0;
   int losses = 0;
   float ratio = 0.0f;
@@ -1257,12 +1258,14 @@ Ranked_BuildListByModeField(const char *mode, const char *field) {
     }
 
     cJSON *disp = cJSON_GetObjectItemCaseSensitive(acc, "displayName");
+    cJSON *lvlObj = cJSON_GetObjectItemCaseSensitive(acc, "level");
     RankedListEntry e;
     e.key = acc->string;
     e.displayName = (disp && cJSON_IsString(disp) && disp->valuestring)
                         ? disp->valuestring
                         : acc->string;
     e.value = val;
+    e.level = lvlObj ? lvlObj->valueint : 1;
     e.wins = wins;
     e.losses = losses;
     e.rankTitle = SV_Ranked_GetTitle(val, acc);
@@ -1857,6 +1860,9 @@ void SV_Ranked_ShowTop(client_t *cl) {
   SV_SendServerCommand(cl, "print \"^2#  Name                             FR     W/L      Ratio   Rank\n\"");
   SV_SendServerCommand(cl, "print \"^2-- ---------------------------- ------ -------- ------- -----------\n\"");
 
+  // Send UI Leaderboard Sync command to client popup overlay
+  SV_SendServerCommand(cl, "top_clear");
+
   const int max = (int)std::min<size_t>(10, list.size());
   for (int i = 0; i < max; ++i) {
     char name[32];
@@ -1888,8 +1894,12 @@ void SV_Ranked_ShowTop(client_t *cl) {
     
     SV_SendServerCommand(cl, va("print \"^3%2d. ^7%s ^5%5d  ^2%3d^7/^1%3d  ^3%6.2f  ^7%s\n\"", 
                          i + 1, paddedName, list[i].value, list[i].wins, list[i].losses, list[i].ratio, list[i].rankTitle.c_str()));
+
+    SV_SendServerCommand(cl, va("top_entry %d %d %d \"%s\" \"%s\"",
+                         i + 1, list[i].value, list[i].level, list[i].rankTitle.c_str(), list[i].displayName.c_str()));
   }
   SV_SendServerCommand(cl, "print \"^5--------------------------------------------------------------------\n\n\"");
+  SV_SendServerCommand(cl, "top_open");
 }
 
 void SV_Ranked_ShowRank(client_t *cl) {

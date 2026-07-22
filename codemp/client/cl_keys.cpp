@@ -1350,6 +1350,11 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 
 		if ( !(Key_GetCatcher() & KEYCATCH_UI) ) {
+			if ( cg_drawLeaderboard && cg_drawLeaderboard->integer ) {
+				Cvar_Set( "cg_drawLeaderboard", "0" );
+				return;
+			}
+
 			if ( cls.state == CA_ACTIVE && !clc.demoplaying )
 				UIVM_SetActiveMenu( UIMENU_INGAME );
 			else {

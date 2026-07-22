@@ -817,6 +817,28 @@ void CL_ParseCommandString( msg_t *msg ) {
 				Cvar_Set( "cg_rpg_name", nameBuf );
 			}
 		}
+	} else if ( !Q_strncmp( s, "top_clear", 9 ) ) {
+		g_topLeaderboardCount = 0;
+	} else if ( !Q_strncmp( s, "top_entry", 9 ) ) {
+		if ( g_topLeaderboardCount < 10 ) {
+			topLeaderboardEntry_t *e = &g_topLeaderboard[g_topLeaderboardCount];
+			char rankBuf[32] = "";
+			char nameBuf[64] = "";
+			int rankNum = 0, frVal = 1000, lvlVal = 1;
+			int num = sscanf( s, "top_entry %d %d %d \"%31[^\"]\" \"%63[^\"]\"", &rankNum, &frVal, &lvlVal, rankBuf, nameBuf );
+			if ( num >= 5 ) {
+				e->rank = rankNum;
+				e->fr = frVal;
+				e->level = lvlVal;
+				Q_strncpyz( e->rankTitle, rankBuf, sizeof( e->rankTitle ) );
+				Q_strncpyz( e->displayName, nameBuf, sizeof( e->displayName ) );
+				g_topLeaderboardCount++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "top_open", 8 ) ) {
+		Cvar_Set( "cg_drawLeaderboard", "1" );
+	} else if ( !Q_strncmp( s, "top_close", 9 ) ) {
+		Cvar_Set( "cg_drawLeaderboard", "0" );
 	}
 }
 
