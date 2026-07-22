@@ -484,21 +484,50 @@ SCR_FillRoundedRect
 Draws a rectangle with smooth rounded corners in 640x480 virtual coordinates
 ==================
 */
-static void SCR_FillRoundedRect( float x, float y, float width, float height, float r, const float *color ) {
-	if ( width <= 0 || height <= 0 ) return;
+/*
+==================
+SCR_DrawRoundedGlassPanel
 
-	// Center body
-	SCR_FillRect( x + r, y, width - 2.0f * r, height, color );
-	// Left & right wings
-	SCR_FillRect( x, y + r, r, height - 2.0f * r, color );
-	SCR_FillRect( x + width - r, y + r, r, height - 2.0f * r, color );
+Renders a high-tech translucent glass panel with smooth rounded corners and a crisp 1px border.
+==================
+*/
+static void SCR_DrawRoundedGlassPanel( float x, float y, float w, float h, float r, const float *bgColor, const float *borderColor ) {
+	if ( w <= 0 || h <= 0 ) return;
+	if ( r < 1.0f ) r = 1.0f;
 
-	// Corner fills (inset to give soft rounded corner curve)
+	// 1. Fill translucent rounded body
+	SCR_FillRect( x + r, y, w - 2.0f * r, h, bgColor );
+	SCR_FillRect( x, y + r, r, h - 2.0f * r, bgColor );
+	SCR_FillRect( x + w - r, y + r, r, h - 2.0f * r, bgColor );
+
+	// Smooth corner fill caps
 	float hr = r * 0.5f;
-	SCR_FillRect( x + hr, y + hr, hr, hr, color );
-	SCR_FillRect( x + width - r, y + hr, hr, hr, color );
-	SCR_FillRect( x + hr, y + height - r, hr, hr, color );
-	SCR_FillRect( x + width - r, y + height - r, hr, hr, color );
+	SCR_FillRect( x + hr, y + hr, hr, hr, bgColor );
+	SCR_FillRect( x + w - r + (r - hr), y + hr, hr, hr, bgColor );
+	SCR_FillRect( x + hr, y + h - r + (r - hr), hr, hr, bgColor );
+	SCR_FillRect( x + w - r + (r - hr), y + h - r + (r - hr), hr, hr, bgColor );
+
+	// 2. Draw crisp 1px rounded border line
+	if ( borderColor ) {
+		// Straight edges
+		SCR_FillRect( x + r, y, w - 2.0f * r, 1.0f, borderColor );                     // Top
+		SCR_FillRect( x + r, y + h - 1.0f, w - 2.0f * r, 1.0f, borderColor );         // Bottom
+		SCR_FillRect( x, y + r, 1.0f, h - 2.0f * r, borderColor );                     // Left
+		SCR_FillRect( x + w - 1.0f, y + r, 1.0f, h - 2.0f * r, borderColor );         // Right
+
+		// Smooth 1px corner stepped border lines
+		SCR_FillRect( x + 1.0f, y + 1.0f, r - 1.0f, 1.0f, borderColor );
+		SCR_FillRect( x + 1.0f, y + 1.0f, 1.0f, r - 1.0f, borderColor );
+
+		SCR_FillRect( x + w - r, y + 1.0f, r - 1.0f, 1.0f, borderColor );
+		SCR_FillRect( x + w - 2.0f, y + 1.0f, 1.0f, r - 1.0f, borderColor );
+
+		SCR_FillRect( x + 1.0f, y + h - 2.0f, r - 1.0f, 1.0f, borderColor );
+		SCR_FillRect( x + 1.0f, y + h - r, 1.0f, r - 1.0f, borderColor );
+
+		SCR_FillRect( x + w - r, y + h - 2.0f, r - 1.0f, 1.0f, borderColor );
+		SCR_FillRect( x + w - 2.0f, y + h - r, 1.0f, r - 1.0f, borderColor );
+	}
 }
 
 /*
@@ -527,7 +556,7 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 			continue;
 		}
 		SCR_DrawChar( (int)xx, (int)y, charSize, *s );
-		xx += (charSize * 0.65f);
+		xx += (charSize * 0.62f);
 		s++;
 	}
 	re->SetColor( NULL );
@@ -548,41 +577,37 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// Calculate preset position defaults if custom X/Y are not set
-	float defaultX = 16.0f;
-	float defaultY = 16.0f;
+	float defaultX = 14.0f;
+	float defaultY = 14.0f;
 	if ( cg_rpg_pos && cg_rpg_pos->string[0] ) {
 		if ( !Q_stricmp( cg_rpg_pos->string, "right" ) || !Q_stricmp( cg_rpg_pos->string, "topright" ) ) {
-			defaultX = 456.0f; defaultY = 16.0f;
+			defaultX = 468.0f; defaultY = 14.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomright" ) ) {
-			defaultX = 456.0f; defaultY = 345.0f;
+			defaultX = 468.0f; defaultY = 345.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomleft" ) ) {
-			defaultX = 16.0f; defaultY = 345.0f;
+			defaultX = 14.0f; defaultY = 345.0f;
 		}
 	}
 
-	// Dynamic position & compact dimensions (virtual 640x480 coordinates)
+	// Dynamic position & compact scaled dimensions (158x42 virtual 640x480 coordinates)
 	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : defaultX;
 	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : defaultY;
-	float panelW = 168.0f;
-	float panelH = 46.0f;
+	float panelW = 158.0f;
+	float panelH = 42.0f;
 
-	// Translucent dark glass panel (40% opacity) with a crisp 1px cyan border line
-	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.40f };
-	vec4_t borderColor = { 0.00f, 0.65f, 0.95f, 0.70f };
+	// Translucent dark glass panel with smooth rounded corners & glowing cyan border
+	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.45f };
+	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.75f };
+	SCR_DrawRoundedGlassPanel( panelX, panelY, panelW, panelH, 4.0f, bgColor, borderColor );
 
-	SCR_FillRect( panelX, panelY, panelW, panelH, bgColor );
-	SCR_FillRect( panelX, panelY, panelW, 1.0f, borderColor );                 // Top
-	SCR_FillRect( panelX, panelY + panelH - 1.0f, panelW, 1.0f, borderColor );     // Bottom
-	SCR_FillRect( panelX, panelY, 1.0f, panelH, borderColor );                 // Left
-	SCR_FillRect( panelX + panelW - 1.0f, panelY, 1.0f, panelH, borderColor );     // Right
-
-	// Avatar Box (23x23)
+	// Avatar Box (21x21)
 	float avatarX = panelX + 4.0f;
 	float avatarY = panelY + 4.0f;
-	float avatarSize = 23.0f;
+	float avatarSize = 21.0f;
 
 	vec4_t avatarBg = { 0.08f, 0.14f, 0.26f, 0.60f };
-	SCR_FillRect( avatarX, avatarY, avatarSize, avatarSize, avatarBg );
+	vec4_t avatarBorder = { 0.15f, 0.65f, 0.95f, 0.60f };
+	SCR_DrawRoundedGlassPanel( avatarX, avatarY, avatarSize, avatarSize, 2.0f, avatarBg, avatarBorder );
 
 	qboolean avatarDrawn = qfalse;
 	const char *avatarPaths[8] = {
@@ -600,7 +625,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		if ( !avatarPaths[i] || !avatarPaths[i][0] ) continue;
 		qhandle_t hAvatar = re->RegisterShader( avatarPaths[i] );
 		if ( hAvatar ) {
-			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, hAvatar );
+			SCR_DrawPic( avatarX + 1.0f, avatarY + 1.0f, avatarSize - 2.0f, avatarSize - 2.0f, hAvatar );
 			avatarDrawn = qtrue;
 			break;
 		}
@@ -616,9 +641,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float cx = avatarX + avatarSize * 0.5f;
 		float cy = avatarY + avatarSize * 0.5f;
 
-		SCR_FillRect( cx - 1.0f, cy - 6.0f, 2.0f, 12.0f, emblemCyan );
-		SCR_FillRect( cx - 5.0f, cy - 2.0f, 10.0f, 2.0f, emblemGold );
-		SCR_FillRect( cx - 3.0f, cy + 2.0f, 6.0f, 2.0f, emblemGold );
+		SCR_FillRect( cx - 1.0f, cy - 5.0f, 2.0f, 10.0f, emblemCyan );
+		SCR_FillRect( cx - 4.0f, cy - 2.0f, 8.0f, 2.0f, emblemGold );
+		SCR_FillRect( cx - 2.0f, cy + 2.0f, 4.0f, 2.0f, emblemGold );
 	}
 
 	// Level Badge (placed under Avatar frame)
@@ -628,7 +653,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float levelX = avatarX + 1.0f;
 	float levelY = avatarY + avatarSize + 2.0f;
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	SCR_DrawVirtualString( levelX, levelY, 4.5f, levelStr, whiteColor );
+	SCR_DrawVirtualString( levelX, levelY, 4.2f, levelStr, whiteColor );
 
 	// Right Content Column (Name, Rank | FR, XP Bar)
 	float textX = avatarX + avatarSize + 5.0f;
@@ -640,12 +665,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// Line 1: Player Name
 	char nameStr[96];
 	Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", playerName );
-	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 3.5f, 5.0f, nameStr, whiteColor );
 
 	// Line 2: Rank Title & Force Rating ELO
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.14s ^7|^2 %d FR", rankTitle, fr );
-	SCR_DrawVirtualString( textX, panelY + 15.0f, 4.5f, rankStr, whiteColor );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.12s ^7|^2 %d FR", rankTitle, fr );
+	SCR_DrawVirtualString( textX, panelY + 14.0f, 4.2f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar & Smooth Animated Fill
 	int xp = cg_rpg_xp ? cg_rpg_xp->integer : 0;
@@ -669,18 +694,14 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	if ( xpRatio > 1.0f ) xpRatio = 1.0f;
 
 	float barX = textX;
-	float barY = panelY + 29.0f;
-	float barW = panelX + panelW - barX - 5.0f;
-	float barH = 12.0f;
+	float barY = panelY + 26.5f;
+	float barW = panelX + panelW - barX - 4.0f;
+	float barH = 10.0f;
 
 	// Progress Bar Container
-	vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.65f };
-	vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.90f };
-	SCR_FillRect( barX, barY, barW, barH, barBg );
-	SCR_FillRect( barX, barY, barW, 1.0f, barBorder );
-	SCR_FillRect( barX, barY + barH - 1.0f, barW, 1.0f, barBorder );
-	SCR_FillRect( barX, barY, 1.0f, barH, barBorder );
-	SCR_FillRect( barX + barW - 1.0f, barY, 1.0f, barH, barBorder );
+	vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.60f };
+	vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.85f };
+	SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
 
 	// Dynamic Fill Bar
 	float fillX = barX + 1.0f;
@@ -697,10 +718,10 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// XP Numeric Readout (Green text over progress bar)
 	char xpText[64];
 	Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", (int)s_visualXP, xpMax );
-	float textWidthPixels = (strlen(xpText) * 4.5f * 0.68f);
+	float textWidthPixels = (strlen(xpText) * 3.8f * 0.62f);
 	float xpTextX = barX + barW - textWidthPixels - 3.0f;
 	if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
-	SCR_DrawVirtualString( xpTextX, barY + 2.0f, 4.5f, xpText, whiteColor );
+	SCR_DrawVirtualString( xpTextX, barY + 1.5f, 3.8f, xpText, whiteColor );
 }
 
 
@@ -711,7 +732,7 @@ int g_topLeaderboardCount = 0;
 ==================
 SCR_DrawLeaderboardOverlay
 
-Renders sleek modal popup window showing top 10 ranked players
+Renders sleek modal popup window showing top 10 ranked players with smooth rounded glass aesthetic
 ==================
 */
 void SCR_DrawLeaderboardOverlay( void ) {
@@ -719,61 +740,56 @@ void SCR_DrawLeaderboardOverlay( void ) {
 		return;
 	}
 
-	// Modal Window Dimensions (Widened to 440px so all columns have generous spacing)
-	float winX = 100.0f;
-	float winY = 60.0f;
-	float winW = 440.0f;
-	float winH = 340.0f;
+	// Modal Window Dimensions (Sleek 380x290 centered modal)
+	float winX = 130.0f;
+	float winY = 80.0f;
+	float winW = 380.0f;
+	float winH = 290.0f;
 
-	// Sleek dark glass panel with a crisp 1px cyan border line (Zero yellow texture bleed)
-	vec4_t bgColor     = { 0.04f, 0.07f, 0.14f, 0.94f };
-	vec4_t borderColor = { 0.00f, 0.65f, 0.95f, 0.85f };
+	// Translucent dark glass panel with smooth rounded corners & glowing cyan border
+	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.85f };
+	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
+	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
 
-	SCR_FillRect( winX, winY, winW, winH, bgColor );
-	SCR_FillRect( winX, winY, winW, 1.0f, borderColor );                 // Top
-	SCR_FillRect( winX, winY + winH - 1.0f, winW, 1.0f, borderColor );     // Bottom
-	SCR_FillRect( winX, winY, 1.0f, winH, borderColor );                 // Left
-	SCR_FillRect( winX + winW - 1.0f, winY, 1.0f, winH, borderColor );     // Right
-
-	// Header background bar
-	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.90f };
-	SCR_FillRect( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, headerBg );
+	// Header background bar with rounded top corners
+	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.85f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
 
 	// Title
 	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	SCR_DrawVirtualString( winX + 120.0f, winY + 9.0f, 7.5f, "^3TOP RANKED DUELISTS", yellowCol );
+	SCR_DrawVirtualString( winX + 100.0f, winY + 8.0f, 6.8f, "^3TOP RANKED DUELISTS", yellowCol );
 
 	// Close Button instruction
-	SCR_DrawVirtualString( winX + winW - 45.0f, winY + 9.0f, 6.0f, "^1[ESC]", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 8.0f, 5.5f, "^1[ESC]", yellowCol );
 
 	// Column Headers Divider line
 	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.70f };
-	float colY = winY + 36.0f;
-	SCR_FillRect( winX + 8.0f, colY + 16.0f, winW - 16.0f, 1.0f, divColor );
+	float colY = winY + 34.0f;
+	SCR_FillRect( winX + 6.0f, colY + 14.0f, winW - 12.0f, 1.0f, divColor );
 
-	// Column Headers: # | PLAYER NAME | LVL | RANK | FR ELO (Generous column spacing)
-	SCR_DrawVirtualString( winX + 16.0f, colY, 6.0f, "^5#", whiteColor );
-	SCR_DrawVirtualString( winX + 45.0f, colY, 6.0f, "^5PLAYER NAME", whiteColor );
-	SCR_DrawVirtualString( winX + 230.0f, colY, 6.0f, "^5LVL", whiteColor );
-	SCR_DrawVirtualString( winX + 275.0f, colY, 6.0f, "^5RANK", whiteColor );
-	SCR_DrawVirtualString( winX + 375.0f, colY, 6.0f, "^5FR ELO", whiteColor );
+	// Column Headers: # | PLAYER NAME | LVL | RANK | FR ELO
+	SCR_DrawVirtualString( winX + 14.0f, colY, 5.5f, "^5#", whiteColor );
+	SCR_DrawVirtualString( winX + 38.0f, colY, 5.5f, "^5PLAYER NAME", whiteColor );
+	SCR_DrawVirtualString( winX + 195.0f, colY, 5.5f, "^5LVL", whiteColor );
+	SCR_DrawVirtualString( winX + 235.0f, colY, 5.5f, "^5RANK", whiteColor );
+	SCR_DrawVirtualString( winX + 325.0f, colY, 5.5f, "^5FR ELO", whiteColor );
 
 	// Render Rows
-	float rowY = colY + 20.0f;
-	float rowH = 24.0f;
+	float rowY = colY + 18.0f;
+	float rowH = 21.0f;
 
 	if ( g_topLeaderboardCount == 0 ) {
-		SCR_DrawVirtualString( winX + 120.0f, rowY + 50.0f, 6.5f, "^7Loading leaderboard data...", whiteColor );
+		SCR_DrawVirtualString( winX + 100.0f, rowY + 40.0f, 6.0f, "^7Loading leaderboard data...", whiteColor );
 	} else {
 		for ( int i = 0; i < g_topLeaderboardCount && i < 10; i++ ) {
 			topLeaderboardEntry_t *e = &g_topLeaderboard[i];
 			float currentY = rowY + (i * rowH);
 
-			// Alternating row background tint
+			// Alternating row background tint with rounded edges
 			if ( i % 2 == 0 ) {
-				vec4_t rowBg = { 0.06f, 0.12f, 0.22f, 0.40f };
-				SCR_FillRect( winX + 6.0f, currentY - 2.0f, winW - 12.0f, 22.0f, rowBg );
+				vec4_t rowBg = { 0.06f, 0.14f, 0.26f, 0.35f };
+				SCR_DrawRoundedGlassPanel( winX + 5.0f, currentY - 1.0f, winW - 10.0f, 19.0f, 2.0f, rowBg, NULL );
 			}
 
 			// Rank Badge Color
@@ -784,32 +800,32 @@ void SCR_DrawLeaderboardOverlay( void ) {
 			else Com_sprintf( rankBadge, sizeof(rankBadge), "^5%2d.", e->rank );
 
 			// Rank #
-			SCR_DrawVirtualString( winX + 14.0f, currentY + 2.0f, 6.0f, rankBadge, whiteColor );
+			SCR_DrawVirtualString( winX + 12.0f, currentY + 2.0f, 5.2f, rankBadge, whiteColor );
 
-			// Player Name (Full names up to 20 characters with generous spacing)
+			// Player Name
 			char nameStr[64];
-			Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", e->displayName );
-			SCR_DrawVirtualString( winX + 45.0f, currentY + 2.0f, 6.0f, nameStr, whiteColor );
+			Com_sprintf( nameStr, sizeof(nameStr), "^7%.18s", e->displayName );
+			SCR_DrawVirtualString( winX + 38.0f, currentY + 2.0f, 5.2f, nameStr, whiteColor );
 
 			// Level Badge
 			char lvlStr[16];
 			Com_sprintf( lvlStr, sizeof(lvlStr), "^3Lv %d", e->level );
-			SCR_DrawVirtualString( winX + 228.0f, currentY + 2.0f, 5.5f, lvlStr, whiteColor );
+			SCR_DrawVirtualString( winX + 195.0f, currentY + 2.0f, 5.0f, lvlStr, whiteColor );
 
-			// Rank Title (Full rank title up to 16 characters: "Grand Master" fits cleanly!)
+			// Rank Title (Full rank title: "Grand Master" fits cleanly!)
 			char titleStr[32];
 			Com_sprintf( titleStr, sizeof(titleStr), "^3%.16s", e->rankTitle );
-			SCR_DrawVirtualString( winX + 275.0f, currentY + 2.0f, 5.5f, titleStr, whiteColor );
+			SCR_DrawVirtualString( winX + 235.0f, currentY + 2.0f, 5.0f, titleStr, whiteColor );
 
 			// FR ELO
 			char frStr[32];
 			Com_sprintf( frStr, sizeof(frStr), "^2%d", e->fr );
-			SCR_DrawVirtualString( winX + 375.0f, currentY + 2.0f, 6.0f, frStr, whiteColor );
+			SCR_DrawVirtualString( winX + 325.0f, currentY + 2.0f, 5.2f, frStr, whiteColor );
 		}
 	}
 
 	// Footer instruction
-	SCR_DrawVirtualString( winX + 100.0f, winY + winH - 16.0f, 5.5f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!top^7 to close", whiteColor );
+	SCR_DrawVirtualString( winX + 85.0f, winY + winH - 14.0f, 5.0f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!top^7 to close", whiteColor );
 }
 
 //=======================================================
