@@ -514,6 +514,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	// Render Custom High-Quality UI Frame Texture from PK3 if available
 	qhandle_t hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
+	if ( !hBox ) hBox = re->RegisterShader( "gfx/hud/rpg_hud_box.tga" );
+	if ( !hBox ) hBox = re->RegisterShader( "gfx/hud/rpg_hud_box.png" );
+
 	if ( hBox ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, hBox );
 	} else {
@@ -539,14 +542,18 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	SCR_FillRoundedRect( avatarX, avatarY, avatarSize, avatarSize, 2.0f, avatarBg );
 
 	qboolean avatarDrawn = qfalse;
-	const char *avatarPaths[4] = {
+	const char *avatarPaths[8] = {
 		(cg_rpg_avatar && cg_rpg_avatar->string[0]) ? cg_rpg_avatar->string : "gfx/hud/avatar_default",
 		"gfx/hud/avatar_default",
+		"gfx/hud/avatar_default.jpg",
+		"gfx/hud/avatar_default.tga",
+		"gfx/hud/avatar_sith.jpg",
+		"gfx/hud/avatar_sith.tga",
 		"gfx/rpg/avatar_default",
 		"gfx/2d/logos/mb_jedaii"
 	};
 
-	for ( int i = 0; i < 4; i++ ) {
+	for ( int i = 0; i < 8; i++ ) {
 		if ( !avatarPaths[i] || !avatarPaths[i][0] ) continue;
 		qhandle_t hAvatar = re->RegisterShader( avatarPaths[i] );
 		if ( hAvatar ) {
