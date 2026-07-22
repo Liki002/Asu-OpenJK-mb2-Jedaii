@@ -434,14 +434,14 @@ static void SCR_RPGHUDPos_f( void ) {
 		Com_Printf( "^2RPG HUD set to TOP LEFT (16, 16)\n" );
 	} else if ( !Q_stricmp( pos, "right" ) || !Q_stricmp( pos, "topright" ) ) {
 		Cvar_Set( "cg_rpg_pos", "right" );
-		Cvar_Set( "cg_rpg_x", "418" );
+		Cvar_Set( "cg_rpg_x", "456" );
 		Cvar_Set( "cg_rpg_y", "16" );
-		Com_Printf( "^2RPG HUD set to TOP RIGHT (418, 16)\n" );
+		Com_Printf( "^2RPG HUD set to TOP RIGHT (456, 16)\n" );
 	} else if ( !Q_stricmp( pos, "bottomright" ) ) {
 		Cvar_Set( "cg_rpg_pos", "bottomright" );
-		Cvar_Set( "cg_rpg_x", "418" );
+		Cvar_Set( "cg_rpg_x", "456" );
 		Cvar_Set( "cg_rpg_y", "345" );
-		Com_Printf( "^2RPG HUD set to BOTTOM RIGHT (418, 345)\n" );
+		Com_Printf( "^2RPG HUD set to BOTTOM RIGHT (456, 345)\n" );
 	} else if ( !Q_stricmp( pos, "bottomleft" ) ) {
 		Cvar_Set( "cg_rpg_pos", "bottomleft" );
 		Cvar_Set( "cg_rpg_x", "16" );
@@ -527,7 +527,7 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 			continue;
 		}
 		SCR_DrawChar( (int)xx, (int)y, charSize, *s );
-		xx += (charSize * 0.68f);
+		xx += (charSize * 0.65f);
 		s++;
 	}
 	re->SetColor( NULL );
@@ -552,23 +552,23 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float defaultY = 16.0f;
 	if ( cg_rpg_pos && cg_rpg_pos->string[0] ) {
 		if ( !Q_stricmp( cg_rpg_pos->string, "right" ) || !Q_stricmp( cg_rpg_pos->string, "topright" ) ) {
-			defaultX = 418.0f; defaultY = 16.0f;
+			defaultX = 456.0f; defaultY = 16.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomright" ) ) {
-			defaultX = 418.0f; defaultY = 345.0f;
+			defaultX = 456.0f; defaultY = 345.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomleft" ) ) {
 			defaultX = 16.0f; defaultY = 345.0f;
 		}
 	}
 
-	// Dynamic position & clean dimensions (virtual 640x480 coordinates)
+	// Dynamic position & compact dimensions (virtual 640x480 coordinates)
 	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : defaultX;
 	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : defaultY;
-	float panelW = 205.0f;
-	float panelH = 48.0f;
+	float panelW = 168.0f;
+	float panelH = 46.0f;
 
-	// Sleek dark glass panel with a crisp 1px cyan border line (Zero yellow texture bleed)
-	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.90f };
-	vec4_t borderColor = { 0.00f, 0.65f, 0.95f, 0.80f };
+	// Translucent dark glass panel (40% opacity) with a crisp 1px cyan border line
+	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.40f };
+	vec4_t borderColor = { 0.00f, 0.65f, 0.95f, 0.70f };
 
 	SCR_FillRect( panelX, panelY, panelW, panelH, bgColor );
 	SCR_FillRect( panelX, panelY, panelW, 1.0f, borderColor );                 // Top
@@ -576,12 +576,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	SCR_FillRect( panelX, panelY, 1.0f, panelH, borderColor );                 // Left
 	SCR_FillRect( panelX + panelW - 1.0f, panelY, 1.0f, panelH, borderColor );     // Right
 
-	// Avatar Box (25x25)
+	// Avatar Box (23x23)
 	float avatarX = panelX + 4.0f;
 	float avatarY = panelY + 4.0f;
-	float avatarSize = 25.0f;
+	float avatarSize = 23.0f;
 
-	vec4_t avatarBg = { 0.08f, 0.14f, 0.26f, 0.80f };
+	vec4_t avatarBg = { 0.08f, 0.14f, 0.26f, 0.60f };
 	SCR_FillRect( avatarX, avatarY, avatarSize, avatarSize, avatarBg );
 
 	qboolean avatarDrawn = qfalse;
@@ -608,7 +608,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	// Fallback procedural vector crest
 	if ( !avatarDrawn ) {
-		vec4_t crestBg = { 0.06f, 0.12f, 0.24f, 0.90f };
+		vec4_t crestBg = { 0.06f, 0.12f, 0.24f, 0.80f };
 		SCR_FillRect( avatarX + 1.0f, avatarY + 1.0f, avatarSize - 2.0f, avatarSize - 2.0f, crestBg );
 
 		vec4_t emblemGold = { 0.95f, 0.80f, 0.20f, 0.95f };
@@ -616,9 +616,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float cx = avatarX + avatarSize * 0.5f;
 		float cy = avatarY + avatarSize * 0.5f;
 
-		SCR_FillRect( cx - 1.0f, cy - 7.0f, 2.0f, 14.0f, emblemCyan );
-		SCR_FillRect( cx - 6.0f, cy - 2.0f, 12.0f, 2.0f, emblemGold );
-		SCR_FillRect( cx - 4.0f, cy + 2.0f, 8.0f, 2.0f, emblemGold );
+		SCR_FillRect( cx - 1.0f, cy - 6.0f, 2.0f, 12.0f, emblemCyan );
+		SCR_FillRect( cx - 5.0f, cy - 2.0f, 10.0f, 2.0f, emblemGold );
+		SCR_FillRect( cx - 3.0f, cy + 2.0f, 6.0f, 2.0f, emblemGold );
 	}
 
 	// Level Badge (placed under Avatar frame)
@@ -628,24 +628,24 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float levelX = avatarX + 1.0f;
 	float levelY = avatarY + avatarSize + 2.0f;
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	SCR_DrawVirtualString( levelX, levelY, 5.0f, levelStr, whiteColor );
+	SCR_DrawVirtualString( levelX, levelY, 4.5f, levelStr, whiteColor );
 
 	// Right Content Column (Name, Rank | FR, XP Bar)
-	float textX = avatarX + avatarSize + 6.0f;
+	float textX = avatarX + avatarSize + 5.0f;
 	cvar_t *clName = Cvar_Get( "name", "Padawan", 0 );
 	const char *playerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
 	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
 	int fr = cg_rpg_fr ? cg_rpg_fr->integer : 1000;
 
-	// Line 1: Player Name (Full name up to 32 characters)
+	// Line 1: Player Name
 	char nameStr[96];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%.32s", playerName );
-	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.5f, nameStr, whiteColor );
+	Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", playerName );
+	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
 
-	// Line 2: Rank Title & Force Rating ELO (Full rank titles up to 24 characters)
+	// Line 2: Rank Title & Force Rating ELO
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.24s ^7|^2 %d FR", rankTitle, fr );
-	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.8f, rankStr, whiteColor );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.14s ^7|^2 %d FR", rankTitle, fr );
+	SCR_DrawVirtualString( textX, panelY + 15.0f, 4.5f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar & Smooth Animated Fill
 	int xp = cg_rpg_xp ? cg_rpg_xp->integer : 0;
