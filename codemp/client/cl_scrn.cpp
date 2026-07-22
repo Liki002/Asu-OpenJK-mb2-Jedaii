@@ -402,12 +402,6 @@ void SCR_DrawDebugGraph (void)
 
 //=============================================================================
 
-cvar_t		*cg_drawRPGHUD;
-cvar_t		*cg_rpg_level;
-cvar_t		*cg_rpg_xp;
-cvar_t		*cg_rpg_xp_max;
-cvar_t		*cg_rpg_avatar;
-
 /*
 ==================
 SCR_Init
@@ -513,9 +507,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// Dynamic position & compact dimensions (virtual 640x480 coords aligned right above MB2 meters)
-	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : 466.0f;
+	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : 430.0f;
 	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : 343.0f;
-	float panelW = 158.0f;
+	float panelW = 195.0f;
 	float panelH = 48.0f;
 
 	// Render Custom High-Quality UI Frame Texture from PK3 if available
@@ -527,7 +521,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float rad = 3.0f;
 		vec4_t glowColor = { 0.10f, 0.50f, 0.95f, 0.35f };
 		SCR_FillRoundedRect( panelX - 1.5f, panelY - 1.5f, panelW + 3.0f, panelH + 3.0f, rad + 1.0f, glowColor );
-		vec4_t bgColor = { 0.03f, 0.05f, 0.08f, 0.45f };
+		vec4_t bgColor = { 0.03f, 0.05f, 0.08f, 0.65f };
 		SCR_FillRoundedRect( panelX, panelY, panelW, panelH, rad, bgColor );
 		vec4_t borderColor = { 0.20f, 0.70f, 1.00f, 0.65f };
 		SCR_FillRect( panelX + rad, panelY, panelW - 2.0f*rad, 1.0f, borderColor );
@@ -545,16 +539,14 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	SCR_FillRoundedRect( avatarX, avatarY, avatarSize, avatarSize, 2.0f, avatarBg );
 
 	qboolean avatarDrawn = qfalse;
-	const char *avatarPaths[6] = {
-		(cg_rpg_avatar && cg_rpg_avatar->string[0]) ? cg_rpg_avatar->string : "gfx/2d/logos/mb_jedaii",
-		"gfx/2d/logos/mb_jedaii",
-		"gfx/2d/logos/mb_jediorder",
-		"gfx/2d/logos/mb_sith",
-		"gfx/2d/logos/mb_sithari",
-		"gfx/2d/logos/mb_sithempire"
+	const char *avatarPaths[4] = {
+		(cg_rpg_avatar && cg_rpg_avatar->string[0]) ? cg_rpg_avatar->string : "gfx/hud/avatar_default",
+		"gfx/hud/avatar_default",
+		"gfx/rpg/avatar_default",
+		"gfx/2d/logos/mb_jedaii"
 	};
 
-	for ( int i = 0; i < 6; i++ ) {
+	for ( int i = 0; i < 4; i++ ) {
 		if ( !avatarPaths[i] || !avatarPaths[i][0] ) continue;
 		qhandle_t hAvatar = re->RegisterShader( avatarPaths[i] );
 		if ( hAvatar ) {
@@ -564,10 +556,20 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		}
 	}
 
-	// Fallback stylized icon if avatar shader is missing/0
+	// Fallback procedural code-rendered vector crest if PK3 asset is missing
 	if ( !avatarDrawn ) {
-		vec4_t iconCol = { 0.20f, 0.75f, 1.00f, 0.90f };
-		SCR_FillRoundedRect( avatarX + 5.0f, avatarY + 5.0f, avatarSize - 10.0f, avatarSize - 10.0f, 2.0f, iconCol );
+		vec4_t crestBg = { 0.08f, 0.14f, 0.26f, 0.90f };
+		SCR_FillRoundedRect( avatarX + 1.0f, avatarY + 1.0f, avatarSize - 2.0f, avatarSize - 2.0f, 2.0f, crestBg );
+		
+		vec4_t emblemGold = { 0.95f, 0.78f, 0.25f, 0.95f };
+		vec4_t emblemCyan = { 0.20f, 0.85f, 1.00f, 0.95f };
+		float cx = avatarX + avatarSize * 0.5f;
+		float cy = avatarY + avatarSize * 0.5f;
+		
+		// Vertical pillar & cross wing vector emblem
+		SCR_FillRect( cx - 1.0f, cy - 7.0f, 2.0f, 14.0f, emblemCyan );
+		SCR_FillRect( cx - 6.0f, cy - 2.0f, 12.0f, 2.0f, emblemGold );
+		SCR_FillRect( cx - 4.0f, cy + 2.0f, 8.0f, 2.0f, emblemGold );
 	}
 
 	// Level Badge (placed right under the Avatar frame)
@@ -591,9 +593,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	Com_sprintf( nameStr, sizeof(nameStr), "^7%.30s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 5.0f, 5.5f, nameStr, whiteColor );
 
-	// Line 2: Rank Title & Force Rating ELO (balanced vertical gap)
+	// Line 2: Rank Title & Force Rating ELO (Generous spacing up to 24 chars for title)
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.12s ^7|^2 %d FR", rankTitle, fr );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.24s ^7|^2 %d FR", rankTitle, fr );
 	SCR_DrawVirtualString( textX, panelY + 17.0f, 5.0f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar & Smooth Animated Tick Interpolation
@@ -768,99 +770,7 @@ void SCR_DrawLeaderboardOverlay( void ) {
 	}
 
 	// Footer instruction
-	SCR_DrawVirtualString( winX + 75.0f, winY + winH - 16.0f, 5.5f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!top^7 to close", whiteColor );
 }
-
-
-/*
-==================
-SCR_DrawRPGHUDOverlay
-
-Renders RPG HUD overlay:
-- Avatar Picture Frame
-- Level Badge & Player Name
-- Dynamic XP Bar
-==================
-*/
-void SCR_DrawRPGHUDOverlay( void ) {
-	if ( !cg_drawRPGHUD || !cg_drawRPGHUD->integer ) {
-		return;
-	}
-
-	float startX = 20.0f;
-	float startY = 20.0f;
-
-	float bgOuterColor[4]   = { 0.05f, 0.08f, 0.12f, 0.75f };
-	float bgInnerColor[4]   = { 0.10f, 0.14f, 0.20f, 0.85f };
-	float borderColor[4]    = { 0.80f, 0.65f, 0.20f, 0.90f };
-	float xpBarBgColor[4]   = { 0.15f, 0.15f, 0.20f, 0.90f };
-	float xpBarFillColor[4] = { 0.00f, 0.75f, 0.95f, 0.95f };
-	float xpBarGlowColor[4] = { 0.20f, 0.90f, 1.00f, 1.00f };
-
-	// 1. Draw Master Panel Backdrop
-	float panelWidth  = 230.0f;
-	float panelHeight = 60.0f;
-	SCR_FillRect( startX - 2, startY - 2, panelWidth + 4, panelHeight + 4, borderColor );
-	SCR_FillRect( startX, startY, panelWidth, panelHeight, bgOuterColor );
-
-	// 2. Draw Avatar Box
-	float avatarX = startX + 6.0f;
-	float avatarY = startY + 6.0f;
-	float avatarSize = 48.0f;
-
-	SCR_FillRect( avatarX - 1, avatarY - 1, avatarSize + 2, avatarSize + 2, borderColor );
-	SCR_FillRect( avatarX, avatarY, avatarSize, avatarSize, bgInnerColor );
-
-	if ( cg_rpg_avatar && cg_rpg_avatar->string[0] ) {
-		qhandle_t hAvatar = re->RegisterShader( cg_rpg_avatar->string );
-		if ( hAvatar ) {
-			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, hAvatar );
-		}
-	}
-
-	// 3. Draw Level & Character Info Text
-	float textX = avatarX + avatarSize + 10.0f;
-	float textY = startY + 8.0f;
-
-	int level = cg_rpg_level ? cg_rpg_level->integer : 1;
-	char infoStr[128];
-	Com_sprintf( infoStr, sizeof(infoStr), "^3LVL %d ^7| ^5Je'daii", level );
-	SCR_DrawSmallStringExt( (int)textX, (int)textY, infoStr, g_color_table[7], qfalse, qfalse );
-
-	// 4. Calculate XP Progress Bar
-	int currentXP = cg_rpg_xp ? cg_rpg_xp->integer : 0;
-	int maxXP     = (cg_rpg_xp_max && cg_rpg_xp_max->integer > 0) ? cg_rpg_xp_max->integer : 10000;
-	if ( currentXP < 0 ) currentXP = 0;
-	if ( currentXP > maxXP ) currentXP = maxXP;
-
-	float frac = (float)currentXP / (float)maxXP;
-
-	float barX = textX;
-	float barY = textY + 16.0f;
-	float barWidth = 150.0f;
-	float barHeight = 12.0f;
-
-	SCR_FillRect( barX, barY, barWidth, barHeight, xpBarBgColor );
-
-	float fillWidth = barWidth * frac;
-	if ( fillWidth > 0 ) {
-		SCR_FillRect( barX, barY, fillWidth, barHeight, xpBarFillColor );
-		if ( fillWidth > 2.0f ) {
-			SCR_FillRect( barX + fillWidth - 2.0f, barY, 2.0f, barHeight, xpBarGlowColor );
-		}
-	}
-
-	SCR_FillRect( barX, barY, barWidth, 1.0f, borderColor );
-	SCR_FillRect( barX, barY + barHeight - 1.0f, barWidth, 1.0f, borderColor );
-	SCR_FillRect( barX, barY, 1.0f, barHeight, borderColor );
-	SCR_FillRect( barX + barWidth - 1.0f, barY, 1.0f, barHeight, borderColor );
-
-	// 5. Draw XP Text Overlay
-	char xpText[64];
-	Com_sprintf( xpText, sizeof(xpText), "%d / %d XP (%d%%)", currentXP, maxXP, (int)(frac * 100.0f) );
-	SCR_DrawSmallStringExt( (int)(barX + 4.0f), (int)(barY + 2.0f), xpText, g_color_table[7], qtrue, qfalse );
-}
-
 
 //=======================================================
 
