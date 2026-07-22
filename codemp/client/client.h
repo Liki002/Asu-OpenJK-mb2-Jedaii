@@ -535,6 +535,7 @@ void	SCR_DrawBigString( int x, int y, const char *s, float alpha, qboolean noCol
 void	SCR_DrawBigStringColor( int x, int y, const char *s, vec4_t color, qboolean noColorEscape );	// ignores embedded color control characters
 void	SCR_DrawSmallStringExt( int x, int y, const char *string, float *setColor, qboolean forceColor, qboolean noColorEscape );
 void	SCR_DrawSmallChar( int x, int y, int ch );
+void	SCR_DrawRPGHUDOverlay( void );
 
 
 //
@@ -592,3 +593,23 @@ void CL_WriteAVIVideoFrame( const byte *imageBuffer, int size );
 void CL_WriteAVIAudioFrame( const byte *pcmBuffer, int size );
 qboolean CL_CloseAVI( void );
 qboolean CL_VideoRecording( void );
+
+//
+// cl_scrn.cpp - RPG HUD & Leaderboard Overlay
+//
+extern cvar_t *cg_drawRPGHUD;
+extern cvar_t *cg_drawLeaderboard;
+
+typedef struct {
+	int rank;
+	int fr;
+	int level;
+	char rankTitle[32];
+	char displayName[64];
+} topLeaderboardEntry_t;
+
+extern topLeaderboardEntry_t g_topLeaderboard[10];
+extern int g_topLeaderboardCount;
+
+void SCR_DrawRPGHUDOverlay( void );
+void SCR_DrawLeaderboardOverlay( void );

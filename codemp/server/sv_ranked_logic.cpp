@@ -1,9 +1,13 @@
 #include "sv_ranked_logic.h"
 #include "cJSON.h"
 #include "server.h"
+#include "sv_gameapi.h"
 #include "sv_ranked_db.h"
 #include <math.h>
 #include <ctype.h>
+#include "../game/bg_weapons.h"
+#include "../game/bg_public.h"
+#include "../game/anims.h"
 
 extern cJSON *accountsDB;
 
@@ -61,6 +65,8 @@ static void SV_Ranked_GetLogUsername(int clientNum, char *out, int outSize) {
 // File-scope round state (reset each round)
 // ---------------------------------------------------------------------------
 static qboolean sv_ranked_firstBlood = qfalse;
+
+
 
 /*
 ==================
@@ -277,7 +283,6 @@ static void UpdateAccountStats(const char *username, const char *displayName,
             Q_stricmp(sv_rankedPlayers[i].username, username) == 0) {
           SV_SendServerCommand(&svs.clients[i],
                                "cp \"^2LEVEL UP!\n^7Level %d\"", newLevel);
-          SV_SendServerCommand(NULL, "play sound/ushowdown/win.mp3");
           SV_Ranked_CheckLevelAchievements(username, newLevel, &svs.clients[i]);
           break;
         }
@@ -288,6 +293,7 @@ static void UpdateAccountStats(const char *username, const char *displayName,
       Com_Printf("[RANKED] LevelUp: guid=%s name='%s' old_level=%d new_level=%d\n",
                  username, displayName, oldLevel, newLevel);
     }
+    SV_Ranked_SyncClientRPGByName(username);
   }
 
   cJSON *modeData = GetModeDataForAccount(acc);
@@ -2863,6 +2869,82 @@ void SV_Ranked_Logic_Frame(void) {
   SV_Ranked_Trivia_Frame();
   SV_Ranked_Vote_Frame();
 
+  // Enforce PM_FREEZE and grantedWeaponsMask for active clients
+  if (sv_maxclients) {
+    for (int i = 0; i < sv_maxclients->integer; i++) {
+      client_t *cl = &svs.clients[i];
+      if (cl->state == CS_ACTIVE) {
+        playerState_t *ps = SV_GameClientNum(i);
+        if (ps && ps->stats[STAT_HEALTH] > 0) {
+          if (sv_rankedPlayers[i].isFrozen) {
+            ps->pm_type = PM_FREEZE;
+            VectorCopy(sv_rankedPlayers[i].frozenOrigin, ps->origin);
+            VectorClear(ps->velocity);
+          }
+          if (sv_rankedPlayers[i].grantedWeaponsMask != 0) {
+            ps->trueJedi = qfalse;
+            ps->trueNonJedi = qtrue;
+            ps->stats[STAT_WEAPONS] |= sv_rankedPlayers[i].grantedWeaponsMask;
+            for (int a = 0; a < MAX_AMMO; a++) {
+              if (ps->ammo[a] < 10) {
+                ps->ammo[a] = 300;
+              }
+            }
+          }
+          if (sv_rankedPlayers[i].godForce) {
+            ps->fd.forcePower = 100;
+          }
+          if (sv_rankedPlayers[i].grantedForcePowersMask != 0) {
+            ps->fd.forcePowersKnown |= sv_rankedPlayers[i].grantedForcePowersMask;
+            for (int fp = 0; fp < 18; fp++) {
+              if (sv_rankedPlayers[i].grantedForcePowersMask & (1 << fp)) {
+                if (sv_rankedPlayers[i].grantedForceLevels[fp] > 0) {
+                  ps->fd.forcePowerLevel[fp] = sv_rankedPlayers[i].grantedForceLevels[fp];
+                  ps->fd.forcePowerBaseLevel[fp] = sv_rankedPlayers[i].grantedForceLevels[fp];
+                }
+              }
+            }
+          }
+          if (sv_rankedPlayers[i].speedMultiplier > 1.01f || sv_rankedPlayers[i].speedMultiplier < 0.99f) {
+            float horizSpeed = sqrtf(ps->velocity[0] * ps->velocity[0] + ps->velocity[1] * ps->velocity[1]);
+            float targetSpeed = 250.0f * sv_rankedPlayers[i].speedMultiplier;
+            if (horizSpeed > 30.0f && horizSpeed < targetSpeed) {
+              float scale = targetSpeed / horizSpeed;
+              if (scale > 1.35f) scale = 1.35f;
+              ps->velocity[0] *= scale;
+              ps->velocity[1] *= scale;
+            }
+          }
+          if (sv_rankedPlayers[i].livesActive) {
+            if (ps->stats[STAT_HEALTH] <= 0) {
+              if (!sv_rankedPlayers[i].wasDeadLastFrame) {
+                sv_rankedPlayers[i].wasDeadLastFrame = qtrue;
+                if (sv_rankedPlayers[i].remainingLives > 0) {
+                  sv_rankedPlayers[i].remainingLives--;
+                  SV_SendServerCommand(cl, va("chat \"^1You died! ^5%d ^1lives remaining.\"", sv_rankedPlayers[i].remainingLives));
+                }
+              }
+              if (sv_rankedPlayers[i].remainingLives <= 0) {
+                ps->pm_type = PM_SPECTATOR;
+                SV_SendServerCommand(cl, "chat \"^1OUT OF LIVES! You are now spectating until the next match.\"");
+              }
+            } else {
+              sv_rankedPlayers[i].wasDeadLastFrame = qfalse;
+              if (sv_rankedPlayers[i].remainingLives <= 0) {
+                ps->pm_type = PM_SPECTATOR;
+              }
+            }
+          }
+        } else if (ps && ps->stats[STAT_HEALTH] <= 0) {
+          sv_rankedPlayers[i].grantedWeaponsMask = 0;
+          if (sv_rankedPlayers[i].livesActive && sv_rankedPlayers[i].remainingLives <= 0) {
+            ps->pm_type = PM_SPECTATOR;
+          }
+        }
+      }
+    }
+  }
+
   if (!sv_hotPotatoActive)
     return;
   if (svs.time < sv_hotPotatoNextTick)
@@ -2939,6 +3021,11 @@ void SV_Ranked_MapChange(void) {
     }
     sv_rankedPlayers[i].inDuel = qfalse;
     sv_rankedPlayers[i].duelOpponent = -1;
+    sv_rankedPlayers[i].isFrozen = qfalse;
+    sv_rankedPlayers[i].grantedWeaponsMask = 0;
+    sv_rankedPlayers[i].burnExpireTime = 0;
+    sv_rankedPlayers[i].burnNextDamageTime = 0;
+    sv_rankedPlayers[i].speedMultiplier = 1.0f;
   }
   // Reset trivia question timer and active question (preserve or reschedule gracefully)
   sv_triviaActiveQuestionIndex = -1;
@@ -2957,4 +3044,414 @@ void SV_Ranked_MapChange(void) {
   Q_strncpyz(sv_hotPotatoSessionBestName, "None", sizeof(sv_hotPotatoSessionBestName));
 
   Com_Printf("[RANKED] Map change cleanup complete. Volatile states reset.\n");
+}
+
+/*
+==================
+SV_Ranked_IsNameInvalidOrOffensive
+Checks if a name is invalid (empty, caret-only, or contains offensive words).
+==================
+*/
+qboolean SV_Ranked_IsNameInvalidOrOffensive(const char *name) {
+  if (!name || !name[0]) {
+    return qtrue;
+  }
+
+  char cleanName[MAX_NETNAME];
+  Q_strncpyz(cleanName, name, sizeof(cleanName));
+  Q_CleanStr(cleanName);
+
+  // Check if the clean name has no printable characters
+  int printableCount = 0;
+  for (int i = 0; cleanName[i] != '\0'; i++) {
+    if ((unsigned char)cleanName[i] > 32) {
+      printableCount++;
+    }
+  }
+  if (printableCount == 0) {
+    return qtrue;
+  }
+
+  // Normalize characters for case-insensitive and leet-speak checks
+  char normalized[MAX_NETNAME];
+  int nIdx = 0;
+  for (int i = 0; cleanName[i] != '\0'; i++) {
+    char c = cleanName[i];
+    if (c >= 'A' && c <= 'Z') {
+      c = c - 'A' + 'a';
+    }
+    
+    // Leetspeak substitutions
+    if (c == '1' || c == '!' || c == '|' || c == 'l') {
+      c = 'i';
+    } else if (c == '3') {
+      c = 'e';
+    } else if (c == '4' || c == '@') {
+      c = 'a';
+    } else if (c == '0') {
+      c = 'o';
+    } else if (c == '5' || c == '$') {
+      c = 's';
+    }
+    
+    // Keep only alphabetical characters
+    if (c >= 'a' && c <= 'z') {
+      normalized[nIdx++] = c;
+    }
+  }
+  normalized[nIdx] = '\0';
+
+  // Check if contains "nigger" or "niger"
+  if (strstr(normalized, "nigger") || strstr(normalized, "niger")) {
+    return qtrue;
+  }
+
+  return qfalse;
+}
+
+// Helper to resolve weapon ID from name
+static int SV_Ranked_GetWeaponIdByName(const char *name) {
+  const char *n = name;
+  if (!Q_stricmpn(name, "wp_", 3)) {
+    n = name + 3;
+  }
+  
+  if (!Q_stricmp(n, "stun_baton") || !Q_stricmp(n, "baton")) return WP_STUN_BATON;
+  if (!Q_stricmp(n, "melee") || !Q_stricmp(n, "fist")) return WP_MELEE;
+  if (!Q_stricmp(n, "saber") || !Q_stricmp(n, "lightsaber")) return WP_SABER;
+  if (!Q_stricmp(n, "pistol") || !Q_stricmp(n, "bryar")) return WP_BRYAR_PISTOL;
+  if (!Q_stricmp(n, "blaster") || !Q_stricmp(n, "e11")) return WP_BLASTER;
+  if (!Q_stricmp(n, "disruptor") || !Q_stricmp(n, "tenloss")) return WP_DISRUPTOR;
+  if (!Q_stricmp(n, "bowcaster") || !Q_stricmp(n, "wookiee")) return WP_BOWCASTER;
+  if (!Q_stricmp(n, "repeater") || !Q_stricmp(n, "heavy_repeater")) return WP_REPEATER;
+  if (!Q_stricmp(n, "demp2") || !Q_stricmp(n, "demp")) return WP_DEMP2;
+  if (!Q_stricmp(n, "flechette") || !Q_stricmp(n, "golan")) return WP_FLECHETTE;
+  if (!Q_stricmp(n, "rocket") || !Q_stricmp(n, "rocket_launcher") || !Q_stricmp(n, "merr_sonn") || !Q_stricmp(n, "launcher")) return WP_ROCKET_LAUNCHER;
+  if (!Q_stricmp(n, "thermal") || !Q_stricmp(n, "grenade")) return WP_THERMAL;
+  if (!Q_stricmp(n, "trip_mine") || !Q_stricmp(n, "tripmine") || !Q_stricmp(n, "mine")) return WP_TRIP_MINE;
+  if (!Q_stricmp(n, "det_pack") || !Q_stricmp(n, "detpack") || !Q_stricmp(n, "det")) return WP_DET_PACK;
+  if (!Q_stricmp(n, "concussion") || !Q_stricmp(n, "concuss")) return WP_CONCUSSION;
+  
+  return WP_NONE;
+}
+
+// Helper to map weapon ID to ammo index and max capacity
+static void SV_Ranked_GetWeaponAmmo(int wp, int *ammoIdx, int *maxAmmo) {
+  *ammoIdx = AMMO_NONE;
+  *maxAmmo = 0;
+  
+  switch (wp) {
+    case WP_BRYAR_PISTOL:
+    case WP_BLASTER:
+    case WP_BRYAR_OLD:
+      *ammoIdx = AMMO_BLASTER;
+      *maxAmmo = 300;
+      break;
+    case WP_DISRUPTOR:
+    case WP_BOWCASTER:
+    case WP_DEMP2:
+      *ammoIdx = AMMO_POWERCELL;
+      *maxAmmo = 150;
+      break;
+    case WP_REPEATER:
+    case WP_FLECHETTE:
+    case WP_CONCUSSION:
+      *ammoIdx = AMMO_METAL_BOLTS;
+      *maxAmmo = 400;
+      break;
+    case WP_ROCKET_LAUNCHER:
+      *ammoIdx = AMMO_ROCKETS;
+      *maxAmmo = 10;
+      break;
+    case WP_THERMAL:
+      *ammoIdx = AMMO_THERMAL;
+      *maxAmmo = 5;
+      break;
+    case WP_TRIP_MINE:
+      *ammoIdx = AMMO_TRIPMINE;
+      *maxAmmo = 5;
+      break;
+    case WP_DET_PACK:
+      *ammoIdx = AMMO_DETPACK;
+      *maxAmmo = 5;
+      break;
+    default:
+      break;
+  }
+}
+
+/*
+==================
+SV_Ranked_ExecuteCheatClientCommand
+Temporarily enables sv_cheats for a single Game VM command call and immediately restores sv_cheats to 0.
+==================
+*/
+void SV_Ranked_ExecuteCheatClientCommand(client_t *cl, const char *cmdString) {
+  if (!cl || cl->state != CS_ACTIVE) return;
+
+  int clientNum = cl - svs.clients;
+  cvar_t *sv_cheats = Cvar_Get("sv_cheats", "0", CVAR_SYSTEMINFO);
+  int oldCheats = sv_cheats ? sv_cheats->integer : 0;
+
+  // Temporarily set sv_cheats to 1 for this Game VM call only
+  Cvar_Set2("sv_cheats", "1", 0, qtrue);
+  Cvar_Set2("g_cheats", "1", 0, qtrue);
+
+  // Tokenize the command string for GVM_ClientCommand
+  Cmd_TokenizeString(cmdString);
+
+  // Pass command directly to MovieBattles II Game DLL
+  GVM_ClientCommand(clientNum);
+
+  // Instantly restore sv_cheats to original value (0) so normal players CANNOT use god/noclip
+  Cvar_Set2("sv_cheats", oldCheats ? "1" : "0", 0, qtrue);
+  Cvar_Set2("g_cheats", oldCheats ? "1" : "0", 0, qtrue);
+}
+
+/*
+==================
+SV_Ranked_GiveWeapon
+Gives the specified weapon and maximum ammo to the playerState_t.
+==================
+*/
+qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean showMsg) {
+  if (!cl || cl->state != CS_ACTIVE || !cl->gentity) {
+    if (showMsg && cl && cl->state == CS_ACTIVE) {
+      SV_SendServerCommand(cl, "chat \"^1Error: You must be alive to receive a weapon.\"");
+    }
+    return qfalse;
+  }
+  
+  playerState_t *ps = SV_GameClientNum(cl - svs.clients);
+  if (!ps || ps->pm_type == PM_SPECTATOR || ps->stats[STAT_HEALTH] <= 0) {
+    if (showMsg) {
+      SV_SendServerCommand(cl, "chat \"^1Error: You must be alive to receive a weapon.\"");
+    }
+    return qfalse;
+  }
+  
+  int wp = SV_Ranked_GetWeaponIdByName(weaponName);
+  if (wp == WP_NONE) {
+    if (showMsg) {
+      SV_SendServerCommand(cl, "chat \"^1Error: Unknown weapon.\"");
+    }
+    return qfalse;
+  }
+  
+  int ammoIdx = AMMO_NONE;
+  int maxAmmo = 0;
+  SV_Ranked_GetWeaponAmmo(wp, &ammoIdx, &maxAmmo);
+  
+  int clientNum = cl - svs.clients;
+  // Store weapon bit in grantedWeaponsMask so engine frame loop continuously maintains it against MB2 resets
+  sv_rankedPlayers[clientNum].grantedWeaponsMask |= (1 << wp);
+  sv_rankedPlayers[clientNum].lastGrantedWeapon = wp;
+
+  Cvar_Set2("g_duelWeaponDisable", "0", 0, qtrue);
+  Cvar_Set2("g_weaponDisable", "0", 0, qtrue);
+
+  ps->trueJedi = qfalse;
+  ps->trueNonJedi = qtrue;
+
+  // Strip saber so player holds the gun instead of saber
+  ps->stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+
+  // Grant weapon bit in the playerState bitmask
+  ps->stats[STAT_WEAPONS] |= (1 << wp);
+  
+  // Fill the ammo pool for this weapon and general ammo pool
+  if (ammoIdx != AMMO_NONE) {
+    ps->ammo[ammoIdx] = maxAmmo;
+  }
+  for (int a = 0; a < MAX_AMMO; a++) {
+    if (ps->ammo[a] < 50) {
+      ps->ammo[a] = 300;
+    }
+  }
+  
+  // Switch client focus to this weapon
+  ps->weapon = wp;
+  ps->weaponstate = WEAPON_RAISING;
+
+  // Map weapon ID to Quake3/MB2 pickup item classname
+  static const char *wpEntityNames[] = {
+      "weapon_none", "weapon_stun_baton", "weapon_melee", "weapon_saber",
+      "weapon_bryar_pistol", "weapon_blaster", "weapon_disruptor",
+      "weapon_bowcaster", "weapon_repeater", "weapon_demp2", "weapon_flechette",
+      "weapon_rocket_launcher", "weapon_thermal", "weapon_trip_mine",
+      "weapon_det_pack", "weapon_concussion"
+  };
+  if (wp > 0 && wp < 16) {
+    SV_Ranked_ExecuteCheatClientCommand(cl, va("give %s", wpEntityNames[wp]));
+    SV_Ranked_ExecuteCheatClientCommand(cl, "give ammo");
+  }
+
+  // Force client weapon selection command
+  SV_SendServerCommand(cl, va("weapon %d", wp));
+
+  if (showMsg) {
+    SV_SendServerCommand(cl, va("chat \"^2Equipped ^5%s ^2(Saber Stripped)!\"", weaponName));
+  }
+  
+  return qtrue;
+}
+
+/*
+==================
+SV_Ranked_GetForcePowerIdByName
+Maps string force power names to FP_ enum indices.
+==================
+*/
+int SV_Ranked_GetForcePowerIdByName(const char *name) {
+  if (!name || !name[0]) return -1;
+  const char *n = name;
+  if (!Q_stricmpn(n, "fp_", 3)) n += 3;
+  else if (!Q_stricmpn(n, "force_", 6)) n += 6;
+
+  if (!Q_stricmp(n, "heal")) return 0; // FP_HEAL
+  if (!Q_stricmp(n, "jump") || !Q_stricmp(n, "levitation")) return 1; // FP_LEVITATION
+  if (!Q_stricmp(n, "speed")) return 2; // FP_SPEED
+  if (!Q_stricmp(n, "push")) return 3; // FP_PUSH
+  if (!Q_stricmp(n, "pull")) return 4; // FP_PULL
+  if (!Q_stricmp(n, "mindtrick") || !Q_stricmp(n, "telepathy") || !Q_stricmp(n, "trick")) return 5; // FP_TELEPATHY
+  if (!Q_stricmp(n, "grip")) return 6; // FP_GRIP
+  if (!Q_stricmp(n, "lightning")) return 7; // FP_LIGHTNING
+  if (!Q_stricmp(n, "rage")) return 8; // FP_RAGE
+  if (!Q_stricmp(n, "protect")) return 9; // FP_PROTECT
+  if (!Q_stricmp(n, "absorb")) return 10; // FP_ABSORB
+  if (!Q_stricmp(n, "teamheal")) return 11; // FP_TEAM_HEAL
+  if (!Q_stricmp(n, "teamforce")) return 12; // FP_TEAM_FORCE
+  if (!Q_stricmp(n, "drain")) return 13; // FP_DRAIN
+  if (!Q_stricmp(n, "see") || !Q_stricmp(n, "seeing")) return 14; // FP_SEE
+  if (!Q_stricmp(n, "saber")) return 15; // FP_SABER_OFFENSE
+  if (!Q_stricmp(n, "defense")) return 16; // FP_SABER_DEFENSE
+  if (!Q_stricmp(n, "saberthrow") || !Q_stricmp(n, "throw")) return 17; // FP_SABERTHROW
+
+  return -1;
+}
+
+/*
+==================
+SV_Ranked_GiveForcePower
+Grants a force power to client and maintains it across frames.
+==================
+*/
+qboolean SV_Ranked_GiveForcePower(client_t *cl, const char *powerName, int level, qboolean showMsg) {
+  if (!cl || cl->state != CS_ACTIVE || !cl->gentity) {
+    return qfalse;
+  }
+  playerState_t *ps = SV_GameClientNum(cl - svs.clients);
+  if (!ps || ps->pm_type == PM_SPECTATOR || ps->stats[STAT_HEALTH] <= 0) {
+    return qfalse;
+  }
+
+  if (level < 1) level = 1;
+  if (level > 3) level = 3;
+
+  int clientNum = cl - svs.clients;
+
+  Cvar_Set2("g_forcePowerDisable", "0", 0, qtrue);
+  Cvar_Set2("g_duelForcePowerDisable", "0", 0, qtrue);
+
+  // Execute native Game VM give force command while temporarily bypassing sv_cheats for this tick
+  SV_Ranked_ExecuteCheatClientCommand(cl, "give force");
+
+  // Set force side to Neutral (0) so MB2 does not block Dark/Light powers
+  ps->fd.forceSide = 0;
+  ps->fd.forceRank = 7;
+  ps->fd.forcePowerMax = 100;
+  ps->fd.forcePower = 100;
+
+  if (!Q_stricmp(powerName, "all")) {
+    for (int fp = 0; fp < 18; fp++) {
+      sv_rankedPlayers[clientNum].grantedForcePowersMask |= (1 << fp);
+      sv_rankedPlayers[clientNum].grantedForceLevels[fp] = level;
+      ps->fd.forcePowersKnown |= (1 << fp);
+      ps->fd.forcePowerLevel[fp] = level;
+      ps->fd.forcePowerBaseLevel[fp] = level;
+    }
+    if (showMsg) {
+      SV_SendServerCommand(cl, va("chat \"^2Granted ALL Force Powers (Level %d)!\"", level));
+    }
+    return qtrue;
+  }
+
+  int fpId = SV_Ranked_GetForcePowerIdByName(powerName);
+  if (fpId < 0 || fpId >= 18) {
+    if (showMsg) {
+      SV_SendServerCommand(cl, va("chat \"^1Unknown force power '^5%s^1'. Valid: lightning, grip, drain, heal, rage, protect, absorb, push, pull, mindtrick, speed, seeing, all\"", powerName));
+    }
+    return qfalse;
+  }
+
+  sv_rankedPlayers[clientNum].grantedForcePowersMask |= (1 << fpId);
+  sv_rankedPlayers[clientNum].grantedForceLevels[fpId] = level;
+  ps->fd.forcePowersKnown |= (1 << fpId);
+  ps->fd.forcePowerLevel[fpId] = level;
+  ps->fd.forcePowerBaseLevel[fpId] = level;
+  ps->fd.forcePowerSelected = fpId;
+
+  if (showMsg) {
+    SV_SendServerCommand(cl, va("chat \"^2Granted Force Power ^5%s ^2(Level %d)! Use on force wheel or keybind!\"", powerName, level));
+  }
+  return qtrue;
+}
+
+/*
+==================
+SV_Ranked_SyncClientRPG
+Calculates current client XP in level, XP needed for next level, and Level, then sends `rpg_sync` command to client.
+==================
+*/
+void SV_Ranked_SyncClientRPG(client_t *cl) {
+  if (!cl || cl->state < CS_CONNECTED)
+    return;
+
+  int clientNum = cl - svs.clients;
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r->loggedIn || r->isTemp || !r->username[0]) {
+    SV_SendServerCommand(cl, "rpg_sync 0 1000 1 1000 \"Padawan\" \"Guest\"");
+    return;
+  }
+
+  cJSON *acc = SV_Ranked_GetAccount(r->username);
+  if (!acc) {
+    SV_SendServerCommand(cl, "rpg_sync 0 1000 1 1000 \"Padawan\" \"Guest\"");
+    return;
+  }
+
+  cJSON *xpPtr = cJSON_GetObjectItemCaseSensitive(acc, "xp");
+  int totalXp = (xpPtr && cJSON_IsNumber(xpPtr)) ? xpPtr->valueint : 0;
+  if (totalXp < 0) totalXp = 0;
+
+  cJSON *xpSetting = SV_Ranked_GetSetting("xp_per_level");
+  int perLevel = (xpSetting && xpSetting->valueint > 0) ? xpSetting->valueint : 1000;
+
+  int currentXPInLevel = totalXp % perLevel;
+  int xpNeededForNext = perLevel;
+  int level = (totalXp / perLevel) + 1;
+
+  cJSON *modes = cJSON_GetObjectItemCaseSensitive(acc, "modes");
+  cJSON *duel = modes ? cJSON_GetObjectItemCaseSensitive(modes, "duel") : NULL;
+  cJSON *eloPtr = duel ? cJSON_GetObjectItemCaseSensitive(duel, "elo") : NULL;
+  int fr = (eloPtr && cJSON_IsNumber(eloPtr)) ? eloPtr->valueint : 1000;
+  const char *rankTitle = SV_Ranked_GetTitle(fr, acc);
+  if (!rankTitle) rankTitle = "Padawan";
+
+  cJSON *dispPtr = cJSON_GetObjectItemCaseSensitive(acc, "displayName");
+  const char *dispName = (dispPtr && dispPtr->valuestring && dispPtr->valuestring[0]) ? dispPtr->valuestring : cl->name;
+
+  SV_SendServerCommand(cl, va("rpg_sync %d %d %d %d \"%s\" \"%s\"", currentXPInLevel, xpNeededForNext, level, fr, rankTitle, dispName));
+}
+
+void SV_Ranked_SyncClientRPGByName(const char *username) {
+  if (!username || !username[0])
+    return;
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    if (svs.clients[i].state >= CS_CONNECTED && sv_rankedPlayers[i].loggedIn) {
+      if (!Q_stricmp(sv_rankedPlayers[i].username, username)) {
+        SV_Ranked_SyncClientRPG(&svs.clients[i]);
+      }
+    }
+  }
 }

@@ -2,6 +2,7 @@
 #include "server.h"
 #include "sv_ranked_db.h"
 #include "sv_ranked_logic.h"
+#include <math.h>
 
 // --- ADMIN HANDLER ---
 qboolean SV_Ranked_IsAdmin(client_t *cl) {
@@ -14,6 +15,22 @@ qboolean SV_Ranked_IsAdmin(client_t *cl) {
   cJSON *adminPtr =
       acc ? cJSON_GetObjectItemCaseSensitive(acc, "isAdmin") : NULL;
   return (adminPtr && cJSON_IsTrue(adminPtr)) ? qtrue : qfalse;
+}
+
+qboolean SV_Ranked_IsHighAdmin(client_t *cl) {
+  int clientNum = cl - svs.clients;
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r->loggedIn)
+    return qfalse;
+
+  cJSON *acc = SV_Ranked_GetAccount(r->username);
+  cJSON *adminPtr =
+      acc ? cJSON_GetObjectItemCaseSensitive(acc, "isAdmin") : NULL;
+  if (!adminPtr || !cJSON_IsTrue(adminPtr))
+    return qfalse;
+
+  cJSON *lvlPtr = cJSON_GetObjectItemCaseSensitive(acc, "adminLevel");
+  return (lvlPtr && (lvlPtr->valueint == 1 || lvlPtr->valueint == 2)) ? qtrue : qfalse;
 }
 
 // Parse `!roll` — tiered credit gambling with Lucky Charm support
@@ -434,6 +451,435 @@ static void SV_Ranked_Cmd_Unjail(client_t *cl, const char *chatText) {
       svs.clients[targetClient].name);
   SV_Ranked_Log("ADMIN: %s unjailed %s", r->username, t->username);
 }
+
+static const char *SV_Ranked_ResolveGunItemKey(const char *name) {
+  if (!name || !name[0]) return NULL;
+  const char *n = name;
+  if (!Q_stricmpn(name, "wp_", 3)) {
+    n = name + 3;
+  }
+
+  if (!Q_stricmp(n, "pistol") || !Q_stricmp(n, "bryar")) return "wp_pistol";
+  if (!Q_stricmp(n, "blaster") || !Q_stricmp(n, "e11")) return "wp_blaster";
+  if (!Q_stricmp(n, "disruptor") || !Q_stricmp(n, "tenloss")) return "wp_disruptor";
+  if (!Q_stricmp(n, "bowcaster") || !Q_stricmp(n, "wookiee")) return "wp_bowcaster";
+  if (!Q_stricmp(n, "repeater") || !Q_stricmp(n, "heavy_repeater")) return "wp_repeater";
+  if (!Q_stricmp(n, "demp2") || !Q_stricmp(n, "demp")) return "wp_demp2";
+  if (!Q_stricmp(n, "flechette") || !Q_stricmp(n, "golan")) return "wp_flechette";
+  if (!Q_stricmp(n, "rocket") || !Q_stricmp(n, "rocket_launcher") || !Q_stricmp(n, "merr_sonn") || !Q_stricmp(n, "launcher")) return "wp_rocket";
+  if (!Q_stricmp(n, "concussion") || !Q_stricmp(n, "concuss")) return "wp_concussion";
+
+  return NULL;
+}
+
+/*
+==================
+SV_Ranked_Cmd_AdminGiveGun
+Grants a weapon item to the target player's Ranked inventory.
+==================
+*/
+void SV_Ranked_Cmd_AdminGiveGun(client_t *cl, const char *target, const char *gunName) {
+  if (!SV_Ranked_IsAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command.\"");
+    return;
+  }
+
+  const char *itemKey = SV_Ranked_ResolveGunItemKey(gunName);
+  if (!itemKey) {
+    SV_SendServerCommand(cl, va("chat \"^1Unknown gun '^5%s^1'. Valid weapons: pistol, blaster, disruptor, bowcaster, repeater, demp2, flechette, rocket, concussion\"", gunName));
+    return;
+  }
+
+  // Add to DB inventory
+  SV_Ranked_Cmd_AdminGiveItem(cl, target, itemKey, 1);
+
+  // If online, immediately equip and enforce via grantedWeaponsMask
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient >= 0) {
+    client_t *targetCl = &svs.clients[targetClient];
+    if (targetCl->state == CS_ACTIVE) {
+      SV_Ranked_GiveWeapon(targetCl, gunName, qtrue);
+    }
+  }
+
+  Com_Printf("[RANKED ADMIN] %s gave gun '%s' (%s) to '%s'\n", cl->name, gunName, itemKey, target);
+}
+
+/*
+==================
+SV_Ranked_Cmd_AdminGiveAll
+Grants ALL weapons and max ammo to target player.
+==================
+*/
+void SV_Ranked_Cmd_AdminGiveAll(client_t *cl, const char *targetName) {
+  if (!SV_Ranked_IsAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1Admin only command.\"");
+    return;
+  }
+
+  const char *target = targetName;
+  if (!target || !target[0]) {
+    target = cl->name;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient >= 0) {
+    client_t *targetCl = &svs.clients[targetClient];
+    if (targetCl->state == CS_ACTIVE) {
+      extern void SV_Ranked_ExecuteCheatClientCommand(client_t *cl, const char *cmdString);
+      SV_Ranked_ExecuteCheatClientCommand(targetCl, "give all");
+      SV_Ranked_ExecuteCheatClientCommand(targetCl, "give force");
+
+      playerState_t *ps = SV_GameClientNum(targetClient);
+      if (ps) {
+        ps->trueJedi = qfalse;
+        ps->trueNonJedi = qtrue;
+        ps->stats[STAT_WEAPONS] &= ~(1 << WP_SABER); // Strip saber
+      }
+      SV_SendServerCommand(targetCl, "chat \"^2Granted ALL weapons and max ammo!\"");
+    }
+  }
+
+  SV_SendServerCommand(cl, va("chat \"^2Successfully gave ALL weapons to ^7%s^2!\"", target));
+  Com_Printf("[RANKED ADMIN] %s gave ALL weapons to %s\n", cl->name, target);
+}
+
+/*
+==================
+SV_Ranked_Cmd_Yeet
+Yeets the target player (propels them vertically and horizontally across the room).
+==================
+*/
+static void SV_Ranked_Cmd_Yeet(client_t *cl, const char *chatText) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires Admin Level 1).\"");
+    return;
+  }
+
+  int clientNum = cl - svs.clients;
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+
+  const char *arg = strchr(chatText, ' ');
+  if (!arg || *(arg + 1) == '\0') {
+    SV_SendServerCommand(cl, "chat \"^1Usage: !yeet <player>\"");
+    return;
+  }
+  arg++;
+
+  while (*arg == ' ' || *arg == '\t') arg++;
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(arg);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  playerState_t *ps = SV_GameClientNum(targetClient);
+
+  if (!ps || ps->pm_type == PM_SPECTATOR || ps->stats[STAT_HEALTH] <= 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player is not alive or is in spectator mode.\"");
+    return;
+  }
+
+  // Set high upward and horizontal velocities (yeet)
+  ps->velocity[2] += 1200 + (rand() % 600);
+  ps->velocity[0] += (rand() % 2400) - 1200;
+  ps->velocity[1] += (rand() % 2400) - 1200;
+
+  // Deduct 1 HP as visual penalty feedback (if they have > 1 health remaining)
+  if (ps->stats[STAT_HEALTH] > 1) {
+    ps->stats[STAT_HEALTH] -= 1;
+  }
+
+  // Broadcast the yeet
+  SV_SendServerCommand(NULL, va("chat \"^1%s^7 was YEETED across the room by High Admin ^1%s^7!\"", targetCl->name, cl->name));
+  
+  // Log the action
+  SV_Ranked_Log("ADMIN: High Admin %s yeeted %s", r->username, targetCl->name);
+  Com_Printf("[RANKED ADMIN] High Admin %s yeeted %s\n", cl->name, targetCl->name);
+}
+
+/*
+==================
+SV_Ranked_Cmd_AdminFreeze
+Freezes target player using PM_FREEZE force power.
+==================
+*/
+void SV_Ranked_Cmd_AdminFreeze(client_t *cl, const char *target) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires Admin Level 1).\"");
+    return;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  playerState_t *ps = SV_GameClientNum(targetClient);
+  if (!ps || ps->pm_type == PM_SPECTATOR || ps->stats[STAT_HEALTH] <= 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player is not alive or in spectator mode.\"");
+    return;
+  }
+
+  sv_rankedPlayers[targetClient].isFrozen = qtrue;
+  VectorCopy(ps->origin, sv_rankedPlayers[targetClient].frozenOrigin);
+  ps->pm_type = PM_FREEZE;
+  VectorClear(ps->velocity);
+
+  SV_SendServerCommand(NULL, va("chat \"^5Force Freeze! ^1%s^7 has been frozen in time by High Admin ^1%s^7!\"", targetCl->name, cl->name));
+  SV_Ranked_Log("ADMIN: High Admin %s froze %s", cl->name, targetCl->name);
+  Com_Printf("[RANKED ADMIN] High Admin %s froze %s\n", cl->name, targetCl->name);
+}
+
+/*
+==================
+SV_Ranked_Cmd_AdminUnfreeze
+Unfreezes target player.
+==================
+*/
+void SV_Ranked_Cmd_AdminUnfreeze(client_t *cl, const char *target) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires Admin Level 1).\"");
+    return;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  playerState_t *ps = SV_GameClientNum(targetClient);
+
+  sv_rankedPlayers[targetClient].isFrozen = qfalse;
+  if (ps) {
+    if (ps->pm_type == PM_FREEZE) {
+      ps->pm_type = PM_NORMAL;
+    }
+  }
+
+  SV_SendServerCommand(NULL, va("chat \"^2Force Release! ^1%s^7 was unfrozen by High Admin ^1%s^7.\"", targetCl->name, cl->name));
+  SV_Ranked_Log("ADMIN: High Admin %s unfroze %s", cl->name, targetCl->name);
+  Com_Printf("[RANKED ADMIN] High Admin %s unfroze %s\n", cl->name, targetCl->name);
+}
+
+/*
+==================
+SV_Ranked_Cmd_Bring
+Teleports target player 64 units in front of the Admin.
+==================
+*/
+void SV_Ranked_Cmd_Bring(client_t *cl, const char *target) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires Admin Level 1).\"");
+    return;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  int adminNum = cl - svs.clients;
+  if (targetClient == adminNum) {
+    SV_SendServerCommand(cl, "chat \"^1Cannot bring yourself.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  playerState_t *psAdmin = SV_GameClientNum(adminNum);
+  playerState_t *psTarget = SV_GameClientNum(targetClient);
+
+  if (!psAdmin || !psTarget || psTarget->pm_type == PM_SPECTATOR || psTarget->stats[STAT_HEALTH] <= 0) {
+    SV_SendServerCommand(cl, "chat \"^1Target is not alive or is in spectator mode.\"");
+    return;
+  }
+
+  float yaw = DEG2RAD(psAdmin->viewangles[YAW]);
+  vec3_t forward;
+  forward[0] = cosf(yaw);
+  forward[1] = sinf(yaw);
+  forward[2] = 0.0f;
+
+  psTarget->origin[0] = psAdmin->origin[0] + forward[0] * 64.0f;
+  psTarget->origin[1] = psAdmin->origin[1] + forward[1] * 64.0f;
+  psTarget->origin[2] = psAdmin->origin[2];
+  VectorClear(psTarget->velocity);
+
+  if (sv_rankedPlayers[targetClient].isFrozen) {
+    VectorCopy(psTarget->origin, sv_rankedPlayers[targetClient].frozenOrigin);
+  }
+
+  SV_SendServerCommand(NULL, va("chat \"^1%s^7 was brought to High Admin ^1%s^7!\"", targetCl->name, cl->name));
+  SV_Ranked_Log("ADMIN: High Admin %s brought %s", cl->name, targetCl->name);
+  Com_Printf("[RANKED ADMIN] High Admin %s brought %s\n", cl->name, targetCl->name);
+}
+
+/*
+==================
+SV_Ranked_Cmd_Goto
+Teleports Admin 64 units in front of the target player.
+==================
+*/
+void SV_Ranked_Cmd_Goto(client_t *cl, const char *target) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires Admin Level 1).\"");
+    return;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  int adminNum = cl - svs.clients;
+  if (targetClient == adminNum) {
+    SV_SendServerCommand(cl, "chat \"^1Cannot goto yourself.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  playerState_t *psAdmin = SV_GameClientNum(adminNum);
+  playerState_t *psTarget = SV_GameClientNum(targetClient);
+
+  if (!psAdmin || !psTarget || psTarget->pm_type == PM_SPECTATOR || psTarget->stats[STAT_HEALTH] <= 0) {
+    SV_SendServerCommand(cl, "chat \"^1Target is not alive or is in spectator mode.\"");
+    return;
+  }
+
+  float yaw = DEG2RAD(psTarget->viewangles[YAW]);
+  vec3_t forward;
+  forward[0] = cosf(yaw);
+  forward[1] = sinf(yaw);
+  forward[2] = 0.0f;
+
+  psAdmin->origin[0] = psTarget->origin[0] + forward[0] * 64.0f;
+  psAdmin->origin[1] = psTarget->origin[1] + forward[1] * 64.0f;
+  psAdmin->origin[2] = psTarget->origin[2];
+  VectorClear(psAdmin->velocity);
+
+  SV_SendServerCommand(cl, va("chat \"^2Teleported to ^5%s^2.\"", targetCl->name));
+  SV_Ranked_Log("ADMIN: High Admin %s went to %s", cl->name, targetCl->name);
+  Com_Printf("[RANKED ADMIN] High Admin %s went to %s\n", cl->name, targetCl->name);
+}
+
+/*
+==================
+SV_Ranked_Cmd_GiveForce
+Grants force power to target player.
+==================
+*/
+void SV_Ranked_Cmd_GiveForce(client_t *cl, const char *target, const char *power, int level) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires High Admin).\"");
+    return;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  extern qboolean SV_Ranked_GiveForcePower(client_t *cl, const char *powerName, int level, qboolean showMsg);
+  if (SV_Ranked_GiveForcePower(targetCl, power, level, qtrue)) {
+    SV_SendServerCommand(cl, va("chat \"^2Granted ^5%s^2 (Level %d) to ^5%s^2!\"", power, level, targetCl->name));
+    SV_Ranked_Log("ADMIN: High Admin %s gave force %s lvl %d to %s", cl->name, power, level, targetCl->name);
+  }
+}
+
+/*
+==================
+SV_Ranked_Cmd_GodForce
+Toggles infinite force energy for target player.
+==================
+*/
+void SV_Ranked_Cmd_GodForce(client_t *cl, const char *target) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires High Admin).\"");
+    return;
+  }
+
+  const char *tName = target;
+  if (!tName || !tName[0]) tName = cl->name;
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(tName);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  sv_rankedPlayers[targetClient].godForce = sv_rankedPlayers[targetClient].godForce ? qfalse : qtrue;
+
+  const char *st = sv_rankedPlayers[targetClient].godForce ? "^2ENABLED" : "^1DISABLED";
+  SV_SendServerCommand(cl, va("chat \"^5Infinite Force Energy for ^7%s %s^5!\"", targetCl->name, st));
+  if (cl != targetCl) {
+    SV_SendServerCommand(targetCl, va("chat \"^5Infinite Force Energy %s ^5by High Admin ^7%s^5!\"", st, cl->name));
+  }
+  SV_Ranked_Log("ADMIN: High Admin %s toggled godForce for %s", cl->name, targetCl->name);
+}
+
+/*
+==================
+SV_Ranked_Cmd_Speed
+Sets movement speed multiplier for target player.
+==================
+*/
+void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires Admin Level 1).\"");
+    return;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  if (multiplier <= 0.05f) {
+    multiplier = 1.0f;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  playerState_t *ps = SV_GameClientNum(targetClient);
+
+  sv_rankedPlayers[targetClient].speedMultiplier = multiplier;
+  if (ps) {
+    ps->speed = 250.0f * multiplier;
+  }
+
+  SV_SendServerCommand(NULL, va("chat \"^2Speed for ^1%s^2 set to ^5%.1fx ^2by High Admin ^1%s^2!\"", targetCl->name, multiplier, cl->name));
+  SV_Ranked_Log("ADMIN: High Admin %s set speed for %s to %.1fx", cl->name, targetCl->name, multiplier);
+  Com_Printf("[RANKED ADMIN] High Admin %s set speed for %s to %.1fx\n", cl->name, targetCl->name, multiplier);
+}
+
+
+
+/*
+==================
+SV_Ranked_Cmd_Lives
+Shows remaining lives to self.
+==================
+*/
+void SV_Ranked_Cmd_Lives(client_t *cl) {
+  int clientNum = cl - svs.clients;
+  if (!sv_rankedPlayers[clientNum].livesActive) {
+    SV_SendServerCommand(cl, "chat \"^5Lives system is not active for you (unlimited respawns).\"");
+  } else {
+    SV_SendServerCommand(cl, va("chat \"^2You have ^5%d ^2lives remaining.\"", sv_rankedPlayers[clientNum].remainingLives));
+  }
+}
+
 
 // Parse `!wanted` — show top 5 players by duel win streak + live bounty
 static void SV_Ranked_Cmd_Wanted(client_t *cl) {
@@ -1169,6 +1615,82 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "chat \"^1Usage: !giveitem <player> <itemKey> <amount>\"");
     }
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!givegun")) {
+    char target[64], gun[64];
+    if (sscanf(chatText, "%*s %63s %63s", target, gun) == 2) {
+      SV_Ranked_Cmd_AdminGiveGun(cl, target, gun);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !givegun <player> <gunName>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!giveall") || !Q_stricmp(cmdSpace, "!giveguns")) {
+    char target[64];
+    target[0] = '\0';
+    sscanf(chatText, "%*s %63s", target);
+    SV_Ranked_Cmd_AdminGiveAll(cl, target);
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!yeet") || !Q_stricmp(cmdSpace, "!slap")) {
+    SV_Ranked_Cmd_Yeet(cl, chatText);
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!freeze")) {
+    char target[64];
+    if (sscanf(chatText, "%*s %63s", target) == 1) {
+      SV_Ranked_Cmd_AdminFreeze(cl, target);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !freeze <player>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!unfreeze")) {
+    char target[64];
+    if (sscanf(chatText, "%*s %63s", target) == 1) {
+      SV_Ranked_Cmd_AdminUnfreeze(cl, target);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !unfreeze <player>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!bring")) {
+    char target[64];
+    if (sscanf(chatText, "%*s %63s", target) == 1) {
+      SV_Ranked_Cmd_Bring(cl, target);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !bring <player>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!goto")) {
+    char target[64];
+    if (sscanf(chatText, "%*s %63s", target) == 1) {
+      SV_Ranked_Cmd_Goto(cl, target);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !goto <player>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!giveforce") || !Q_stricmp(cmdSpace, "!grantforce")) {
+    char target[64], power[64];
+    int level = 3;
+    if (sscanf(chatText, "%*s %63s %63s %d", target, power, &level) >= 2) {
+      SV_Ranked_Cmd_GiveForce(cl, target, power, level);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !giveforce <player> <power> [level: 1-3] (Powers: lightning, grip, drain, heal, rage, protect, absorb, push, pull, mindtrick, speed, seeing, all)\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!godforce") || !Q_stricmp(cmdSpace, "!infforce")) {
+    char target[64];
+    target[0] = '\0';
+    sscanf(chatText, "%*s %63s", target);
+    SV_Ranked_Cmd_GodForce(cl, target);
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!lives") || !Q_stricmp(cmdSpace, "!mylives")) {
+    SV_Ranked_Cmd_Lives(cl);
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!speed")) {
+    char target[64];
+    float mult = 1.0f;
+    if (sscanf(chatText, "%*s %63s %f", target, &mult) >= 1) {
+      SV_Ranked_Cmd_Speed(cl, target, mult);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !speed <player> <multiplier>\"");
+    }
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!details") || !Q_stricmp(cmdSpace, "!myinfo")) {
     SV_Ranked_Cmd_Details(cl);
     return qtrue;
@@ -1329,6 +1851,16 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "print \"^1!setelo <name> <n>      ^7Set player FR\n\"");
       SV_SendServerCommand(cl, "print \"^1!setrank <name> <rank>  ^7Set player rank title\n\"");
       SV_SendServerCommand(cl, "print \"^1!giveitem <name> <itm> <n> ^7Grant shop item\n\"");
+      SV_SendServerCommand(cl, "print \"^1!givegun <name> <gun>   ^7Grant player weapon\n\"");
+      SV_SendServerCommand(cl, "print \"^1!giveall [name]         ^7Grant ALL weapons and max ammo\n\"");
+      SV_SendServerCommand(cl, "print \"^1!yeet <name>            ^7Yeet target player across room (Level 1 Admin)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!freeze <name>          ^7Force Freeze player (Level 1 Admin)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!unfreeze <name>        ^7Unfreeze player (Level 1 Admin)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!bring <name>           ^7Teleport player in front of you (Level 1 Admin)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!goto <name>            ^7Teleport to player (Level 1 Admin)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!giveforce <name> <pwr> [lvl] ^7Grant force power (High Admin)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!godforce [name]            ^7Toggle infinite force energy (High Admin)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!speed <name> <mult>        ^7Set movement speed (High Admin)\n\"");
       SV_SendServerCommand(cl, "print \"^1!jail <name> <min>      ^7Put on probation\n\"");
       SV_SendServerCommand(cl, "print \"^1!unjail <name>          ^7Clear probation\n\"");
     }

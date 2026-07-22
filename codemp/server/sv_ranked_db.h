@@ -31,6 +31,19 @@ typedef struct {
   qboolean loggedIn;
   qboolean isTemp;   // If qtrue, player has not authenticated — stats are in-memory only, not persisted
   qboolean inDuel;
+  qboolean isFrozen; // Admin Force Freeze active
+  vec3_t frozenOrigin; // Position where player was frozen
+  int burnExpireTime; // Timestamp when burn effect ends
+  int burnNextDamageTime; // Timestamp for next periodic 5 HP burn damage
+  float speedMultiplier; // Movement speed multiplier (e.g. 2.0 = 2x speed)
+  int grantedWeaponsMask; // Bitmask of weapons granted during session/round
+  int lastGrantedWeapon;  // ID of last granted weapon to enforce active weapon holding
+  qboolean godForce;      // Infinite force energy
+  int grantedForcePowersMask; // Bitmask of force powers granted
+  int grantedForceLevels[18]; // Level per force power (1-3)
+  int remainingLives;     // Custom lives count (-1 = off, >=0 = limited lives)
+  qboolean livesActive;   // Custom lives system active for player
+  qboolean wasDeadLastFrame; // Helper for death detection
   int duelOpponent;
   int duelStartTime; // ms
   
@@ -118,6 +131,15 @@ void SV_Ranked_Cmd_SetWinMsg(client_t *cl, const char *msg);
 void SV_Ranked_Cmd_SetWinSnd(client_t *cl, const char *snd);
 void SV_Ranked_Cmd_AdminGiveItem(client_t *cl, const char *target, const char *itemKey, int amount);
 qboolean SV_Ranked_IsAdmin(client_t *cl);
+qboolean SV_Ranked_IsHighAdmin(client_t *cl);
+void SV_Ranked_Cmd_AdminGiveGun(client_t *cl, const char *target, const char *gunName);
+void SV_Ranked_Cmd_AdminGiveAll(client_t *cl, const char *targetName);
+void SV_Ranked_Cmd_AdminFreeze(client_t *cl, const char *target);
+void SV_Ranked_Cmd_AdminUnfreeze(client_t *cl, const char *target);
+void SV_Ranked_Cmd_Bring(client_t *cl, const char *target);
+void SV_Ranked_Cmd_Goto(client_t *cl, const char *target);
+void SV_Ranked_Cmd_Burn(client_t *cl, const char *target);
+void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier);
 
 // Daily Quest System
 void SV_Ranked_CheckAndRefreshDailyQuests(const char *username, client_t *cl);
