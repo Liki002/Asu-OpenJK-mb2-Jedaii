@@ -1061,6 +1061,10 @@ void Com_ExecuteCfg(void)
 		// skip the q3config.cfg and autoexec.cfg if "safe" is on the command line
 		Cbuf_ExecuteText(EXEC_NOW, "exec " Q3CONFIG_CFG "\n");
 		Cbuf_Execute();
+		Cbuf_ExecuteText(EXEC_NOW, "exec mbii.cfg\n");
+		Cbuf_Execute();
+		Cbuf_ExecuteText(EXEC_NOW, "exec jamp.cfg\n");
+		Cbuf_Execute();
 		Cbuf_ExecuteText(EXEC_NOW, "exec autoexec.cfg\n");
 		Cbuf_Execute();
 	}
