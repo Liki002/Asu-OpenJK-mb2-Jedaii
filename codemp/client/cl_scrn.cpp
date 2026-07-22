@@ -434,14 +434,14 @@ static void SCR_RPGHUDPos_f( void ) {
 		Com_Printf( "^2RPG HUD set to TOP LEFT (16, 16)\n" );
 	} else if ( !Q_stricmp( pos, "right" ) || !Q_stricmp( pos, "topright" ) ) {
 		Cvar_Set( "cg_rpg_pos", "right" );
-		Cvar_Set( "cg_rpg_x", "468" );
+		Cvar_Set( "cg_rpg_x", "418" );
 		Cvar_Set( "cg_rpg_y", "16" );
-		Com_Printf( "^2RPG HUD set to TOP RIGHT (468, 16)\n" );
+		Com_Printf( "^2RPG HUD set to TOP RIGHT (418, 16)\n" );
 	} else if ( !Q_stricmp( pos, "bottomright" ) ) {
 		Cvar_Set( "cg_rpg_pos", "bottomright" );
-		Cvar_Set( "cg_rpg_x", "468" );
+		Cvar_Set( "cg_rpg_x", "418" );
 		Cvar_Set( "cg_rpg_y", "345" );
-		Com_Printf( "^2RPG HUD set to BOTTOM RIGHT (468, 345)\n" );
+		Com_Printf( "^2RPG HUD set to BOTTOM RIGHT (418, 345)\n" );
 	} else if ( !Q_stricmp( pos, "bottomleft" ) ) {
 		Cvar_Set( "cg_rpg_pos", "bottomleft" );
 		Cvar_Set( "cg_rpg_x", "16" );
@@ -552,9 +552,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float defaultY = 16.0f;
 	if ( cg_rpg_pos && cg_rpg_pos->string[0] ) {
 		if ( !Q_stricmp( cg_rpg_pos->string, "right" ) || !Q_stricmp( cg_rpg_pos->string, "topright" ) ) {
-			defaultX = 444.0f; defaultY = 16.0f;
+			defaultX = 418.0f; defaultY = 16.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomright" ) ) {
-			defaultX = 444.0f; defaultY = 345.0f;
+			defaultX = 418.0f; defaultY = 345.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomleft" ) ) {
 			defaultX = 16.0f; defaultY = 345.0f;
 		}
@@ -563,7 +563,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// Dynamic position & clean dimensions (virtual 640x480 coordinates)
 	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : defaultX;
 	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : defaultY;
-	float panelW = 180.0f;
+	float panelW = 205.0f;
 	float panelH = 48.0f;
 
 	// Sleek dark glass panel with a crisp 1px cyan border line (Zero yellow texture bleed)
@@ -637,14 +637,14 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
 	int fr = cg_rpg_fr ? cg_rpg_fr->integer : 1000;
 
-	// Line 1: Player Name (Up to 22 chars with crisp character spacing)
+	// Line 1: Player Name (Full name up to 32 characters)
 	char nameStr[96];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%.22s", playerName );
+	Com_sprintf( nameStr, sizeof(nameStr), "^7%.32s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.5f, nameStr, whiteColor );
 
-	// Line 2: Rank Title & Force Rating ELO
+	// Line 2: Rank Title & Force Rating ELO (Full rank titles up to 24 characters)
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.14s ^7|^2 %d FR", rankTitle, fr );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.24s ^7|^2 %d FR", rankTitle, fr );
 	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.8f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar & Smooth Animated Fill
