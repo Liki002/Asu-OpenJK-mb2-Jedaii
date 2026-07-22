@@ -389,6 +389,12 @@ void SCR_DrawDebugGraph (void)
 
 //=============================================================================
 
+cvar_t		*cg_drawRPGHUD;
+cvar_t		*cg_rpg_level;
+cvar_t		*cg_rpg_xp;
+cvar_t		*cg_rpg_xp_max;
+cvar_t		*cg_rpg_avatar;
+
 /*
 ==================
 SCR_Init
@@ -401,7 +407,103 @@ void SCR_Init( void ) {
 	cl_graphscale = Cvar_Get ("graphscale", "1", CVAR_CHEAT);
 	cl_graphshift = Cvar_Get ("graphshift", "0", CVAR_CHEAT);
 
+	cg_drawRPGHUD = Cvar_Get( "cg_drawRPGHUD", "1", CVAR_ARCHIVE );
+	cg_rpg_level = Cvar_Get( "cg_rpg_level", "1", CVAR_ARCHIVE );
+	cg_rpg_xp = Cvar_Get( "cg_rpg_xp", "7500", CVAR_ARCHIVE );
+	cg_rpg_xp_max = Cvar_Get( "cg_rpg_xp_max", "10000", CVAR_ARCHIVE );
+	cg_rpg_avatar = Cvar_Get( "cg_rpg_avatar", "gfx/hud/avatar_default", CVAR_ARCHIVE );
+
 	scr_initialized = qtrue;
+}
+
+
+/*
+==================
+SCR_DrawRPGHUDOverlay
+
+Renders RPG HUD overlay:
+- Avatar Picture Frame
+- Level Badge & Player Name
+- Dynamic XP Bar
+==================
+*/
+void SCR_DrawRPGHUDOverlay( void ) {
+	if ( !cg_drawRPGHUD || !cg_drawRPGHUD->integer ) {
+		return;
+	}
+
+	float startX = 20.0f;
+	float startY = 20.0f;
+
+	float bgOuterColor[4]   = { 0.05f, 0.08f, 0.12f, 0.75f };
+	float bgInnerColor[4]   = { 0.10f, 0.14f, 0.20f, 0.85f };
+	float borderColor[4]    = { 0.80f, 0.65f, 0.20f, 0.90f };
+	float xpBarBgColor[4]   = { 0.15f, 0.15f, 0.20f, 0.90f };
+	float xpBarFillColor[4] = { 0.00f, 0.75f, 0.95f, 0.95f };
+	float xpBarGlowColor[4] = { 0.20f, 0.90f, 1.00f, 1.00f };
+
+	// 1. Draw Master Panel Backdrop
+	float panelWidth  = 230.0f;
+	float panelHeight = 60.0f;
+	SCR_FillRect( startX - 2, startY - 2, panelWidth + 4, panelHeight + 4, borderColor );
+	SCR_FillRect( startX, startY, panelWidth, panelHeight, bgOuterColor );
+
+	// 2. Draw Avatar Box
+	float avatarX = startX + 6.0f;
+	float avatarY = startY + 6.0f;
+	float avatarSize = 48.0f;
+
+	SCR_FillRect( avatarX - 1, avatarY - 1, avatarSize + 2, avatarSize + 2, borderColor );
+	SCR_FillRect( avatarX, avatarY, avatarSize, avatarSize, bgInnerColor );
+
+	if ( cg_rpg_avatar && cg_rpg_avatar->string[0] ) {
+		qhandle_t hAvatar = re->RegisterShader( cg_rpg_avatar->string );
+		if ( hAvatar ) {
+			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, hAvatar );
+		}
+	}
+
+	// 3. Draw Level & Character Info Text
+	float textX = avatarX + avatarSize + 10.0f;
+	float textY = startY + 8.0f;
+
+	int level = cg_rpg_level ? cg_rpg_level->integer : 1;
+	char infoStr[128];
+	Com_sprintf( infoStr, sizeof(infoStr), "^3LVL %d ^7| ^5Je'daii", level );
+	SCR_DrawSmallStringExt( (int)textX, (int)textY, infoStr, g_color_table[7], qfalse, qfalse );
+
+	// 4. Calculate XP Progress Bar
+	int currentXP = cg_rpg_xp ? cg_rpg_xp->integer : 0;
+	int maxXP     = (cg_rpg_xp_max && cg_rpg_xp_max->integer > 0) ? cg_rpg_xp_max->integer : 10000;
+	if ( currentXP < 0 ) currentXP = 0;
+	if ( currentXP > maxXP ) currentXP = maxXP;
+
+	float frac = (float)currentXP / (float)maxXP;
+
+	float barX = textX;
+	float barY = textY + 16.0f;
+	float barWidth = 150.0f;
+	float barHeight = 12.0f;
+
+	SCR_FillRect( barX, barY, barWidth, barHeight, xpBarBgColor );
+
+	float fillWidth = barWidth * frac;
+	if ( fillWidth > 0 ) {
+		SCR_FillRect( barX, barY, fillWidth, barHeight, xpBarFillColor );
+		if ( fillWidth > 2.0f ) {
+			SCR_FillRect( barX + fillWidth - 2.0f, barY, 2.0f, barHeight, xpBarGlowColor );
+		}
+	}
+
+	SCR_FillRect( barX, barY, barWidth, 1.0f, borderColor );
+	SCR_FillRect( barX, barY + barHeight - 1.0f, barWidth, 1.0f, borderColor );
+	SCR_FillRect( barX, barY, 1.0f, barHeight, borderColor );
+	SCR_FillRect( barX + barWidth - 1.0f, barY, 1.0f, barHeight, borderColor );
+
+	// 5. Draw XP Text Overlay
+	char xpText[64];
+	Com_sprintf( xpText, sizeof(xpText), "%d / %d XP (%d%%)", currentXP, maxXP, (int)(frac * 100.0f) );
+	SCR_DrawSmallStringExt( (int)(barX + 4.0f), (int)(barY + 2.0f), xpText, g_color_table[7], qtrue, qfalse );
 }
 
 
@@ -462,6 +564,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			break;
 		case CA_ACTIVE:
 			CL_CGameRendering( stereoFrame );
+			SCR_DrawRPGHUDOverlay();
 			SCR_DrawDemoRecording();
 			break;
 		}

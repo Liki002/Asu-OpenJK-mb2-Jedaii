@@ -741,6 +741,20 @@ void CL_ParseCommandString( msg_t *msg ) {
 	seq = MSG_ReadLong( msg );
 	s = MSG_ReadString( msg );
 
+	// --- Intercept RPG stats sync from the server at the client engine level ---
+	if ( Q_strncmp( s, "rpg_sync ", 9 ) == 0 ) {
+		char xp[32] = {0}, maxXP[32] = {0}, level[32] = {0};
+		if ( sscanf( s, "rpg_sync %31s %31s %31s", xp, maxXP, level ) == 3 ) {
+			Cvar_Set( "cg_rpg_xp", xp );
+			Cvar_Set( "cg_rpg_xp_max", maxXP );
+			Cvar_Set( "cg_rpg_level", level );
+		}
+		if ( clc.serverCommandSequence < seq ) {
+			clc.serverCommandSequence = seq;
+		}
+		return;
+	}
+
 	// see if we have already executed stored it off
 	if ( clc.serverCommandSequence >= seq ) {
 		return;
