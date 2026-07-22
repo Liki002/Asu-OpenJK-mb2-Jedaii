@@ -484,7 +484,7 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 			continue;
 		}
 		SCR_DrawChar( (int)xx, (int)y, charSize, *s );
-		xx += (charSize * 0.60f);
+		xx += (charSize * 0.72f);
 		s++;
 	}
 	re->SetColor( NULL );
@@ -505,10 +505,10 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// Dynamic position & compact dimensions (virtual 640x480 coords aligned right above MB2 meters)
-	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : 472.0f;
-	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : 345.0f;
-	float panelW = 152.0f;
-	float panelH = 46.0f;
+	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : 466.0f;
+	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : 343.0f;
+	float panelW = 158.0f;
+	float panelH = 48.0f;
 
 	// Render Custom High-Quality UI Frame Texture from PK3 if available
 	qhandle_t hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
@@ -528,10 +528,10 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		SCR_FillRect( panelX + panelW - 1.0f, panelY + rad, 1.0f, panelH - 2.0f*rad, borderColor );
 	}
 
-	// Avatar Box (25x25) with rounded edges
+	// Avatar Box (26x26) with rounded edges
 	float avatarX = panelX + 5.0f;
 	float avatarY = panelY + 4.0f;
-	float avatarSize = 25.0f;
+	float avatarSize = 26.0f;
 
 	vec4_t avatarBg = { 0.10f, 0.16f, 0.28f, 0.80f };
 	SCR_FillRoundedRect( avatarX, avatarY, avatarSize, avatarSize, 2.0f, avatarBg );
@@ -567,26 +567,26 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	char levelStr[32];
 	Com_sprintf( levelStr, sizeof(levelStr), "^3Lv %d", level );
 	float levelX = avatarX + 1.0f;
-	float levelY = avatarY + avatarSize + 2.0f; // panelY + 31.0f
+	float levelY = avatarY + avatarSize + 2.0f; // panelY + 32.0f
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 	SCR_DrawVirtualString( levelX, levelY, 5.5f, levelStr, whiteColor );
 
 	// Right Content Column (Name, Rank | FR, XP Bar)
-	float textX = avatarX + avatarSize + 5.0f;
+	float textX = avatarX + avatarSize + 6.0f;
 	cvar_t *clName = Cvar_Get( "name", "Padawan", 0 );
 	const char *playerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
 	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
 	int fr = cg_rpg_fr ? cg_rpg_fr->integer : 1000;
 
-	// Line 1: Player Name (Full name up to 35 chars)
+	// Line 1: Player Name (Full name up to 30 chars with balanced top margin)
 	char nameStr[96];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%.35s", playerName );
-	SCR_DrawVirtualString( textX, panelY + 3.0f, 5.5f, nameStr, whiteColor );
+	Com_sprintf( nameStr, sizeof(nameStr), "^7%.30s", playerName );
+	SCR_DrawVirtualString( textX, panelY + 5.0f, 5.5f, nameStr, whiteColor );
 
-	// Line 2: Rank Title & Force Rating ELO
+	// Line 2: Rank Title & Force Rating ELO (balanced vertical gap)
 	char rankStr[96];
 	Com_sprintf( rankStr, sizeof(rankStr), "^3%.12s ^7|^2 %d FR", rankTitle, fr );
-	SCR_DrawVirtualString( textX, panelY + 15.0f, 5.0f, rankStr, whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 17.0f, 5.0f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar & Smooth Animated Tick Interpolation
 	int xp = cg_rpg_xp ? cg_rpg_xp->integer : 0;
@@ -611,7 +611,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	if ( xpRatio > 1.0f ) xpRatio = 1.0f;
 
 	float barX = textX;
-	float barY = panelY + 28.0f;
+	float barY = panelY + 30.0f;
 	float barW = panelX + panelW - barX - 5.0f;
 	float barH = 12.0f;
 
@@ -641,13 +641,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		}
 	}
 
-	// Small Green XP Text Overlay on the right side of the XP bar (moved down to barY + 3.5f)
+	// Small Green XP Text Overlay on the right side of the XP bar
 	char xpText[64];
 	Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", (int)s_visualXP, xpMax );
-	float textWidthPixels = (strlen(xpText) * 4.5f * 0.60f);
+	float textWidthPixels = (strlen(xpText) * 4.5f * 0.72f);
 	float xpTextX = barX + barW - textWidthPixels - 3.0f;
 	if ( xpTextX < barX + 2.0f ) xpTextX = barX + 2.0f;
-	SCR_DrawVirtualString( xpTextX, barY + 3.5f, 4.5f, xpText, whiteColor );
+	SCR_DrawVirtualString( xpTextX, barY + 3.0f, 4.5f, xpText, whiteColor );
 }
 
 
