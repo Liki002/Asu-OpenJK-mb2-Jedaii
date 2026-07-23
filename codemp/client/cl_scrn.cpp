@@ -659,6 +659,7 @@ static qhandle_t s_hBox = 0;
 static qhandle_t s_hBarBg = 0;
 static qhandle_t s_hBarFill = 0;
 static qhandle_t s_hAvatar = 0;
+static qhandle_t s_hAvatarFrame = 0;
 static qhandle_t s_hModalBg = 0;
 
 void SCR_DrawRPGHUDOverlay( void ) {
@@ -675,32 +676,36 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		s_hBarBg = 0;
 		s_hBarFill = 0;
 		s_hAvatar = 0;
+		s_hAvatarFrame = 0;
 		s_hModalBg = 0;
 		s_lastState = cls.state;
 	}
 
 	// Register HD TGA Shaders dynamically once active
-	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/hud/rpg_hud_box" );
-	if ( !s_hBarBg ) s_hBarBg = re->RegisterShader( "gfx/hud/rpg_bar_bg" );
-	if ( !s_hBarFill ) s_hBarFill = re->RegisterShader( "gfx/hud/rpg_bar_fill" );
-	if ( !s_hAvatar ) s_hAvatar = re->RegisterShader( "gfx/hud/avatar_default" );
-	if ( !s_hModalBg ) s_hModalBg = re->RegisterShader( "gfx/hud/rpg_modal_bg" );
+	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
+	if ( !s_hBarBg ) s_hBarBg = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
+	if ( !s_hBarFill ) s_hBarFill = re->RegisterShader( "gfx/rpg_hud/bar_fill" );
+	if ( !s_hAvatar ) s_hAvatar = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
+	if ( !s_hAvatarFrame ) s_hAvatarFrame = re->RegisterShader( "gfx/rpg_hud/avatar_frame" );
+	if ( !s_hModalBg ) s_hModalBg = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
 
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
+	float panelW = (style == 1) ? 175.0f : 140.0f;
+	float panelH = 46.0f;
 
 	// Preset position defaults
-	float defaultX = (style == 1) ? 190.0f : 14.0f;
+	float defaultX = (style == 1) ? (320.0f - panelW * 0.5f) : 14.0f;
 	float defaultY = (style == 1) ? 428.0f : 14.0f;
 
 	if ( cg_rpg_pos && cg_rpg_pos->string[0] ) {
 		if ( !Q_stricmp( cg_rpg_pos->string, "right" ) || !Q_stricmp( cg_rpg_pos->string, "topright" ) ) {
-			defaultX = 428.0f; defaultY = 14.0f;
+			defaultX = 640.0f - panelW - 14.0f; defaultY = 14.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomright" ) ) {
-			defaultX = 428.0f; defaultY = 345.0f;
+			defaultX = 640.0f - panelW - 14.0f; defaultY = 345.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomleft" ) ) {
 			defaultX = 14.0f; defaultY = 345.0f;
 		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomcenter" ) || !Q_stricmp( cg_rpg_pos->string, "center" ) ) {
-			defaultX = 190.0f; defaultY = 428.0f;
+			defaultX = 320.0f - panelW * 0.5f; defaultY = 428.0f;
 		}
 	}
 
@@ -734,19 +739,21 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	if ( xpRatio > 1.0f ) xpRatio = 1.0f;
 
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	re->SetColor( whiteColor );
 
 	// ========================================================
-	// STYLE 1: BOTTOM SLEEK BAR (Expanded 260px Floating Elements)
+	// STYLE 1: BOTTOM SLEEK BAR (Expanded Floating Elements)
 	// ========================================================
 	if ( style == 1 ) {
-		float panelW = 260.0f;
-
-		// Circular Avatar Picture Frame
+		// Avatar silhouette (Fitted inside frame)
 		float avatarX = panelX + 4.0f;
-		float avatarY = panelY + 2.0f;
+		float avatarY = panelY - 1.0f;
 		float avatarSize = 26.0f;
 
-		if ( s_hAvatar ) {
+		if ( s_hAvatar && s_hAvatarFrame ) {
+			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatarFrame );
+			SCR_DrawPic( avatarX + 2.0f, avatarY + 2.0f, avatarSize - 4.0f, avatarSize - 4.0f, s_hAvatar );
+		} else if ( s_hAvatar ) {
 			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
 		} else {
 			float cx = avatarX + avatarSize * 0.5f;
@@ -755,7 +762,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		}
 
 		// Player Info Column next to Circular Avatar
-		float textX = avatarX + avatarSize + 6.0f;
+		float textX = avatarX + avatarSize + 8.0f;
 
 		// Line 1: Player Name + Level Badge
 		char nameLvlStr[96];
@@ -764,14 +771,14 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		// Line 2: Rank Title & Force Rating ELO
 		char rankStr[96];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d FR", rankTitle, fr );
+		Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d", rankTitle, fr );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
 
-		// Line 3: Sleek Horizontal XP Bar (Floating MBII style capsule track & cyan fill)
+		// Line 3: Sleek Horizontal XP Bar (TGA Background)
 		float barX = textX;
 		float barY = panelY + 25.0f;
 		float barW = panelX + panelW - barX - 4.0f;
-		float barH = 10.0f;
+		float barH = 8.0f;
 
 		if ( s_hBarBg ) {
 			SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
@@ -781,11 +788,11 @@ void SCR_DrawRPGHUDOverlay( void ) {
 			SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
 		}
 
-		float fillX = barX + 1.0f;
-		float fillY = barY + 1.0f;
-		float maxFillW = barW - 2.0f;
+		float fillX = barX;
+		float fillY = barY;
+		float maxFillW = barW;
 		float fillW = maxFillW * xpRatio;
-		float fillH = barH - 2.0f;
+		float fillH = barH;
 
 		if ( fillW > 0.0f ) {
 			if ( s_hBarFill ) {
@@ -802,16 +809,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float textWidthPixels = (strlen(xpText) * 3.8f * 0.60f);
 		float xpTextX = barX + barW - textWidthPixels - 3.0f;
 		if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
-		SCR_DrawVirtualString( xpTextX, barY + 1.5f, 3.8f, xpText, whiteColor );
+		SCR_DrawVirtualString( xpTextX, barY - 10.0f, 3.8f, xpText, whiteColor );
 		return;
 	}
 
 	// ========================================================
-	// STYLE 0: CLASSIC GLASS PANEL CARD (HD TGA Card & Thin Cyan Border)
+	// STYLE 0: CLASSIC GLASS PANEL CARD (HD TGA Card)
 	// ========================================================
-	float panelW = 205.0f;
-	float panelH = 46.0f;
-
 	if ( s_hBox ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hBox );
 	} else {
@@ -820,12 +824,15 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, bgColor, borderColor );
 	}
 
-	// Avatar Circle Frame
+	// Avatar (Fitted inside circular frame)
 	float avatarX = panelX + 5.0f;
-	float avatarY = panelY + 4.0f;
-	float avatarSize = 24.0f;
+	float avatarY = panelY + 5.0f;
+	float avatarSize = 22.0f;
 
-	if ( s_hAvatar ) {
+	if ( s_hAvatar && s_hAvatarFrame ) {
+		SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatarFrame );
+		SCR_DrawPic( avatarX + 2.0f, avatarY + 2.0f, avatarSize - 4.0f, avatarSize - 4.0f, s_hAvatar );
+	} else if ( s_hAvatar ) {
 		SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
 	} else {
 		float cx = avatarX + avatarSize * 0.5f;
@@ -845,19 +852,19 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	// Line 1: Player Name
 	char nameStr[96];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%.20s", playerName );
+	Com_sprintf( nameStr, sizeof(nameStr), "^7%.18s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
 
 	// Line 2: Rank Title & Force Rating ELO
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d FR", rankTitle, fr );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d", rankTitle, fr );
 	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.3f, rankStr, whiteColor );
 
-	// Line 3: Dynamic XP Progress Bar Capsule
+	// Line 3: Dynamic XP Progress Bar (TGA Background)
 	float barX = textX;
 	float barY = panelY + 28.5f;
 	float barW = panelX + panelW - barX - 5.0f;
-	float barH = 10.0f;
+	float barH = 8.0f;
 
 	if ( s_hBarBg ) {
 		SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
@@ -867,11 +874,11 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
 	}
 
-	float fillX = barX + 1.0f;
-	float fillY = barY + 1.0f;
-	float maxFillW = barW - 2.0f;
+	float fillX = barX;
+	float fillY = barY;
+	float maxFillW = barW;
 	float fillW = maxFillW * xpRatio;
-	float fillH = barH - 2.0f;
+	float fillH = barH;
 
 	if ( fillW > 0.0f ) {
 		if ( s_hBarFill ) {
@@ -931,12 +938,12 @@ void SCR_DrawLeaderboardOverlay( void ) {
 	SCR_DrawVirtualString( winX + 140.0f, winY + 8.0f, 7.2f, "^3TOP RANKED DUELISTS", yellowCol );
 
 	// Close Button instruction
-	SCR_DrawVirtualString( winX + winW - 45.0f, winY + 8.0f, 5.8f, "^1[ESC]", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 65.0f, winY + 8.0f, 5.8f, "^1[ESC]", yellowCol );
 
 	// Column Headers Divider line
 	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.70f };
 	float colY = winY + 36.0f;
-	SCR_FillRect( winX + 6.0f, colY + 16.0f, winW - 12.0f, 1.0f, divColor );
+	SCR_FillRect( winX + 16.0f, colY + 16.0f, winW - 32.0f, 1.0f, divColor );
 
 	// Column Headers: # | PLAYER NAME | LVL | RANK TITLE | FR ELO
 	SCR_DrawVirtualString( winX + 16.0f, colY, 5.8f, "^5#", whiteColor );
@@ -955,7 +962,7 @@ void SCR_DrawLeaderboardOverlay( void ) {
 		// Alternating row background highlight
 		if ( i % 2 == 0 ) {
 			vec4_t rowBg = { 0.05f, 0.12f, 0.25f, 0.35f };
-			SCR_DrawRoundedGlassPanel( winX + 6.0f, currentY, winW - 12.0f, rowHeight - 2.0f, 2.0f, rowBg, NULL );
+			SCR_FillRect( winX + 16.0f, currentY, winW - 32.0f, rowHeight - 2.0f, rowBg );
 		}
 
 		if ( i < g_topLeaderboardCount ) {
@@ -966,9 +973,9 @@ void SCR_DrawLeaderboardOverlay( void ) {
 			Com_sprintf( numStr, sizeof(numStr), (i < 3) ? "^3#%d" : "^7#%d", i + 1 );
 			SCR_DrawVirtualString( winX + 16.0f, currentY + 2.0f, 5.5f, numStr, whiteColor );
 
-			// Player Name (up to 20 characters)
+			// Player Name (up to 30 characters)
 			char pNameStr[64];
-			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%.20s", e->displayName );
+			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%.30s", e->displayName );
 			SCR_DrawVirtualString( winX + 48.0f, currentY + 2.0f, 5.5f, pNameStr, whiteColor );
 
 			// Level
