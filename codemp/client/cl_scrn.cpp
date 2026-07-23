@@ -479,13 +479,13 @@ void SCR_Init( void ) {
 	cg_rpg_pos = Cvar_Get ("cg_rpg_pos", "left", CVAR_ARCHIVE);
 	cg_rpg_x = Cvar_Get ("cg_rpg_x", "14", CVAR_ARCHIVE);
 	cg_rpg_y = Cvar_Get ("cg_rpg_y", "14", CVAR_ARCHIVE);
-	cg_rpg_level = Cvar_Get ("cg_rpg_level", "1", 0);
-	cg_rpg_xp = Cvar_Get ("cg_rpg_xp", "0", 0);
-	cg_rpg_xp_max = Cvar_Get ("cg_rpg_xp_max", "1000", 0);
-	cg_rpg_fr = Cvar_Get ("cg_rpg_fr", "1000", 0);
-	cg_rpg_avatar = Cvar_Get ("cg_rpg_avatar", "gfx/hud/avatar_default", 0);
-	cg_rpg_name = Cvar_Get ("cg_rpg_name", "", 0);
-	cg_rpg_rank = Cvar_Get ("cg_rpg_rank", "Padawan", 0);
+	cg_rpg_level   = Cvar_Get ("cg_rpg_level",   "1",                        CVAR_ROM);
+	cg_rpg_xp      = Cvar_Get ("cg_rpg_xp",      "0",                        CVAR_ROM);
+	cg_rpg_xp_max  = Cvar_Get ("cg_rpg_xp_max",  "1000",                     CVAR_ROM);
+	cg_rpg_fr      = Cvar_Get ("cg_rpg_fr",      "1000",                     CVAR_ROM);
+	cg_rpg_avatar  = Cvar_Get ("cg_rpg_avatar",  "gfx/rpg_hud/avatar_default", 0);
+	cg_rpg_name    = Cvar_Get ("cg_rpg_name",    "",                         CVAR_ROM);
+	cg_rpg_rank    = Cvar_Get ("cg_rpg_rank",    "Padawan",                  CVAR_ROM);
 	cg_drawLeaderboard = Cvar_Get ("cg_drawLeaderboard", "0", 0);
 
 	Cmd_AddCommand( "rpg_hud_style", SCR_RPGHUDStyle_f, "Select RPG HUD style: classic (0) or bottom (1)" );
