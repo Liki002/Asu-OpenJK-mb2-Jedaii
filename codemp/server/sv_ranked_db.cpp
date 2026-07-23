@@ -74,6 +74,16 @@ void SV_Ranked_Log(const char *fmt, ...) {
   Q_vsnprintf(msg, sizeof(msg), fmt, argptr);
   va_end(argptr);
 
+  // Mirror to server console with [RANKED] prefix — only if debug is enabled
+  // to avoid spamming the main console (e.g. database save messages)
+  if (Cvar_VariableIntegerValue("sv_ranked_debug")) {
+    Com_Printf("[RANKED] %s\n", msg);
+  }
+
+  if (!com_dedicated || !com_dedicated->integer) {
+    return;
+  }
+
   // Timestamp
   time_t now = time(NULL);
   struct tm *t = localtime(&now);
@@ -90,12 +100,6 @@ void SV_Ranked_Log(const char *fmt, ...) {
   if (f) {
     FS_Write(logLine, (int)strlen(logLine), f);
     FS_FCloseFile(f);
-  }
-
-  // Mirror to server console with [RANKED] prefix — only if debug is enabled
-  // to avoid spamming the main console (e.g. database save messages)
-  if (Cvar_VariableIntegerValue("sv_ranked_debug")) {
-    Com_Printf("[RANKED] %s\n", msg);
   }
 }
 
@@ -149,6 +153,9 @@ static cJSON *Ranked_ParseOrEmptyObject(const char *jsonText, const char *tag) {
 }
 
 static void Ranked_WriteJSON(const char *path, cJSON *root, const char *tag) {
+  if (!com_dedicated || !com_dedicated->integer) {
+    return;
+  }
   if (!root)
     return;
   char *printed = cJSON_Print(root);
@@ -578,6 +585,16 @@ void SV_Ranked_Init(void) {
   for (int i = 0; i < RANKED_MAX_CLIENTS; ++i) {
     sv_rankedPlayers[i].duelOpponent = -1;
     sv_rankedPlayers[i].currentBetTarget = -1;
+  }
+
+  // If not running as a dedicated server, do not read/write configs/DB on disk.
+  // We still initialize empty JSON objects to avoid NULL-dereference crashes.
+  if (!com_dedicated || !com_dedicated->integer) {
+    accountsDB = cJSON_CreateObject();
+    rankedConfig = cJSON_CreateObject();
+    Ranked_EnsureDefaultConfig();
+    SV_Ranked_Logic_Init();
+    return;
   }
 
   SV_Ranked_LoadAccounts();
