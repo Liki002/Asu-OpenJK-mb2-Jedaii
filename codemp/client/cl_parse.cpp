@@ -840,6 +840,36 @@ void CL_ParseCommandString( msg_t *msg ) {
 		Cvar_Set( "cg_drawLeaderboard", "1" );
 	} else if ( !Q_strncmp( s, "top_close", 9 ) ) {
 		Cvar_Set( "cg_drawLeaderboard", "0" );
+	} else if ( !Q_strncmp( s, "stats_sync", 10 ) ) {
+		char rankBuf[32] = "";
+		char nameBuf[64] = "";
+		char rivalBuf[64] = "";
+		int xp = 0, lvl = 1, creds = 0, fr = 1000;
+		int wins = 0, losses = 0, kills = 0, deaths = 0;
+		int curStr = 0, highStr = 0, trivia = 0, rivalCnt = 0;
+		int num = sscanf( s, "stats_sync %d %d %d %d %d %d %d %d %d %d %d %d \"%31[^\"]\" \"%63[^\"]\" \"%63[^\"]\"",
+			&xp, &lvl, &creds, &fr, &wins, &losses, &kills, &deaths, &curStr, &highStr, &trivia, &rivalCnt, rankBuf, nameBuf, rivalBuf );
+		if ( num >= 12 ) {
+			g_rpgStats.xp = xp;
+			g_rpgStats.level = lvl;
+			g_rpgStats.credits = creds;
+			g_rpgStats.fr = fr;
+			g_rpgStats.wins = wins;
+			g_rpgStats.losses = losses;
+			g_rpgStats.kills = kills;
+			g_rpgStats.deaths = deaths;
+			g_rpgStats.curStreak = curStr;
+			g_rpgStats.highStreak = highStr;
+			g_rpgStats.triviaWins = trivia;
+			g_rpgStats.rivalCount = rivalCnt;
+			Q_strncpyz( g_rpgStats.rankTitle, rankBuf, sizeof( g_rpgStats.rankTitle ) );
+			Q_strncpyz( g_rpgStats.displayName, nameBuf, sizeof( g_rpgStats.displayName ) );
+			Q_strncpyz( g_rpgStats.rivalName, rivalBuf, sizeof( g_rpgStats.rivalName ) );
+		}
+	} else if ( !Q_strncmp( s, "stats_open", 10 ) ) {
+		Cvar_Set( "cg_drawStats", "1" );
+	} else if ( !Q_strncmp( s, "stats_close", 11 ) ) {
+		Cvar_Set( "cg_drawStats", "0" );
 	}
 }
 

@@ -49,6 +49,8 @@ cvar_t		*cg_rpg_avatar;
 cvar_t		*cg_rpg_name;
 cvar_t		*cg_rpg_rank;
 cvar_t		*cg_drawLeaderboard;
+cvar_t		*cg_drawStats;
+rpgPlayerStats_t g_rpgStats;
 
 /*
 ================
@@ -487,6 +489,7 @@ void SCR_Init( void ) {
 	cg_rpg_name    = Cvar_Get ("cg_rpg_name",    "",                         CVAR_ROM);
 	cg_rpg_rank    = Cvar_Get ("cg_rpg_rank",    "Padawan",                  CVAR_ROM);
 	cg_drawLeaderboard = Cvar_Get ("cg_drawLeaderboard", "0", 0);
+	cg_drawStats = Cvar_Get ("cg_drawStats", "0", 0);
 
 	Cmd_AddCommand( "rpg_hud_style", SCR_RPGHUDStyle_f, "Select RPG HUD style: classic (0) or bottom (1)" );
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
@@ -999,6 +1002,133 @@ void SCR_DrawLeaderboardOverlay( void ) {
 	SCR_DrawVirtualString( winX + 120.0f, winY + winH - 15.0f, 5.2f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!top^7 to close", whiteColor );
 }
 
+/*
+==================
+SCR_DrawStatsOverlay
+
+Renders sleek modal popup stats sheet card with full player statistics
+==================
+*/
+void SCR_DrawStatsOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) {
+		return;
+	}
+	if ( !cg_drawStats || !cg_drawStats->integer ) {
+		return;
+	}
+
+	// Modal Window Dimensions (Centered 460x280 card layout)
+	float winX = 90.0f;
+	float winY = 85.0f;
+	float winW = 460.0f;
+	float winH = 280.0f;
+
+	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.90f };
+	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
+	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+
+	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.88f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, 3.0f, headerBg, NULL );
+
+	// Title
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_DrawVirtualString( winX + 140.0f, winY + 8.0f, 7.2f, "^3RPG CHARACTER PROFILE", yellowCol );
+
+	// Close Button instruction
+	SCR_DrawVirtualString( winX + winW - 65.0f, winY + 8.0f, 5.8f, "^1[ESC]", yellowCol );
+
+	// LEFT COLUMN - Profile Picture & Title card
+	float avatarX = winX + 15.0f;
+	float avatarY = winY + 45.0f;
+	float avatarSize = 64.0f;
+
+	vec4_t avBg = { 0.06f, 0.12f, 0.25f, 0.50f };
+	SCR_DrawRoundedGlassPanel( avatarX, avatarY, avatarSize, avatarSize, 4.0f, avBg, borderColor );
+
+	qhandle_t hAv = s_hAvatar;
+	if ( !hAv ) hAv = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
+	if ( hAv ) {
+		SCR_DrawPic( avatarX + 2.0f, avatarY + 2.0f, avatarSize - 4.0f, avatarSize - 4.0f, hAv );
+	}
+
+	// Level Badge
+	char lvlStr[32];
+	Com_sprintf( lvlStr, sizeof(lvlStr), "^3Lv %d", g_rpgStats.level );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 10.0f, 6.0f, lvlStr, whiteColor );
+
+	// Display Name
+	char dName[64];
+	Com_sprintf( dName, sizeof(dName), "^7%.16s", g_rpgStats.displayName );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 26.0f, 5.5f, dName, whiteColor );
+
+	// Rank Title
+	char rTitle[64];
+	Com_sprintf( rTitle, sizeof(rTitle), "^3%.16s", g_rpgStats.rankTitle );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 40.0f, 5.2f, rTitle, whiteColor );
+
+	// Divider line between columns
+	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
+	SCR_FillRect( winX + 148.0f, winY + 40.0f, 1.0f, winH - 62.0f, divColor );
+
+	// RIGHT COLUMN - Statistics Rows
+	float rightX = winX + 160.0f;
+	float rightY = winY + 45.0f;
+
+	// Row 1: XP Progress Bar
+	SCR_DrawVirtualString( rightX, rightY, 5.5f, "^5XP Progress:", whiteColor );
+	float barX = rightX + 85.0f;
+	float barY = rightY + 1.0f;
+	float barW = 120.0f;
+	float barH = 10.0f;
+	vec4_t barBg = { 0.02f, 0.04f, 0.08f, 0.90f };
+	SCR_FillRect( barX, barY, barW, barH, barBg );
+
+	int xpVal = g_rpgStats.xp % 1000;
+	float xpRatio = (float)xpVal / 1000.0f;
+	if ( xpRatio < 0.0f ) xpRatio = 0.0f;
+	if ( xpRatio > 1.0f ) xpRatio = 1.0f;
+	if ( xpRatio > 0.0f ) {
+		vec4_t barFill = { 0.00f, 0.70f, 1.00f, 0.95f };
+		SCR_FillRect( barX + 1.5f, barY + 1.5f, (barW - 3.0f) * xpRatio, barH - 3.0f, barFill );
+	}
+	char xpLabel[32];
+	Com_sprintf( xpLabel, sizeof(xpLabel), "^2%d^7/^21000 XP", xpVal );
+	SCR_DrawVirtualString( barX + barW + 6.0f, rightY, 5.2f, xpLabel, whiteColor );
+
+	// Row 2: Force Rating (ELO)
+	SCR_DrawVirtualString( rightX, rightY + 20.0f, 5.5f, va( "^5Force Rating: ^7%d FR", g_rpgStats.fr ), whiteColor );
+
+	// Row 3: Credits Balance
+	SCR_DrawVirtualString( rightX, rightY + 40.0f, 5.5f, va( "^5Credits: ^7%d Credits", g_rpgStats.credits ), whiteColor );
+
+	// Row 4: Wins / Losses
+	float wlRatio = g_rpgStats.losses > 0 ? (float)g_rpgStats.wins / (float)g_rpgStats.losses : (float)g_rpgStats.wins;
+	SCR_DrawVirtualString( rightX, rightY + 60.0f, 5.5f, va( "^5Wins / Losses: ^2%d^7/^1%d ^5(Ratio: %.2f)", g_rpgStats.wins, g_rpgStats.losses, wlRatio ), whiteColor );
+
+	// Row 5: Kills / Deaths
+	float kdRatio = g_rpgStats.deaths > 0 ? (float)g_rpgStats.kills / (float)g_rpgStats.deaths : (float)g_rpgStats.kills;
+	SCR_DrawVirtualString( rightX, rightY + 80.0f, 5.5f, va( "^5Kills / Deaths: ^2%d^7/^1%d ^5(K/D: %.2f)", g_rpgStats.kills, g_rpgStats.deaths, kdRatio ), whiteColor );
+
+	// Row 6: Kill Streak
+	SCR_DrawVirtualString( rightX, rightY + 100.0f, 5.5f, va( "^5Kill Streak: ^7Current: ^2%d ^7| Highest: ^3%d", g_rpgStats.curStreak, g_rpgStats.highStreak ), whiteColor );
+
+	// Row 7: Trivia Wins
+	SCR_DrawVirtualString( rightX, rightY + 120.0f, 5.5f, va( "^5Trivia Wins: ^7%d Wins", g_rpgStats.triviaWins ), whiteColor );
+
+	// Row 8: Main Rival
+	char rivalStr[128];
+	if ( g_rpgStats.rivalCount > 0 ) {
+		Com_sprintf( rivalStr, sizeof(rivalStr), "^5Main Rival: ^7%.16s ^5(%d duels)", g_rpgStats.rivalName, g_rpgStats.rivalCount );
+	} else {
+		Com_sprintf( rivalStr, sizeof(rivalStr), "^5Main Rival: ^7None" );
+	}
+	SCR_DrawVirtualString( rightX, rightY + 140.0f, 5.5f, rivalStr, whiteColor );
+
+	// Footer instruction
+	SCR_DrawVirtualString( winX + 110.0f, winY + winH - 15.0f, 5.2f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!stats^7 to close", whiteColor );
+}
+
 //=======================================================
 
 /*
@@ -1059,6 +1189,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			SCR_DrawRPGHUDOverlay();
 			SCR_DrawDemoRecording();
 			SCR_DrawLeaderboardOverlay();
+			SCR_DrawStatsOverlay();
 			break;
 		}
 	}

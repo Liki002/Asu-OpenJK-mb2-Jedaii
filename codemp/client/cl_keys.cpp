@@ -1354,6 +1354,10 @@ void CL_KeyDownEvent( int key, unsigned time )
 				Cvar_Set( "cg_drawLeaderboard", "0" );
 				return;
 			}
+			if ( cg_drawStats && cg_drawStats->integer ) {
+				Cvar_Set( "cg_drawStats", "0" );
+				return;
+			}
 
 			if ( cls.state == CA_ACTIVE && !clc.demoplaying )
 				UIVM_SetActiveMenu( UIMENU_INGAME );

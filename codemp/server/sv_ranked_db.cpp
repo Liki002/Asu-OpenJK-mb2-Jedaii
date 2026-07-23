@@ -1635,6 +1635,11 @@ void SV_Ranked_ShowStats(client_t *cl) {
   }
 
   SV_SendServerCommand(cl, "print \"^2----------------------\n\n\"");
+
+  // Send UI Profile Sync command to client popup overlay
+  SV_SendServerCommand(cl, va("stats_sync %d %d %d %d %d %d %d %d %d %d %d %d \"%s\" \"%s\" \"%s\"",
+      xp, level, credits, elo, wins, losses, kills, deaths, r->killStreak, highestStreak, triviaWins, topRivalCount, title, displayName, topRivalName));
+  SV_SendServerCommand(cl, "stats_open");
 }
 
 /*
@@ -1680,6 +1685,8 @@ void SV_Ranked_ShowStatsTarget(client_t *cl, const char *targetName) {
   cJSON *xpPtr = cJSON_GetObjectItemCaseSensitive(acc, "xp");
   int xp = xpPtr ? xpPtr->valueint : 0;
   int level = SV_Ranked_CalculateLevel(xp);
+  cJSON *credPtr = cJSON_GetObjectItemCaseSensitive(acc, "credits");
+  int credits = credPtr ? credPtr->valueint : 0;
 
   int elo = 1000;
   int wins = 0, losses = 0, kills = 0, deaths = 0, highestStreak = 0;
@@ -1855,6 +1862,14 @@ void SV_Ranked_ShowStatsTarget(client_t *cl, const char *targetName) {
   }
 
   SV_SendServerCommand(cl, "print \"^2----------------------\n\n\"");
+
+  // Send UI Profile Sync command to client popup overlay
+  {
+    int curStreak = (targetId >= 0 && targetId < sv_maxclients->integer) ? sv_rankedPlayers[targetId].killStreak : 0;
+    SV_SendServerCommand(cl, va("stats_sync %d %d %d %d %d %d %d %d %d %d %d %d \"%s\" \"%s\" \"%s\"",
+        xp, level, credits, elo, wins, losses, kills, deaths, curStreak, highestStreak, triviaWins, topRivalCount, title, displayName, topRivalName));
+    SV_SendServerCommand(cl, "stats_open");
+  }
 }
 
 /*

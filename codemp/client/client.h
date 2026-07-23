@@ -599,6 +599,7 @@ qboolean CL_VideoRecording( void );
 //
 extern cvar_t *cg_drawRPGHUD;
 extern cvar_t *cg_drawLeaderboard;
+extern cvar_t *cg_drawStats;
 
 typedef struct {
 	int rank;
@@ -611,5 +612,26 @@ typedef struct {
 extern topLeaderboardEntry_t g_topLeaderboard[10];
 extern int g_topLeaderboardCount;
 
+typedef struct {
+	int xp;
+	int level;
+	int credits;
+	int fr;
+	int wins;
+	int losses;
+	int kills;
+	int deaths;
+	int curStreak;
+	int highStreak;
+	int triviaWins;
+	int rivalCount;
+	char rankTitle[32];
+	char displayName[64];
+	char rivalName[64];
+} rpgPlayerStats_t;
+
+extern rpgPlayerStats_t g_rpgStats;
+
 void SCR_DrawRPGHUDOverlay( void );
 void SCR_DrawLeaderboardOverlay( void );
+void SCR_DrawStatsOverlay( void );
