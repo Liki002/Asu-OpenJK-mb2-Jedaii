@@ -590,6 +590,7 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
       Com_DPrintf("[RANKED] Boss check: victim='%s' clean='%s'\n",
                   victimNameOverride, clean);
 
+      qboolean isBoss = qfalse;
       for (int b = 0; b < bossCount; b++) {
         if (Q_stricmp(clean, bosses[b].cleanName) != 0)
           continue;
@@ -619,7 +620,16 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
             killerName, bosses[b].displayName, bosses[b].xp, bosses[b].cr);
         SV_Ranked_Log("BOSS: %s defeated %s", killerName, bosses[b].displayName);
         SV_Ranked_SaveAccounts();
+        isBoss = qtrue;
         break;
+      }
+
+      if (!isBoss) {
+        // Standard NPC kill - give 2 XP
+        UpdateAccountStats(kState->username, killerName, 0, 2, 0, 0, NULL);
+        SV_SendServerCommand(svs.clients + killerId, "chat \"^2NPC Slayed! ^7+2 XP\"");
+        SV_Ranked_Log("NPC_SLAY: %s defeated NPC (%s) for 2 XP", killerName, clean);
+        SV_Ranked_SaveAccounts();
       }
     }
     return;
@@ -2883,6 +2893,26 @@ void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex) {
 void SV_Ranked_Logic_Frame(void) {
   SV_Ranked_Trivia_Frame();
   SV_Ranked_Vote_Frame();
+
+  // Passive XP logic (1 XP every 180 seconds = 3 minutes)
+  static int lastPassiveXPTime = 0;
+  if (lastPassiveXPTime == 0) {
+    lastPassiveXPTime = svs.time;
+  }
+  if (svs.time - lastPassiveXPTime >= 180000) {
+    lastPassiveXPTime = svs.time;
+    qboolean saved = qfalse;
+    for (int i = 0; i < sv_maxclients->integer; i++) {
+      client_t *cl = &svs.clients[i];
+      if (cl->state == CS_ACTIVE && sv_rankedPlayers[i].loggedIn) {
+        UpdateAccountStats(sv_rankedPlayers[i].username, cl->name, 0, 1, 0, 0, NULL);
+        saved = qtrue;
+      }
+    }
+    if (saved) {
+      SV_Ranked_SaveAccounts();
+    }
+  }
 
   // Enforce PM_FREEZE and grantedWeaponsMask for active clients
   if (sv_maxclients) {

@@ -676,17 +676,6 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		return;
 	}
 
-	// Flush handles on map/state transitions to prevent stale renderer pointer crashes
-	if ( cls.state != s_lastState ) {
-		s_hBox = 0;
-		s_hBarBg = 0;
-		s_hBarFill = 0;
-		s_hAvatar = 0;
-		s_hAvatarFrame = 0;
-		s_hModalBg = 0;
-		s_lastState = cls.state;
-	}
-
 	// Register HD TGA Shaders dynamically once active
 	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
 	if ( !s_hBarBg ) s_hBarBg = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
@@ -1020,31 +1009,37 @@ void SCR_DrawStatsOverlay( void ) {
 		return;
 	}
 
-	// Modal Window Dimensions (Centered 460x280 card layout)
-	float winX = 90.0f;
-	float winY = 85.0f;
-	float winW = 460.0f;
-	float winH = 280.0f;
+	// Modal Window Dimensions (Centered 420x240 card layout)
+	float winW = 420.0f;
+	float winH = 240.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 120.0f;
 
-	vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.90f };
 	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
-	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+
+	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
+	if ( s_hBox ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hBox );
+	} else {
+		vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.90f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
 
 	vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.88f };
-	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, 3.0f, headerBg, NULL );
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 22.0f, 3.0f, headerBg, NULL );
 
 	// Title
 	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	SCR_DrawVirtualString( winX + 140.0f, winY + 8.0f, 7.2f, "^3RPG CHARACTER PROFILE", yellowCol );
+	SCR_DrawVirtualString( winX + 115.0f, winY + 6.0f, 6.0f, "^3CHARACTER STATISTICS", yellowCol );
 
 	// Close Button instruction
-	SCR_DrawVirtualString( winX + winW - 65.0f, winY + 8.0f, 5.8f, "^1[ESC]", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 55.0f, winY + 6.0f, 5.0f, "^1[ESC]", yellowCol );
 
 	// LEFT COLUMN - Profile Picture & Title card
 	float avatarX = winX + 15.0f;
-	float avatarY = winY + 45.0f;
-	float avatarSize = 64.0f;
+	float avatarY = winY + 38.0f;
+	float avatarSize = 54.0f;
 
 	vec4_t avBg = { 0.06f, 0.12f, 0.25f, 0.50f };
 	SCR_DrawRoundedGlassPanel( avatarX, avatarY, avatarSize, avatarSize, 4.0f, avBg, borderColor );
@@ -1058,31 +1053,31 @@ void SCR_DrawStatsOverlay( void ) {
 	// Level Badge
 	char lvlStr[32];
 	Com_sprintf( lvlStr, sizeof(lvlStr), "^3Lv %d", g_rpgStats.level );
-	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 10.0f, 6.0f, lvlStr, whiteColor );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 8.0f, 5.0f, lvlStr, whiteColor );
 
 	// Display Name
 	char dName[64];
 	Com_sprintf( dName, sizeof(dName), "^7%.16s", g_rpgStats.displayName );
-	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 26.0f, 5.5f, dName, whiteColor );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 22.0f, 4.8f, dName, whiteColor );
 
 	// Rank Title
 	char rTitle[64];
 	Com_sprintf( rTitle, sizeof(rTitle), "^3%.16s", g_rpgStats.rankTitle );
-	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 40.0f, 5.2f, rTitle, whiteColor );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 34.0f, 4.5f, rTitle, whiteColor );
 
 	// Divider line between columns
 	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
-	SCR_FillRect( winX + 148.0f, winY + 40.0f, 1.0f, winH - 62.0f, divColor );
+	SCR_FillRect( winX + 115.0f, winY + 34.0f, 1.0f, winH - 52.0f, divColor );
 
 	// RIGHT COLUMN - Statistics Rows
-	float rightX = winX + 160.0f;
-	float rightY = winY + 45.0f;
+	float rightX = winX + 125.0f;
+	float rightY = winY + 38.0f;
 
 	// Row 1: XP Progress Bar
-	SCR_DrawVirtualString( rightX, rightY, 5.5f, "^5XP Progress:", whiteColor );
-	float barX = rightX + 85.0f;
+	SCR_DrawVirtualString( rightX, rightY, 4.8f, "^5XP Progress:", whiteColor );
+	float barX = rightX + 75.0f;
 	float barY = rightY + 1.0f;
-	float barW = 120.0f;
+	float barW = 100.0f;
 	float barH = 10.0f;
 	vec4_t barBg = { 0.02f, 0.04f, 0.08f, 0.90f };
 	SCR_FillRect( barX, barY, barW, barH, barBg );
@@ -1097,27 +1092,27 @@ void SCR_DrawStatsOverlay( void ) {
 	}
 	char xpLabel[32];
 	Com_sprintf( xpLabel, sizeof(xpLabel), "^2%d^7/^21000 XP", xpVal );
-	SCR_DrawVirtualString( barX + barW + 6.0f, rightY, 5.2f, xpLabel, whiteColor );
+	SCR_DrawVirtualString( barX + barW + 5.0f, rightY, 4.8f, xpLabel, whiteColor );
 
 	// Row 2: Force Rating (ELO)
-	SCR_DrawVirtualString( rightX, rightY + 20.0f, 5.5f, va( "^5Force Rating: ^7%d FR", g_rpgStats.fr ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 18.0f, 4.8f, va( "^5Force Rating: ^7%d FR", g_rpgStats.fr ), whiteColor );
 
 	// Row 3: Credits Balance
-	SCR_DrawVirtualString( rightX, rightY + 40.0f, 5.5f, va( "^5Credits: ^7%d Credits", g_rpgStats.credits ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 36.0f, 4.8f, va( "^5Credits: ^7%d Credits", g_rpgStats.credits ), whiteColor );
 
 	// Row 4: Wins / Losses
 	float wlRatio = g_rpgStats.losses > 0 ? (float)g_rpgStats.wins / (float)g_rpgStats.losses : (float)g_rpgStats.wins;
-	SCR_DrawVirtualString( rightX, rightY + 60.0f, 5.5f, va( "^5Wins / Losses: ^2%d^7/^1%d ^5(Ratio: %.2f)", g_rpgStats.wins, g_rpgStats.losses, wlRatio ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 54.0f, 4.8f, va( "^5Wins / Losses: ^2%d^7/^1%d ^5(Ratio: %.2f)", g_rpgStats.wins, g_rpgStats.losses, wlRatio ), whiteColor );
 
 	// Row 5: Kills / Deaths
 	float kdRatio = g_rpgStats.deaths > 0 ? (float)g_rpgStats.kills / (float)g_rpgStats.deaths : (float)g_rpgStats.kills;
-	SCR_DrawVirtualString( rightX, rightY + 80.0f, 5.5f, va( "^5Kills / Deaths: ^2%d^7/^1%d ^5(K/D: %.2f)", g_rpgStats.kills, g_rpgStats.deaths, kdRatio ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 72.0f, 4.8f, va( "^5Kills / Deaths: ^2%d^7/^1%d ^5(K/D: %.2f)", g_rpgStats.kills, g_rpgStats.deaths, kdRatio ), whiteColor );
 
 	// Row 6: Kill Streak
-	SCR_DrawVirtualString( rightX, rightY + 100.0f, 5.5f, va( "^5Kill Streak: ^7Current: ^2%d ^7| Highest: ^3%d", g_rpgStats.curStreak, g_rpgStats.highStreak ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 90.0f, 4.8f, va( "^5Kill Streak: ^7Current: ^2%d ^7| Highest: ^3%d", g_rpgStats.curStreak, g_rpgStats.highStreak ), whiteColor );
 
 	// Row 7: Trivia Wins
-	SCR_DrawVirtualString( rightX, rightY + 120.0f, 5.5f, va( "^5Trivia Wins: ^7%d Wins", g_rpgStats.triviaWins ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 108.0f, 4.8f, va( "^5Trivia Wins: ^7%d Wins", g_rpgStats.triviaWins ), whiteColor );
 
 	// Row 8: Main Rival
 	char rivalStr[128];
@@ -1126,10 +1121,10 @@ void SCR_DrawStatsOverlay( void ) {
 	} else {
 		Com_sprintf( rivalStr, sizeof(rivalStr), "^5Main Rival: ^7None" );
 	}
-	SCR_DrawVirtualString( rightX, rightY + 140.0f, 5.5f, rivalStr, whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 126.0f, 4.8f, rivalStr, whiteColor );
 
 	// Footer instruction
-	SCR_DrawVirtualString( winX + 110.0f, winY + winH - 15.0f, 5.2f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!stats^7 to close", whiteColor );
+	SCR_DrawVirtualString( winX + 90.0f, winY + winH - 12.0f, 4.5f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!stats^7 to close", whiteColor );
 }
 
 //=======================================================
@@ -1166,16 +1161,32 @@ void SCR_DrawToastOverlay( void ) {
 	if ( alpha < 0.0f ) alpha = 0.0f;
 	if ( alpha > 1.0f ) alpha = 1.0f;
 
-	const float panelW = 180.0f;
+	const float panelW = 150.0f;
 	const float panelH = 46.0f;
 	const float panelX = 640.0f - panelW - 14.0f;  // Top-Right corner
-	const float panelY = 14.0f;
+	const float panelY = 125.0f;                   // Under the map
 
-	// Panel background (dark navy glass)
-	vec4_t bgColor   = { 0.04f, 0.07f, 0.14f, 0.88f * alpha };
-	re->SetColor( bgColor );
-	re->DrawStretchPic( panelX, panelY, panelW, panelH, 0, 0, 0, 0, cls.whiteShader );
-	re->SetColor( NULL );
+	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
+
+	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
+	if ( s_hBox ) {
+		re->SetColor( whiteA );
+		re->DrawStretchPic( panelX, panelY, panelW, panelH, 0, 0, 1, 1, s_hBox );
+		re->SetColor( NULL );
+	} else {
+		// Panel background (dark navy glass) fallback
+		vec4_t bgColor   = { 0.04f, 0.07f, 0.14f, 0.88f * alpha };
+		re->SetColor( bgColor );
+		re->DrawStretchPic( panelX, panelY, panelW, panelH, 0, 0, 0, 0, cls.whiteShader );
+		re->SetColor( NULL );
+
+		// Outer border fallback
+		vec4_t borderColor = { 0.20f, 0.50f, 0.80f, 0.55f * alpha };
+		SCR_FillRect( panelX,              panelY,              panelW, 1.0f,   borderColor );
+		SCR_FillRect( panelX,              panelY + panelH - 1, panelW, 1.0f,   borderColor );
+		SCR_FillRect( panelX,              panelY,              1.0f,   panelH, borderColor );
+		SCR_FillRect( panelX + panelW - 1, panelY,              1.0f,   panelH, borderColor );
+	}
 
 	// Left accent bar (3px wide): green for win, red for loss
 	vec4_t accentColor;
@@ -1191,16 +1202,6 @@ void SCR_DrawToastOverlay( void ) {
 		accentColor[3] = alpha;
 	}
 	SCR_FillRect( panelX, panelY, 3.0f, panelH, accentColor );
-
-	// Outer border
-	vec4_t borderColor = { 0.20f, 0.50f, 0.80f, 0.55f * alpha };
-	SCR_FillRect( panelX,              panelY,              panelW, 1.0f,   borderColor );
-	SCR_FillRect( panelX,              panelY + panelH - 1, panelW, 1.0f,   borderColor );
-	SCR_FillRect( panelX,              panelY,              1.0f,   panelH, borderColor );
-	SCR_FillRect( panelX + panelW - 1, panelY,              1.0f,   panelH, borderColor );
-
-	// Text colors
-	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
 
 	const float textX = panelX + 8.0f;
 
@@ -1247,8 +1248,8 @@ Fades in when data is fresh and fades out after 2.5s of no data.
 */
 #define INSPECT_POLL_MS    1500
 #define INSPECT_EXPIRE_MS  2500
-#define INSPECT_FADEIN_MS  250
-#define INSPECT_FADEOUT_MS 400
+#define INSPECT_FADEIN_MS  150
+#define INSPECT_FADEOUT_MS 150
 
 static int s_inspectLastPollMs = 0;
 
@@ -1262,7 +1263,11 @@ void SCR_DrawInspectOverlay( void ) {
 		if ( crosshairNum >= 0 && crosshairNum < 64 ) {
 			CL_AddReliableCommand( va( "inspect %d", crosshairNum ), qfalse );
 		} else {
-			// No one under crosshair — let the card expire
+			// If we look away, shorten the expiration time so it fades out very fast
+			int elapsed = cls.realtime - g_rpgInspect.lastUpdateMs;
+			if ( elapsed < INSPECT_EXPIRE_MS - 150 ) {
+				g_rpgInspect.lastUpdateMs = cls.realtime - (INSPECT_EXPIRE_MS - 150);
+			}
 		}
 	}
 
@@ -1284,57 +1289,16 @@ void SCR_DrawInspectOverlay( void ) {
 	if ( alpha < 0.0f ) alpha = 0.0f;
 	if ( alpha > 1.0f ) alpha = 1.0f;
 
-	char nameStr[80];
-	char rankStr[64];
 	char statStr[64];
-
-	Com_sprintf( nameStr, sizeof( nameStr ), "^7%.26s", g_rpgInspect.displayName );
-	Com_sprintf( rankStr, sizeof( rankStr ), "^3%.24s", g_rpgInspect.rankTitle );
 	Com_sprintf( statStr, sizeof( statStr ), "^5Lv %d  ^7|  ^2%d FR", g_rpgInspect.level, g_rpgInspect.fr );
 
-	float w1 = (float)SCR_Strlen( nameStr ) * 4.5f * 0.60f;
-	float w2 = (float)SCR_Strlen( rankStr ) * 3.8f * 0.60f;
-	float w3 = (float)SCR_Strlen( statStr ) * 3.8f * 0.60f;
-
-	float cardW = w1;
-	if ( w2 > cardW ) cardW = w2;
-	if ( w3 > cardW ) cardW = w3;
-	cardW += 16.0f; // Padding on sides
-	if ( cardW < 90.0f ) cardW = 90.0f;
-
-	const float cardH = 42.0f;
-	const float cardX = 320.0f - cardW * 0.5f;  // horizontally centered
-	const float cardY = 252.0f;                  // well below crosshair reticle (blocks nothing)
-
-	// Glass panel background
-	vec4_t bgColor = { 0.04f, 0.07f, 0.16f, 0.84f * alpha };
-	re->SetColor( bgColor );
-	re->DrawStretchPic( cardX, cardY, cardW, cardH, 0, 0, 0, 0, cls.whiteShader );
-	re->SetColor( NULL );
-
-	// Top accent bar (cyan)
-	vec4_t topBar = { 0.10f, 0.75f, 1.00f, 0.90f * alpha };
-	SCR_FillRect( cardX, cardY, cardW, 2.0f, topBar );
-
-	// Border
-	vec4_t borderColor = { 0.10f, 0.55f, 0.90f, 0.45f * alpha };
-	SCR_FillRect( cardX,             cardY,             cardW, 1.0f,   borderColor );
-	SCR_FillRect( cardX,             cardY + cardH - 1, cardW, 1.0f,   borderColor );
-	SCR_FillRect( cardX,             cardY,             1.0f,  cardH,  borderColor );
-	SCR_FillRect( cardX + cardW - 1, cardY,             1.0f,  cardH,  borderColor );
+	float fontSize = 3.8f;
+	float w = (float)SCR_Strlen( statStr ) * fontSize * 0.60f;
+	float x = 320.0f - w * 0.5f;
+	float y = 195.0f;                  // Directly under default crosshair name
 
 	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
-
-	const float tX = cardX + 8.0f;
-
-	// Row 1: Player Name
-	SCR_DrawVirtualString( tX, cardY + 4.0f, 4.5f, nameStr, whiteA );
-
-	// Row 2: Rank Title
-	SCR_DrawVirtualString( tX, cardY + 16.0f, 3.8f, rankStr, whiteA );
-
-	// Row 3: Level | FR ELO
-	SCR_DrawVirtualString( tX, cardY + 27.0f, 3.8f, statStr, whiteA );
+	SCR_DrawVirtualString( x, y, fontSize, statStr, whiteA );
 }
 
 
@@ -1348,6 +1312,16 @@ This will be called twice if rendering in stereo mode
 ==================
 */
 void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
+	if ( cls.state != s_lastState ) {
+		s_hBox = 0;
+		s_hBarBg = 0;
+		s_hBarFill = 0;
+		s_hAvatar = 0;
+		s_hAvatarFrame = 0;
+		s_hModalBg = 0;
+		s_lastState = cls.state;
+	}
+
 	re->BeginFrame( stereoFrame );
 
 	qboolean uiFullscreen = (qboolean)(cls.uiStarted && UIVM_IsFullscreen());
