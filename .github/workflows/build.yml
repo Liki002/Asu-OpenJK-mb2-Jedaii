@@ -38,7 +38,7 @@ jobs:
       - name: Build Dedicated Server Only
         working-directory: ${{ runner.workspace }}/build
         shell: bash
-        run: cmake --build . --target openjkded --config Release
+        run: cmake --build . --target openjkded.i386 --config Release
 
       - name: Prepare Artifact
         working-directory: ${{ runner.workspace }}/build
