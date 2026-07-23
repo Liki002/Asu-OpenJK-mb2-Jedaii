@@ -16,7 +16,7 @@ jobs:
         build_type: [Release]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Create Build Environment
         run: |
@@ -47,7 +47,7 @@ jobs:
           mkdir -p ${{ runner.workspace }}/artifact
           cp openjkded.i386 ${{ runner.workspace }}/artifact/openjkded.i386
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: openjkded-linux-i386
           path: ${{ runner.workspace }}/artifact/openjkded.i386
