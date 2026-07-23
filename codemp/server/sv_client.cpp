@@ -1766,6 +1766,11 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
     SV_Ranked_Logout(cl);
     return;
   }
+  if (!Q_stricmp(Cmd_Argv(0), "inspect")) {
+    int targetNum = atoi(Cmd_Argv(1));
+    SV_Ranked_InspectPlayer(cl, targetNum);
+    return;
+  }
 
   // Intercept Ranked Chat Commands
   if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team")) {

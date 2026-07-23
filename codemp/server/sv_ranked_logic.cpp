@@ -1988,10 +1988,10 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   cJSON *lCrPtr = SV_Ranked_GetSetting("duel_loss_credits");
   int wCr = wCrPtr ? wCrPtr->valueint : 25;
   int lCr = lCrPtr ? lCrPtr->valueint : 5;
+  cJSON *xpDuelWinPtr = SV_Ranked_GetSetting("xp_per_duel_win");
+  int xpPerDuelWin = xpDuelWinPtr ? xpDuelWinPtr->valueint : 50;
 
   if (rWin->loggedIn && aWin) {
-    cJSON *xpDuelWinPtr = SV_Ranked_GetSetting("xp_per_duel_win");
-    int xpPerDuelWin = xpDuelWinPtr ? xpDuelWinPtr->valueint : 50;
     UpdateAccountStats(rWin->username, svs.clients[winnerId].name, 0, xpPerDuelWin, 1, 0, "Lightsaber");
     UpdateAccountCredits(rWin->username, wCr);
     // Daily quest: duel wins
@@ -2001,6 +2001,21 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
     UpdateAccountStats(rLose->username, svs.clients[loserId].name, 0, 0, 0, 1, NULL);
     UpdateAccountCredits(rLose->username, lCr);
   }
+
+  // Toast notifications — winner sees green card, loser sees red card
+  SV_SendServerCommand(svs.clients + winnerId,
+                       va("toast_win %d %d %d \"%s\"",
+                          winEloChange,
+                          wCr,
+                          xpPerDuelWin,
+                          svs.clients[loserId].name));
+
+  SV_SendServerCommand(svs.clients + loserId,
+                       va("toast_lose %d %d %d \"%s\"",
+                          loseEloChange,
+                          lCr,
+                          0,
+                          svs.clients[winnerId].name));
 
   // ---- CLAIM BOUNTY ON LOSER ----
   if (rLose->bountyValue > 0) {

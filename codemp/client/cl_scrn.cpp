@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "client.h"
 #include "cl_uiapi.h"
+#include "cl_cgameapi.h"
 
 extern console_t con;
 qboolean	scr_initialized;		// ready to draw
@@ -51,6 +52,8 @@ cvar_t		*cg_rpg_rank;
 cvar_t		*cg_drawLeaderboard;
 cvar_t		*cg_drawStats;
 rpgPlayerStats_t g_rpgStats;
+rpgToastNotif_t  g_rpgToast   = {qfalse, qfalse, 0, 0, 0, "", 0};
+rpgInspectCard_t g_rpgInspect = {qfalse, 1, 1000, "Padawan", "", 0};
 
 /*
 ================
@@ -1133,6 +1136,212 @@ void SCR_DrawStatsOverlay( void ) {
 
 /*
 ==================
+SCR_DrawToastOverlay
+
+Personal Victory / Defeat toast banner shown only to the duel participant.
+Auto-dismisses after TOAST_DURATION_MS with fade-in / fade-out animation.
+==================
+*/
+#define TOAST_DURATION_MS  6000
+#define TOAST_FADEIN_MS    350
+#define TOAST_FADEOUT_MS   500
+
+void SCR_DrawToastOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !g_rpgToast.active ) return;
+
+	int elapsed = cls.realtime - g_rpgToast.startTimeMs;
+	if ( elapsed >= TOAST_DURATION_MS ) {
+		g_rpgToast.active = qfalse;
+		return;
+	}
+
+	// Calculate alpha (fade-in / fade-out)
+	float alpha = 1.0f;
+	if ( elapsed < TOAST_FADEIN_MS ) {
+		alpha = (float)elapsed / (float)TOAST_FADEIN_MS;
+	} else if ( elapsed > TOAST_DURATION_MS - TOAST_FADEOUT_MS ) {
+		alpha = (float)(TOAST_DURATION_MS - elapsed) / (float)TOAST_FADEOUT_MS;
+	}
+	if ( alpha < 0.0f ) alpha = 0.0f;
+	if ( alpha > 1.0f ) alpha = 1.0f;
+
+	const float panelW = 180.0f;
+	const float panelH = 46.0f;
+	const float panelX = 640.0f - panelW - 14.0f;  // Top-Right corner
+	const float panelY = 14.0f;
+
+	// Panel background (dark navy glass)
+	vec4_t bgColor   = { 0.04f, 0.07f, 0.14f, 0.88f * alpha };
+	re->SetColor( bgColor );
+	re->DrawStretchPic( panelX, panelY, panelW, panelH, 0, 0, 0, 0, cls.whiteShader );
+	re->SetColor( NULL );
+
+	// Left accent bar (3px wide): green for win, red for loss
+	vec4_t accentColor;
+	if ( g_rpgToast.isWin ) {
+		accentColor[0] = 0.20f;
+		accentColor[1] = 1.00f;
+		accentColor[2] = 0.40f;
+		accentColor[3] = alpha;
+	} else {
+		accentColor[0] = 1.00f;
+		accentColor[1] = 0.20f;
+		accentColor[2] = 0.20f;
+		accentColor[3] = alpha;
+	}
+	SCR_FillRect( panelX, panelY, 3.0f, panelH, accentColor );
+
+	// Outer border
+	vec4_t borderColor = { 0.20f, 0.50f, 0.80f, 0.55f * alpha };
+	SCR_FillRect( panelX,              panelY,              panelW, 1.0f,   borderColor );
+	SCR_FillRect( panelX,              panelY + panelH - 1, panelW, 1.0f,   borderColor );
+	SCR_FillRect( panelX,              panelY,              1.0f,   panelH, borderColor );
+	SCR_FillRect( panelX + panelW - 1, panelY,              1.0f,   panelH, borderColor );
+
+	// Text colors
+	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
+
+	const float textX = panelX + 8.0f;
+
+	// Row 1: Title (VICTORY! / DEFEAT.)
+	const char *titleStr;
+	if ( g_rpgToast.isWin ) {
+		titleStr = "^2VICTORY!";
+	} else {
+		titleStr = "^1DEFEAT.";
+	}
+	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, titleStr, whiteA );
+
+	// Row 2: vs. Opponent name
+	char vsStr[80];
+	Com_sprintf( vsStr, sizeof( vsStr ), "^7vs. ^5%.24s", g_rpgToast.opponentName );
+	SCR_DrawVirtualString( textX, panelY + 15.0f, 4.0f, vsStr, whiteA );
+
+	// Row 3: Stats row
+	char statsStr[96];
+	if ( g_rpgToast.isWin ) {
+		Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp );
+	} else {
+		Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^1%d ^7| ^6+%d CR", g_rpgToast.eloDelta, g_rpgToast.credits );
+	}
+	SCR_DrawVirtualString( textX, panelY + 26.0f, 4.0f, statsStr, whiteA );
+
+	// Progress bar (shrinks left to right as duration elapses)
+	float barW    = panelW - 4.0f;
+	float barFill = barW * ( 1.0f - (float)elapsed / (float)TOAST_DURATION_MS );
+	vec4_t barBg   = { 0.10f, 0.10f, 0.18f, 0.70f * alpha };
+	SCR_FillRect( panelX + 2.0f, panelY + panelH - 3.0f, barW,    2.0f, barBg );
+	if ( barFill > 0.0f ) {
+		SCR_FillRect( panelX + 2.0f, panelY + panelH - 3.0f, barFill, 2.0f, accentColor );
+	}
+}
+
+/*
+==================
+SCR_DrawInspectOverlay
+
+Crosshair hover card — polls server every 1.5s via "inspect <entityNum>".
+Fades in when data is fresh and fades out after 2.5s of no data.
+==================
+*/
+#define INSPECT_POLL_MS    1500
+#define INSPECT_EXPIRE_MS  2500
+#define INSPECT_FADEIN_MS  250
+#define INSPECT_FADEOUT_MS 400
+
+static int s_inspectLastPollMs = 0;
+
+void SCR_DrawInspectOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+
+	// Poll server for crosshair data
+	if ( cls.cgameStarted && cls.realtime - s_inspectLastPollMs >= INSPECT_POLL_MS ) {
+		s_inspectLastPollMs = cls.realtime;
+		int crosshairNum = CGVM_CrosshairPlayer();
+		if ( crosshairNum >= 0 && crosshairNum < 64 ) {
+			CL_AddReliableCommand( va( "inspect %d", crosshairNum ), qfalse );
+		} else {
+			// No one under crosshair — let the card expire
+		}
+	}
+
+	if ( !g_rpgInspect.active ) return;
+
+	int age = cls.realtime - g_rpgInspect.lastUpdateMs;
+	if ( age >= INSPECT_EXPIRE_MS ) {
+		g_rpgInspect.active = qfalse;
+		return;
+	}
+
+	// Alpha animation
+	float alpha = 1.0f;
+	if ( age < INSPECT_FADEIN_MS ) {
+		alpha = (float)age / (float)INSPECT_FADEIN_MS;
+	} else if ( age > INSPECT_EXPIRE_MS - INSPECT_FADEOUT_MS ) {
+		alpha = (float)(INSPECT_EXPIRE_MS - age) / (float)INSPECT_FADEOUT_MS;
+	}
+	if ( alpha < 0.0f ) alpha = 0.0f;
+	if ( alpha > 1.0f ) alpha = 1.0f;
+
+	char nameStr[80];
+	char rankStr[64];
+	char statStr[64];
+
+	Com_sprintf( nameStr, sizeof( nameStr ), "^7%.26s", g_rpgInspect.displayName );
+	Com_sprintf( rankStr, sizeof( rankStr ), "^3%.24s", g_rpgInspect.rankTitle );
+	Com_sprintf( statStr, sizeof( statStr ), "^5Lv %d  ^7|  ^2%d FR", g_rpgInspect.level, g_rpgInspect.fr );
+
+	float w1 = (float)SCR_Strlen( nameStr ) * 4.5f * 0.60f;
+	float w2 = (float)SCR_Strlen( rankStr ) * 3.8f * 0.60f;
+	float w3 = (float)SCR_Strlen( statStr ) * 3.8f * 0.60f;
+
+	float cardW = w1;
+	if ( w2 > cardW ) cardW = w2;
+	if ( w3 > cardW ) cardW = w3;
+	cardW += 16.0f; // Padding on sides
+	if ( cardW < 90.0f ) cardW = 90.0f;
+
+	const float cardH = 42.0f;
+	const float cardX = 320.0f - cardW * 0.5f;  // horizontally centered
+	const float cardY = 252.0f;                  // well below crosshair reticle (blocks nothing)
+
+	// Glass panel background
+	vec4_t bgColor = { 0.04f, 0.07f, 0.16f, 0.84f * alpha };
+	re->SetColor( bgColor );
+	re->DrawStretchPic( cardX, cardY, cardW, cardH, 0, 0, 0, 0, cls.whiteShader );
+	re->SetColor( NULL );
+
+	// Top accent bar (cyan)
+	vec4_t topBar = { 0.10f, 0.75f, 1.00f, 0.90f * alpha };
+	SCR_FillRect( cardX, cardY, cardW, 2.0f, topBar );
+
+	// Border
+	vec4_t borderColor = { 0.10f, 0.55f, 0.90f, 0.45f * alpha };
+	SCR_FillRect( cardX,             cardY,             cardW, 1.0f,   borderColor );
+	SCR_FillRect( cardX,             cardY + cardH - 1, cardW, 1.0f,   borderColor );
+	SCR_FillRect( cardX,             cardY,             1.0f,  cardH,  borderColor );
+	SCR_FillRect( cardX + cardW - 1, cardY,             1.0f,  cardH,  borderColor );
+
+	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
+
+	const float tX = cardX + 8.0f;
+
+	// Row 1: Player Name
+	SCR_DrawVirtualString( tX, cardY + 4.0f, 4.5f, nameStr, whiteA );
+
+	// Row 2: Rank Title
+	SCR_DrawVirtualString( tX, cardY + 16.0f, 3.8f, rankStr, whiteA );
+
+	// Row 3: Level | FR ELO
+	SCR_DrawVirtualString( tX, cardY + 27.0f, 3.8f, statStr, whiteA );
+}
+
+
+//=======================================================
+
+/*
+==================
 SCR_DrawScreenField
 
 This will be called twice if rendering in stereo mode
@@ -1190,6 +1399,8 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			SCR_DrawDemoRecording();
 			SCR_DrawLeaderboardOverlay();
 			SCR_DrawStatsOverlay();
+			SCR_DrawToastOverlay();
+			SCR_DrawInspectOverlay();
 			break;
 		}
 	}

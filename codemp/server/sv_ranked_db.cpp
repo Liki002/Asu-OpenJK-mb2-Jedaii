@@ -1874,6 +1874,42 @@ void SV_Ranked_ShowStatsTarget(client_t *cl, const char *targetName) {
 
 /*
 ==================
+SV_Ranked_InspectPlayer
+==================
+*/
+void SV_Ranked_InspectPlayer(client_t *cl, int targetClientNum) {
+  if (targetClientNum < 0 || targetClientNum >= sv_maxclients->integer)
+    return;
+  if (svs.clients[targetClientNum].state < CS_CONNECTED)
+    return;
+
+  rankedMatchState_t *r = &sv_rankedPlayers[targetClientNum];
+  int fr = r->tempElo > 0 ? r->tempElo : 1000;
+
+  // Try to get level/title from account if logged in
+  int level = 1;
+  const char *title = "Padawan";
+  if (r->loggedIn && r->username[0]) {
+    cJSON *acc = SV_Ranked_GetAccount(r->username);
+    if (acc) {
+      cJSON *xpPtr = cJSON_GetObjectItemCaseSensitive(acc, "xp");
+      int xp = xpPtr ? xpPtr->valueint : 0;
+      level = SV_Ranked_CalculateLevel(xp);
+      title = SV_Ranked_GetTitle(fr, acc);
+    }
+  }
+
+  const char *dispName = svs.clients[targetClientNum].name;
+
+  SV_SendServerCommand(cl,
+    "inspect_data %d %d %d \"%s\" \"%s\"",
+    targetClientNum, level, fr,
+    title ? title : "Padawan",
+    dispName);
+}
+
+/*
+==================
 SV_Ranked_ShowTop
 ==================
 */

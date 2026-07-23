@@ -870,6 +870,42 @@ void CL_ParseCommandString( msg_t *msg ) {
 		Cvar_Set( "cg_drawStats", "1" );
 	} else if ( !Q_strncmp( s, "stats_close", 11 ) ) {
 		Cvar_Set( "cg_drawStats", "0" );
+	} else if ( !Q_strncmp( s, "toast_win", 9 ) ) {
+		int eloDelta = 0, cr = 0, xp = 0;
+		char oppBuf[64] = "";
+		sscanf( s, "toast_win %d %d %d \"%63[^\"]\"", &eloDelta, &cr, &xp, oppBuf );
+		g_rpgToast.active       = qtrue;
+		g_rpgToast.isWin        = qtrue;
+		g_rpgToast.eloDelta     = eloDelta;
+		g_rpgToast.credits      = cr;
+		g_rpgToast.xp           = xp;
+		g_rpgToast.startTimeMs  = cls.realtime;
+		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
+	} else if ( !Q_strncmp( s, "toast_lose", 10 ) ) {
+		int eloDelta = 0, cr = 0, xp = 0;
+		char oppBuf[64] = "";
+		sscanf( s, "toast_lose %d %d %d \"%63[^\"]\"", &eloDelta, &cr, &xp, oppBuf );
+		g_rpgToast.active       = qtrue;
+		g_rpgToast.isWin        = qfalse;
+		g_rpgToast.eloDelta     = eloDelta;
+		g_rpgToast.credits      = cr;
+		g_rpgToast.xp           = xp;
+		g_rpgToast.startTimeMs  = cls.realtime;
+		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
+	} else if ( !Q_strncmp( s, "inspect_data", 12 ) ) {
+		int tNum = 0, lvl = 1, fr = 1000;
+		char rankBuf[32] = "";
+		char nameBuf[64] = "";
+		int num = sscanf( s, "inspect_data %d %d %d \"%31[^\"]\" \"%63[^\"]\"",
+			&tNum, &lvl, &fr, rankBuf, nameBuf );
+		if ( num >= 4 ) {
+			g_rpgInspect.active       = qtrue;
+			g_rpgInspect.level        = lvl;
+			g_rpgInspect.fr           = fr;
+			g_rpgInspect.lastUpdateMs = cls.realtime;
+			Q_strncpyz( g_rpgInspect.rankTitle,   rankBuf, sizeof( g_rpgInspect.rankTitle ) );
+			Q_strncpyz( g_rpgInspect.displayName, nameBuf, sizeof( g_rpgInspect.displayName ) );
+		}
 	}
 }
 

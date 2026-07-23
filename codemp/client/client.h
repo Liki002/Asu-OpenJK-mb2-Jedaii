@@ -635,3 +635,31 @@ extern rpgPlayerStats_t g_rpgStats;
 void SCR_DrawRPGHUDOverlay( void );
 void SCR_DrawLeaderboardOverlay( void );
 void SCR_DrawStatsOverlay( void );
+
+// --- Victory / Defeat Toast Notification ---
+typedef struct {
+	qboolean active;
+	qboolean isWin;
+	int      eloDelta;
+	int      credits;
+	int      xp;
+	char     opponentName[64];
+	int      startTimeMs;   // cls.realtime when toast was triggered
+} rpgToastNotif_t;
+
+extern rpgToastNotif_t g_rpgToast;
+
+// --- Inspect Duelist Hover Card ---
+typedef struct {
+	qboolean active;
+	int      level;
+	int      fr;
+	char     rankTitle[32];
+	char     displayName[64];
+	int      lastUpdateMs;  // cls.realtime when data was last received
+} rpgInspectCard_t;
+
+extern rpgInspectCard_t g_rpgInspect;
+
+void SCR_DrawToastOverlay( void );
+void SCR_DrawInspectOverlay( void );
