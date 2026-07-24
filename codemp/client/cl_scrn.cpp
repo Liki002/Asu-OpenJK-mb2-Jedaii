@@ -1314,17 +1314,9 @@ void SCR_DrawInspectOverlay( void ) {
 	float boxY = y - 3.0f;
 	float boxH = 16.0f;
 
-	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
-	if ( s_hBox ) {
-		vec4_t panelColor = { 1.0f, 1.0f, 1.0f, alpha * 0.70f };
-		re->SetColor( panelColor );
-		re->DrawStretchPic( boxX, boxY, boxW, boxH, 0, 0, 1, 1, s_hBox );
-		re->SetColor( NULL );
-	} else {
-		vec4_t glassBg = { 0.03f, 0.06f, 0.12f, 0.45f * alpha };
-		vec4_t glassBorder = { 0.10f, 0.60f, 0.90f, 0.35f * alpha };
-		SCR_DrawRoundedGlassPanel( boxX, boxY, boxW, boxH, 3.0f, glassBg, glassBorder );
-	}
+	vec4_t glassBg = { 0.03f, 0.06f, 0.12f, 0.45f * alpha };
+	vec4_t glassBorder = { 0.10f, 0.60f, 0.90f, 0.35f * alpha };
+	SCR_DrawRoundedGlassPanel( boxX, boxY, boxW, boxH, 3.0f, glassBg, glassBorder );
 
 	// Make the text transparent (max 0.75 alpha)
 	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha * 0.75f };
@@ -1358,9 +1350,10 @@ void SCR_DrawBountyOverlay( void ) {
 		borderColor[0] = 0.00f; borderColor[1] = 0.70f; borderColor[2] = 1.00f; borderColor[3] = 0.85f;
 	}
 
-	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
-	if ( s_hBox ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hBox );
+	static qhandle_t s_hWantedBg = 0;
+	if ( !s_hWantedBg ) s_hWantedBg = re->RegisterShader( "gfx/rpg_hud/wanted_bg" );
+	if ( s_hWantedBg ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hWantedBg );
 	} else {
 		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
 		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );

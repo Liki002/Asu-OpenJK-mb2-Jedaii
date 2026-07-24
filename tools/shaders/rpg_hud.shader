@@ -47,3 +47,23 @@ gfx/hud/avatar_sith
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
+
+gfx/rpg_hud/wanted_bg
+{
+	nopicmip
+	cull disable
+	{
+		map gfx/rpg_hud/wanted_bg.tga
+		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+	}
+}
+
+gfx/rpg_hud/panel_bg
+{
+	nopicmip
+	cull disable
+	{
+		map gfx/rpg_hud/panel_bg.tga
+		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+	}
+}
