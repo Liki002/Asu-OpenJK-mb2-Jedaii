@@ -65,6 +65,7 @@ typedef struct {
 
   int tempElo;                    // In-memory session ELO (starts at 1000 for guests, synced on login for registered)
   char username[MAX_AUTH_STRING]; // Used for saving back to DB
+  char displayName[MAX_AUTH_STRING]; // Un-truncated display name from auth/client
 } rankedMatchState_t;
 
 // Externally accessible match state array (parallel to svs.clients)

@@ -627,7 +627,9 @@ void SV_Ranked_Cmd_AdminFreeze(client_t *cl, const char *target) {
 
   sv_rankedPlayers[targetClient].isFrozen = qtrue;
   VectorCopy(ps->origin, sv_rankedPlayers[targetClient].frozenOrigin);
-  ps->pm_type = PM_FREEZE;
+  if (ps->pm_type == PM_FREEZE) {
+    ps->pm_type = PM_NORMAL;
+  }
   VectorClear(ps->velocity);
 
   SV_SendServerCommand(NULL, va("chat \"^5Force Freeze! ^1%s^7 has been frozen in time by High Admin ^1%s^7!\"", targetCl->name, cl->name));
@@ -950,8 +952,11 @@ static void SV_Ranked_Cmd_Wanted(client_t *cl) {
     SV_SendServerCommand(cl, "chat \"^1No wanted players at the moment.\"");
     return;
   }
+  SV_SendServerCommand(cl, "bounty_clear");
   SV_SendServerCommand(cl, "print \"^1=== WANTED LIST (Duel Streaks) ===\n\"");
   for (int i = 0; i < topCount; i++) {
+    SV_SendServerCommand(cl, va("bounty_entry %d %d %d \"%s\"",
+      i + 1, top[i].streak, top[i].bounty, top[i].name));
     if (top[i].bounty > 0) {
       SV_SendServerCommand(cl,
         "print \"^5#%d^7: ^7%s^7 | Streak: ^5%d^7 | Bounty: ^3%d CR^7\n\"",
@@ -962,6 +967,7 @@ static void SV_Ranked_Cmd_Wanted(client_t *cl) {
         i + 1, top[i].name, top[i].streak);
     }
   }
+  SV_SendServerCommand(cl, "bounty_open 1");
 }
 
 // Parse `!inventory` — show owned items from JSON account

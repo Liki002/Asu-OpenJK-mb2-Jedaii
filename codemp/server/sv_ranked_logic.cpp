@@ -1569,9 +1569,6 @@ int SV_Ranked_FindPlayerByNameOrId(const char *identifier) {
   int idMatch = atoi(identifier);
   if (idMatch >= 0 && idMatch < sv_maxclients->integer &&
       svs.clients[idMatch].state >= CS_CONNECTED) {
-    // If it's a valid integer ID and the client is connected, try it.
-    // As an extra check, compare if parsing it as int matches string precisely
-    // or close enough
     char idStr[16];
     Q_strncpyz(idStr, va("%d", idMatch), sizeof(idStr));
     if (Q_stricmp(idStr, identifier) == 0) {
@@ -1583,67 +1580,74 @@ int SV_Ranked_FindPlayerByNameOrId(const char *identifier) {
   Q_strncpyz(cleanInput, identifier, sizeof(cleanInput));
   Q_StripColor(cleanInput);
   Q_strlwr(cleanInput);
+  int inputLen = (int)strlen(cleanInput);
 
+  int prefixMatch = -1;
+  int numPrefixes = 0;
   int partialMatches[64];
-  int numMatches = 0;
+  int numPartials = 0;
 
   for (int i = 0; i < sv_maxclients->integer; i++) {
     if (svs.clients[i].state < CS_CONNECTED)
       continue;
 
-    char cleanName[MAX_NETNAME];
+    // Clean netname
+    char cleanName[MAX_STRING_CHARS];
     Q_strncpyz(cleanName, svs.clients[i].name, sizeof(cleanName));
     Q_StripColor(cleanName);
     Q_strlwr(cleanName);
+    int nameLen = (int)strlen(cleanName);
 
-    if (strcmp(cleanName, cleanInput) == 0) {
+    // Clean display name
+    char cleanDisp[MAX_STRING_CHARS] = "";
+    if (sv_rankedPlayers[i].displayName[0]) {
+      Q_strncpyz(cleanDisp, sv_rankedPlayers[i].displayName, sizeof(cleanDisp));
+      Q_StripColor(cleanDisp);
+      Q_strlwr(cleanDisp);
+    }
+    int dispLen = (int)strlen(cleanDisp);
+
+    // 1. Exact match
+    if (strcmp(cleanName, cleanInput) == 0 || (cleanDisp[0] && strcmp(cleanDisp, cleanInput) == 0)) {
       return i;
     }
 
-    if (strstr(cleanName, cleanInput)) {
-      if (numMatches < 64) {
-        partialMatches[numMatches++] = i;
+    // 2. Truncation / Prefix match
+    int minLenName = (nameLen < inputLen) ? nameLen : inputLen;
+    if (minLenName >= 3 && strncmp(cleanName, cleanInput, minLenName) == 0) {
+      prefixMatch = i;
+      numPrefixes++;
+    }
+    if (dispLen > 0) {
+      int minLenDisp = (dispLen < inputLen) ? dispLen : inputLen;
+      if (minLenDisp >= 3 && strncmp(cleanDisp, cleanInput, minLenDisp) == 0) {
+        prefixMatch = i;
+        numPrefixes++;
+      }
+    }
+
+    // 3. Substring match
+    if (strstr(cleanName, cleanInput) || (cleanDisp[0] && strstr(cleanDisp, cleanInput))) {
+      if (numPartials < 64) {
+        partialMatches[numPartials++] = i;
       }
     }
   }
 
-  if (numMatches == 0)
-    return -1;
-  if (numMatches == 1)
+  if (numPrefixes == 1) {
+    return prefixMatch;
+  }
+  if (numPartials == 1) {
     return partialMatches[0];
-
-  // If multiple partial matches, check for EXACT match
-  for (int i = 0; i < numMatches; i++) {
-    int idx = partialMatches[i];
-    char cleanName[MAX_STRING_CHARS];
-    Q_strncpyz(cleanName, svs.clients[idx].name, sizeof(cleanName));
-
-    int k = 0;
-    char fullyClean[MAX_STRING_CHARS];
-    for (int m = 0; cleanName[m] != '\0' && k < MAX_STRING_CHARS - 1; m++) {
-      if (cleanName[m] == '^' && cleanName[m + 1] != '\0' &&
-          cleanName[m + 1] >= '0' && cleanName[m + 1] <= '9') {
-        m++;
-        continue;
-      }
-      fullyClean[k++] = cleanName[m];
-    }
-    fullyClean[k] = 0;
-    Q_strlwr(fullyClean);
-
-    int rawLen = strlen(svs.clients[idx].name);
-    int lenFC = strlen(fullyClean);
-    int lenCI = strlen(cleanInput);
-    int minLen = lenFC < lenCI ? lenFC : lenCI;
-
-    if (Q_stricmp(fullyClean, cleanInput) == 0 ||
-        (rawLen >= 31 && Q_stricmpn(fullyClean, cleanInput, minLen) == 0) ||
-        (minLen >= 8 && Q_stricmpn(fullyClean, cleanInput, minLen) == 0)) {
-      return idx;
-    }
+  }
+  if (numPrefixes > 1) {
+    return prefixMatch;
+  }
+  if (numPartials > 1) {
+    return partialMatches[0];
   }
 
-  return -2; // Ambiguous
+  return -1;
 }
 
 static void AnnounceSpecialDuelResults(int winnerId, int loserId) {
@@ -2922,7 +2926,9 @@ void SV_Ranked_Logic_Frame(void) {
         playerState_t *ps = SV_GameClientNum(i);
         if (ps && ps->stats[STAT_HEALTH] > 0) {
           if (sv_rankedPlayers[i].isFrozen) {
-            ps->pm_type = PM_FREEZE;
+            if (ps->pm_type == PM_FREEZE) {
+              ps->pm_type = PM_NORMAL;
+            }
             VectorCopy(sv_rankedPlayers[i].frozenOrigin, ps->origin);
             VectorClear(ps->velocity);
           }

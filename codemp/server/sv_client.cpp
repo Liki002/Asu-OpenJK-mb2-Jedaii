@@ -767,18 +767,19 @@ void SV_ClientEnterWorld(client_t *client, usercmd_t *cmd) {
 
   // RANKED: Check for restored session (Run on both Connect and Map Restart)
   clientNum = client - svs.clients;
+  const char *rawName = (sv_rankedPlayers[clientNum].displayName[0]) ? sv_rankedPlayers[clientNum].displayName : client->name;
   if (SV_HasSession(client)) {
-    Com_Printf("AUTH_RESTORE: %i %s [GUID: %s]\n", clientNum, client->name,
+    Com_Printf("AUTH_RESTORE: %i %s [GUID: %s]\n", clientNum, rawName,
                client->guid[0] ? client->guid : "NONE");
   }
 
   // RANKED: Auto-log player info for script to reduce RCON lag
-  Q_strncpyz(cleanName, client->name, sizeof(cleanName));
+  Q_strncpyz(cleanName, rawName, sizeof(cleanName));
   Q_CleanStr(cleanName);
   Com_Printf(
       "PLAYER_INFO: { \"id\": %d, \"name\": \"%s\", \"rawName\": \"%s\", "
       "\"ip\": \"%s\", \"ping\": %d, \"lastPacket\": %d, \"guid\": \"%s\" }\n",
-      clientNum, cleanName, client->name,
+      clientNum, cleanName, rawName,
       NET_AdrToString(client->netchan.remoteAddress), client->ping,
       client->lastPacketTime, client->guid[0] ? client->guid : "");
 

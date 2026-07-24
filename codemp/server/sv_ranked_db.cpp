@@ -2152,13 +2152,17 @@ void SV_Ranked_SetBounty(client_t *cl, const char *targetName, int amount) {
 void SV_Ranked_ShowBountyList(client_t *cl) {
   if (!cl)
     return;
+  SV_SendServerCommand(cl, "bounty_clear");
   SV_SendServerCommand(cl,
                        "print \"\n^2--- ^7Active Bounties (online) ^2---\n\"");
   int shown = 0;
   for (int i = 0; i < sv_maxclients->integer; ++i) {
     if (svs.clients[i].state && sv_rankedPlayers[i].bountyValue > 0) {
+      const char *pName = sv_rankedPlayers[i].displayName[0] ? sv_rankedPlayers[i].displayName : svs.clients[i].name;
+      SV_SendServerCommand(cl, va("bounty_entry %d 0 %d \"%s\"",
+                           shown + 1, sv_rankedPlayers[i].bountyValue, pName));
       SV_SendServerCommand(cl, "print \"^7%s ^2- ^5%d credits\n\"",
-                           svs.clients[i].name,
+                           pName,
                            sv_rankedPlayers[i].bountyValue);
       shown++;
     }
@@ -2167,6 +2171,7 @@ void SV_Ranked_ShowBountyList(client_t *cl) {
     SV_SendServerCommand(cl, "print \"^3No active bounties.\n\"");
   }
   SV_SendServerCommand(cl, "print \"\n\"");
+  SV_SendServerCommand(cl, "bounty_open 0");
 }
 
 // ============================================================

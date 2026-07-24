@@ -51,9 +51,11 @@ cvar_t		*cg_rpg_name;
 cvar_t		*cg_rpg_rank;
 cvar_t		*cg_drawLeaderboard;
 cvar_t		*cg_drawStats;
+cvar_t		*cg_drawBounty;
 rpgPlayerStats_t g_rpgStats;
 rpgToastNotif_t  g_rpgToast   = {qfalse, qfalse, 0, 0, 0, "", 0};
 rpgInspectCard_t g_rpgInspect = {qfalse, 1, 1000, "Padawan", "", 0};
+rpgBountyOverlay_t g_rpgBounty = {qfalse, qfalse, 0, {}};
 
 /*
 ================
@@ -493,6 +495,7 @@ void SCR_Init( void ) {
 	cg_rpg_rank    = Cvar_Get ("cg_rpg_rank",    "Padawan",                  CVAR_ROM);
 	cg_drawLeaderboard = Cvar_Get ("cg_drawLeaderboard", "0", 0);
 	cg_drawStats = Cvar_Get ("cg_drawStats", "0", 0);
+	cg_drawBounty = Cvar_Get ("cg_drawBounty", "0", 0);
 
 	Cmd_AddCommand( "rpg_hud_style", SCR_RPGHUDStyle_f, "Select RPG HUD style: classic (0) or bottom (1)" );
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
@@ -1057,7 +1060,7 @@ void SCR_DrawStatsOverlay( void ) {
 
 	// Display Name
 	char dName[64];
-	Com_sprintf( dName, sizeof(dName), "^7%.16s", g_rpgStats.displayName );
+	Com_sprintf( dName, sizeof(dName), "^7%.32s", g_rpgStats.displayName );
 	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 22.0f, 4.8f, dName, whiteColor );
 
 	// Rank Title
@@ -1248,25 +1251,32 @@ Fades in when data is fresh and fades out after 2.5s of no data.
 */
 #define INSPECT_POLL_MS    1500
 #define INSPECT_EXPIRE_MS  2500
-#define INSPECT_FADEIN_MS  150
-#define INSPECT_FADEOUT_MS 150
+#define INSPECT_FADEIN_MS  100
+#define INSPECT_FADEOUT_MS 100
 
 static int s_inspectLastPollMs = 0;
 
 void SCR_DrawInspectOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) return;
 
-	// Poll server for crosshair data
-	if ( cls.cgameStarted && cls.realtime - s_inspectLastPollMs >= INSPECT_POLL_MS ) {
-		s_inspectLastPollMs = cls.realtime;
-		int crosshairNum = CGVM_CrosshairPlayer();
-		if ( crosshairNum >= 0 && crosshairNum < 64 ) {
+	// Check crosshair target every frame
+	int crosshairNum = -1;
+	if ( cls.cgameStarted ) {
+		crosshairNum = CGVM_CrosshairPlayer();
+	}
+
+	// Poll server periodically if looking at a valid player
+	if ( crosshairNum >= 0 && crosshairNum < 64 ) {
+		if ( cls.realtime - s_inspectLastPollMs >= INSPECT_POLL_MS ) {
+			s_inspectLastPollMs = cls.realtime;
 			CL_AddReliableCommand( va( "inspect %d", crosshairNum ), qfalse );
-		} else {
-			// If we look away, shorten the expiration time so it fades out very fast
+		}
+	} else {
+		// If we look away, shorten the expiration time immediately so it starts a fast fade-out
+		if ( g_rpgInspect.active ) {
 			int elapsed = cls.realtime - g_rpgInspect.lastUpdateMs;
-			if ( elapsed < INSPECT_EXPIRE_MS - 150 ) {
-				g_rpgInspect.lastUpdateMs = cls.realtime - (INSPECT_EXPIRE_MS - 150);
+			if ( elapsed < INSPECT_EXPIRE_MS - 100 ) {
+				g_rpgInspect.lastUpdateMs = cls.realtime - (INSPECT_EXPIRE_MS - 100);
 			}
 		}
 	}
@@ -1292,13 +1302,144 @@ void SCR_DrawInspectOverlay( void ) {
 	char statStr[64];
 	Com_sprintf( statStr, sizeof( statStr ), "^5Lv %d  ^7|  ^2%d FR", g_rpgInspect.level, g_rpgInspect.fr );
 
-	float fontSize = 3.8f;
+	float fontSize = 4.2f;
 	float w = (float)SCR_Strlen( statStr ) * fontSize * 0.60f;
 	float x = 320.0f - w * 0.5f;
 	float y = 195.0f;                  // Directly under default crosshair name
 
-	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
+	// Draw see-through glass background panel behind inspect text
+	float padX = 8.0f;
+	float boxX = x - padX;
+	float boxW = w + padX * 2.0f;
+	float boxY = y - 3.0f;
+	float boxH = 16.0f;
+
+	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
+	if ( s_hBox ) {
+		vec4_t panelColor = { 1.0f, 1.0f, 1.0f, alpha * 0.70f };
+		re->SetColor( panelColor );
+		re->DrawStretchPic( boxX, boxY, boxW, boxH, 0, 0, 1, 1, s_hBox );
+		re->SetColor( NULL );
+	} else {
+		vec4_t glassBg = { 0.03f, 0.06f, 0.12f, 0.45f * alpha };
+		vec4_t glassBorder = { 0.10f, 0.60f, 0.90f, 0.35f * alpha };
+		SCR_DrawRoundedGlassPanel( boxX, boxY, boxW, boxH, 3.0f, glassBg, glassBorder );
+	}
+
+	// Make the text transparent (max 0.75 alpha)
+	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha * 0.75f };
 	SCR_DrawVirtualString( x, y, fontSize, statStr, whiteA );
+}
+
+
+//=======================================================
+
+/*
+==================
+SCR_DrawBountyOverlay
+
+Modal popup sheet for !wanted (duel streaks) and !bountylist (online bounties)
+==================
+*/
+void SCR_DrawBountyOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawBounty || !cg_drawBounty->integer ) return;
+	if ( !g_rpgBounty.active ) return;
+
+	float winW = 420.0f;
+	float winH = 240.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 120.0f;
+
+	vec4_t borderColor;
+	if ( g_rpgBounty.isWanted ) {
+		borderColor[0] = 1.00f; borderColor[1] = 0.20f; borderColor[2] = 0.20f; borderColor[3] = 0.85f;
+	} else {
+		borderColor[0] = 0.00f; borderColor[1] = 0.70f; borderColor[2] = 1.00f; borderColor[3] = 0.85f;
+	}
+
+	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
+	if ( s_hBox ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hBox );
+	} else {
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
+
+	// Header background
+	vec4_t headerBg;
+	if ( g_rpgBounty.isWanted ) {
+		headerBg[0] = 0.40f; headerBg[1] = 0.08f; headerBg[2] = 0.08f; headerBg[3] = 0.88f;
+	} else {
+		headerBg[0] = 0.08f; headerBg[1] = 0.18f; headerBg[2] = 0.35f; headerBg[3] = 0.88f;
+	}
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 22.0f, 3.0f, headerBg, NULL );
+
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	if ( g_rpgBounty.isWanted ) {
+		SCR_DrawVirtualString( winX + 100.0f, winY + 6.0f, 6.0f, "^1WANTED TARGETS ^7(Duel Streaks)", yellowCol );
+	} else {
+		SCR_DrawVirtualString( winX + 100.0f, winY + 6.0f, 6.0f, "^3ACTIVE BOUNTIES ^7(Online)", yellowCol );
+	}
+
+	SCR_DrawVirtualString( winX + winW - 55.0f, winY + 6.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	// Table Headers
+	float startY = winY + 34.0f;
+	SCR_DrawVirtualString( winX + 16.0f, startY, 4.8f, "^5#", yellowCol );
+	SCR_DrawVirtualString( winX + 45.0f, startY, 4.8f, "^5PLAYER NAME", yellowCol );
+	if ( g_rpgBounty.isWanted ) {
+		SCR_DrawVirtualString( winX + 260.0f, startY, 4.8f, "^5STREAK", yellowCol );
+		SCR_DrawVirtualString( winX + 335.0f, startY, 4.8f, "^5BOUNTY", yellowCol );
+	} else {
+		SCR_DrawVirtualString( winX + 295.0f, startY, 4.8f, "^5BOUNTY REWARD", yellowCol );
+	}
+
+	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
+	SCR_FillRect( winX + 10.0f, startY + 14.0f, winW - 20.0f, 1.0f, divColor );
+
+	if ( g_rpgBounty.count == 0 ) {
+		SCR_DrawVirtualString( winX + 130.0f, startY + 40.0f, 5.2f, "^7No active targets found.", whiteColor );
+	} else {
+		float rowY = startY + 20.0f;
+		for ( int i = 0; i < g_rpgBounty.count && i < 8; i++ ) {
+			bountyEntry_t *e = &g_rpgBounty.entries[i];
+
+			// Highlight top 1
+			if ( i == 0 ) {
+				vec4_t topBg = { 0.80f, 0.60f, 0.10f, 0.15f };
+				SCR_FillRect( winX + 10.0f, rowY - 1.0f, winW - 20.0f, 16.0f, topBg );
+			}
+
+			// Rank
+			SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^3%d", e->rank ), whiteColor );
+
+			// Name (full long name support)
+			char nameFormatted[64];
+			Com_sprintf( nameFormatted, sizeof( nameFormatted ), "^7%.28s", e->name );
+			SCR_DrawVirtualString( winX + 45.0f, rowY, 4.8f, nameFormatted, whiteColor );
+
+			// Values
+			if ( g_rpgBounty.isWanted ) {
+				SCR_DrawVirtualString( winX + 260.0f, rowY, 4.8f, va( "^5%d wins", e->streak ), whiteColor );
+				if ( e->bounty > 0 ) {
+					SCR_DrawVirtualString( winX + 335.0f, rowY, 4.8f, va( "^3%d CR", e->bounty ), whiteColor );
+				} else {
+					SCR_DrawVirtualString( winX + 335.0f, rowY, 4.8f, "^7-", whiteColor );
+				}
+			} else {
+				SCR_DrawVirtualString( winX + 295.0f, rowY, 4.8f, va( "^3%d Credits", e->bounty ), whiteColor );
+			}
+
+			rowY += 18.0f;
+		}
+	}
+
+	// Footer instruction
+	const char *closeStr = g_rpgBounty.isWanted ? "^7Press ^3F8^7, ^3ESC^7, or type ^3!wanted^7 to close" : "^7Press ^3F8^7, ^3ESC^7, or type ^3!bountylist^7 to close";
+	SCR_DrawVirtualString( winX + 80.0f, winY + winH - 12.0f, 4.5f, closeStr, whiteColor );
 }
 
 
@@ -1375,6 +1516,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			SCR_DrawStatsOverlay();
 			SCR_DrawToastOverlay();
 			SCR_DrawInspectOverlay();
+			SCR_DrawBountyOverlay();
 			break;
 		}
 	}

@@ -906,6 +906,31 @@ void CL_ParseCommandString( msg_t *msg ) {
 			Q_strncpyz( g_rpgInspect.rankTitle,   rankBuf, sizeof( g_rpgInspect.rankTitle ) );
 			Q_strncpyz( g_rpgInspect.displayName, nameBuf, sizeof( g_rpgInspect.displayName ) );
 		}
+	} else if ( !Q_strncmp( s, "bounty_clear", 12 ) ) {
+		g_rpgBounty.count = 0;
+	} else if ( !Q_strncmp( s, "bounty_entry", 12 ) ) {
+		if ( g_rpgBounty.count < 10 ) {
+			bountyEntry_t *e = &g_rpgBounty.entries[g_rpgBounty.count];
+			char nameBuf[64] = "";
+			int rankNum = 0, streakVal = 0, bountyVal = 0;
+			int num = sscanf( s, "bounty_entry %d %d %d \"%63[^\"]\"", &rankNum, &streakVal, &bountyVal, nameBuf );
+			if ( num >= 4 ) {
+				e->rank = rankNum;
+				e->streak = streakVal;
+				e->bounty = bountyVal;
+				Q_strncpyz( e->name, nameBuf, sizeof( e->name ) );
+				g_rpgBounty.count++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "bounty_open", 11 ) ) {
+		int isWanted = 0;
+		sscanf( s, "bounty_open %d", &isWanted );
+		g_rpgBounty.isWanted = (isWanted != 0) ? qtrue : qfalse;
+		g_rpgBounty.active = qtrue;
+		Cvar_Set( "cg_drawBounty", "1" );
+	} else if ( !Q_strncmp( s, "bounty_close", 12 ) ) {
+		g_rpgBounty.active = qfalse;
+		Cvar_Set( "cg_drawBounty", "0" );
 	}
 }
 

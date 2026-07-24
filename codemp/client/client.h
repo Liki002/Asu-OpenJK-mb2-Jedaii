@@ -663,3 +663,21 @@ extern rpgInspectCard_t g_rpgInspect;
 
 void SCR_DrawToastOverlay( void );
 void SCR_DrawInspectOverlay( void );
+void SCR_DrawBountyOverlay( void );
+
+// --- Bounty / Wanted UI Overlay ---
+typedef struct {
+	int  rank;
+	int  streak;
+	int  bounty;
+	char name[64];
+} bountyEntry_t;
+
+typedef struct {
+	qboolean active;
+	qboolean isWanted; // qtrue = !wanted (duel streaks), qfalse = !bountylist (active bounties)
+	int      count;
+	bountyEntry_t entries[10];
+} rpgBountyOverlay_t;
+
+extern rpgBountyOverlay_t g_rpgBounty;
