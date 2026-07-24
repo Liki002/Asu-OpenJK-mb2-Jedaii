@@ -670,6 +670,7 @@ static qhandle_t s_hBarFill = 0;
 static qhandle_t s_hAvatar = 0;
 static qhandle_t s_hAvatarFrame = 0;
 static qhandle_t s_hModalBg = 0;
+static qboolean  s_shadersTried = qfalse;
 
 void SCR_DrawRPGHUDOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) {
@@ -680,12 +681,17 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// Register HD TGA Shaders dynamically once active
-	if ( !s_hBox ) s_hBox = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
-	if ( !s_hBarBg ) s_hBarBg = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
-	if ( !s_hBarFill ) s_hBarFill = re->RegisterShader( "gfx/rpg_hud/bar_fill" );
-	if ( !s_hAvatar ) s_hAvatar = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
-	if ( !s_hAvatarFrame ) s_hAvatarFrame = re->RegisterShader( "gfx/rpg_hud/avatar_frame" );
-	if ( !s_hModalBg ) s_hModalBg = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
+	if ( !s_shadersTried ) {
+		s_shadersTried = qtrue;
+		if ( re && re->RegisterShader ) {
+			s_hBox         = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
+			s_hBarBg       = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
+			s_hBarFill     = re->RegisterShader( "gfx/rpg_hud/bar_fill" );
+			s_hAvatar      = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
+			s_hAvatarFrame = re->RegisterShader( "gfx/rpg_hud/avatar_frame" );
+			s_hModalBg     = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
+		}
+	}
 
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
 	float panelW = (style == 1) ? 175.0f : 140.0f;
@@ -1351,8 +1357,14 @@ void SCR_DrawBountyOverlay( void ) {
 	}
 
 	static qhandle_t s_hWantedBg = 0;
-	if ( !s_hWantedBg ) s_hWantedBg = re->RegisterShader( "gfx/rpg_hud/wanted_bg" );
-	if ( s_hWantedBg ) {
+	static qboolean  s_hWantedBgTried = qfalse;
+	if ( !s_hWantedBgTried ) {
+		s_hWantedBgTried = qtrue;
+		if ( re && re->RegisterShader ) {
+			s_hWantedBg = re->RegisterShader( "gfx/rpg_hud/wanted_bg" );
+		}
+	}
+	if ( s_hWantedBg > 0 ) {
 		SCR_DrawPic( winX, winY, winW, winH, s_hWantedBg );
 	} else {
 		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
