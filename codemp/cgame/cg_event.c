@@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // cg_event.c -- handle entity events at snapshot or playerstate transitions
 
 #include "cg_local.h"
+#include "cg_xp_profile.h"
 #include "fx_local.h"
 #include "ui/ui_shared.h"
 #include "ui/ui_public.h"
@@ -274,6 +275,14 @@ clientkilled:
 	// check for kill messages from the current clientNum
 	if ( attacker == cg.snap->ps.clientNum ) {
 		char	*s;
+
+		if ( target != attacker ) {
+			if ( target >= 0 && target < MAX_CLIENTS ) {
+				CG_XP_OnPlayerKill();
+			} else {
+				CG_XP_OnNPCKill();
+			}
+		}
 
 		if ( cgs.gametype < GT_TEAM && cgs.gametype != GT_DUEL && cgs.gametype != GT_POWERDUEL ) {
 			if (cgs.gametype == GT_JEDIMASTER &&

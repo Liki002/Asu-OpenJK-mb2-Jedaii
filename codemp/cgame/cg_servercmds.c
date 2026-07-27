@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // be a valid snapshot this frame
 
 #include "cg_local.h"
+#include "cg_xp_profile.h"
 #include "ui/menudef.h"
 #include "ghoul2/G2.h"
 #include "ui/ui_public.h"
@@ -749,7 +750,12 @@ static void CG_ConfigStringModified( void ) {
 	}
 	else if ( num == CS_CLIENT_DUELWINNER )
 	{
+		int oldWinner = cgs.duelWinner;
 		cgs.duelWinner = atoi ( str );
+		if ( cgs.duelWinner != oldWinner && cgs.duelWinner == cg.snap->ps.clientNum )
+		{
+			CG_XP_OnDuelWin();
+		}
 	}
 	else if ( num == CS_CLIENT_DUELISTS )
 	{

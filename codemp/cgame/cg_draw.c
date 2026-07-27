@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // active (after loading) gameplay
 
 #include "cg_local.h"
+#include "cg_xp_profile.h"
 
 #include "game/bg_saga.h"
 
@@ -8339,6 +8340,9 @@ static void CG_Draw2D( void ) {
 	if ( !cg.scoreBoardShowing) {
 		CG_DrawCenterString();
 	}
+
+	// Draw Standalone XP Level Profile HUD
+	CG_XP_DrawHUD();
 
 	// always draw chat
 	CG_ChatBox_DrawStrings();

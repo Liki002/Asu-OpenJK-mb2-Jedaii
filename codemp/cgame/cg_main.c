@@ -24,6 +24,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 // cg_main.c -- initialization and primary entry point for cgame
 #include "cg_local.h"
+#include "cg_xp_profile.h"
 
 #include "ui/ui_shared.h"
 
@@ -2404,6 +2405,7 @@ void CG_Init( int serverMessageNum, int serverCommandSequence, int clientNum )
 	int i = 0;
 
 	Rand_Init( trap->Milliseconds() );
+	CG_XP_Init();
 
 	BG_InitAnimsets(); //clear it out
 

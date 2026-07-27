@@ -82,6 +82,7 @@ set(MPCGameCgameFiles
 	"${MPDir}/cgame/cg_view.c"
 	"${MPDir}/cgame/cg_weaponinit.c"
 	"${MPDir}/cgame/cg_weapons.c"
+	"${MPDir}/cgame/cg_xp_profile.c"
 	"${MPDir}/cgame/fx_blaster.c"
 	"${MPDir}/cgame/fx_bowcaster.c"
 	"${MPDir}/cgame/fx_bryarpistol.c"
@@ -95,6 +96,7 @@ set(MPCGameCgameFiles
 	"${MPDir}/cgame/cg_local.h"
 	"${MPDir}/cgame/cg_public.h"
 	"${MPDir}/cgame/cg_xcvar.h"
+	"${MPDir}/cgame/cg_xp_profile.h"
 	"${MPDir}/cgame/fx_local.h"
 	)
 source_group("cgame" FILES ${MPCGameCgameFiles})
