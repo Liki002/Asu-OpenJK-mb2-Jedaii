@@ -675,12 +675,29 @@ static qhandle_t s_hAvatarFrame = 0;
 static qhandle_t s_hModalBg = 0;
 static qboolean  s_shadersTried = qfalse;
 
+static int SCR_GetCleanStringLength( const char *str ) {
+	if ( !str ) return 0;
+	int len = 0;
+	for ( const char *p = str; *p; p++ ) {
+		if ( *p == '^' && *(p + 1) != '\0' && *(p + 1) != '^' ) {
+			p++; // skip color escape code char
+		} else {
+			len++;
+		}
+	}
+	return len;
+}
+
 void SCR_DrawRPGHUDOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) {
 		return;
 	}
 
 	CL_XP_CheckGameEvents();
+
+	if ( g_xpDrawCard ) {
+		SCR_DrawProfileCardOverlay();
+	}
 
 	if ( !cg_drawRPGHUD || !cg_drawRPGHUD->integer ) {
 		return;
@@ -700,7 +717,19 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
-	float panelW = (style == 1) ? 175.0f : 140.0f;
+
+	cvar_t *clName = Cvar_Get( "name", "Padawan", 0 );
+	const char *playerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
+	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
+
+	int nameLen = SCR_GetCleanStringLength( playerName );
+	int rankLen = SCR_GetCleanStringLength( rankTitle );
+	int maxTextLen = (nameLen > rankLen + 10) ? nameLen : (rankLen + 10);
+
+	float calculatedW = (style == 1) ? (42.0f + maxTextLen * 5.5f + 35.0f) : (35.0f + maxTextLen * 5.5f + 25.0f);
+	float minW = (style == 1) ? 190.0f : 160.0f;
+	float panelW = (calculatedW > minW) ? calculatedW : minW;
+	if ( panelW > 500.0f ) panelW = 500.0f;
 	float panelH = 46.0f;
 
 	// Preset position defaults
@@ -722,9 +751,6 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : defaultX;
 	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : defaultY;
 
-	cvar_t *clName = Cvar_Get( "name", "Padawan", 0 );
-	const char *playerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
-	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
 	int level = cg_rpg_level ? cg_rpg_level->integer : 1;
 	int fr = cg_rpg_fr ? cg_rpg_fr->integer : 1000;
 	int xp = cg_rpg_xp ? cg_rpg_xp->integer : 0;
@@ -776,12 +802,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		// Line 1: Player Name + Level Badge
 		char nameLvlStr[96];
-		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%.22s ^3Lv %d", playerName, level );
+		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%s ^3Lv %d", playerName, level );
 		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, nameLvlStr, whiteColor );
 
 		// Line 2: Rank Title & Private Duel Record (Wins - Losses)
 		char rankStr[96];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
+		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
 
 		// Line 3: Sleek Horizontal XP Bar (TGA Background)
@@ -865,12 +891,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	// Line 1: Player Name
 	char nameStr[96];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%.18s", playerName );
+	Com_sprintf( nameStr, sizeof(nameStr), "^7%s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
 
 	// Line 2: Rank Title & Private Duel Record (Wins - Losses)
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
 	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.3f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar (TGA Background)
