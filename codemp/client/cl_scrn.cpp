@@ -943,7 +943,18 @@ void SCR_DrawRPGHUDOverlay( void ) {
 void SCR_DrawProfileCardOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) return;
 
-	float cardW = 340.0f;
+	const char *profName = CL_XP_GetProfileName();
+	const char *rankTitle = CL_XP_GetRankTitle( g_xpProfile.level, g_xpProfile.faction );
+
+	int nameCleanLen = SCR_GetCleanStringLength( profName );
+	int rankCleanLen = SCR_GetCleanStringLength( rankTitle );
+	int headerMaxLen = (nameCleanLen + 20 > rankCleanLen + 15) ? (nameCleanLen + 20) : (rankCleanLen + 15);
+
+	float calculatedCardW = 32.0f + headerMaxLen * 5.8f + 25.0f;
+	float minCardW = 360.0f;
+	float cardW = (calculatedCardW > minCardW) ? calculatedCardW : minCardW;
+	if ( cardW > 580.0f ) cardW = 580.0f;
+
 	float cardH = 210.0f;
 	float cardX = 320.0f - cardW * 0.5f;
 	float cardY = 240.0f - cardH * 0.5f;
@@ -959,12 +970,11 @@ void SCR_DrawProfileCardOverlay( void ) {
 	SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
 
 	char headerStr[128];
-	Com_sprintf( headerStr, sizeof(headerStr), "^7%.20s ^3[Lvl %d %s^3]",
-		CL_XP_GetProfileName(), g_xpProfile.level, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI" );
+	Com_sprintf( headerStr, sizeof(headerStr), "^7%s ^3[Lvl %d %s^3]",
+		profName, g_xpProfile.level, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI" );
 	SCR_DrawVirtualString( cardX + 16.0f, cardY + 14.0f, 5.8f, headerStr, whiteColor );
 
-	const char *rankTitle = CL_XP_GetRankTitle( g_xpProfile.level, g_xpProfile.faction );
-	char rankSub[64];
+	char rankSub[96];
 	Com_sprintf( rankSub, sizeof(rankSub), "^3Rank Title: ^7%s", rankTitle );
 	SCR_DrawVirtualString( cardX + 16.0f, cardY + 34.0f, 4.8f, rankSub, whiteColor );
 

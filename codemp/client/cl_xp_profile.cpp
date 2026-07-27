@@ -351,37 +351,28 @@ void CL_XP_CheckGameEvents(void) {
 
 	// Check if local player is active (not spectating another entity)
 	qboolean isSpectatingOther = (cl.snap.ps.clientNum != clc.clientNum || (cl.snap.ps.pm_flags & PMF_FOLLOW)) ? qtrue : qfalse;
-
-	// 1. Direct Death tracking via PERS_KILLED & Health transition (works across all death types)
-	if (!isSpectatingOther) {
-		int currentDeaths = cl.snap.ps.persistant[PERS_KILLED];
-		int currentHealth = cl.snap.ps.stats[STAT_HEALTH];
-
-		if (g_lastDeaths != -1 && currentDeaths > g_lastDeaths) {
-			int diff = currentDeaths - g_lastDeaths;
-			if (diff > 0 && diff <= 5) {
-				for (int i = 0; i < diff; i++) {
-					CL_XP_OnPlayerDeath();
-				}
-			}
-		} else if (g_lastHealth > 0 && currentHealth <= 0) {
-			CL_XP_OnPlayerDeath();
-		}
-		g_lastDeaths = currentDeaths;
-		g_lastHealth = currentHealth;
-	} else {
-		g_lastDeaths = -1;
-		g_lastHealth = -1;
-	}
-
-	// Filter spectating for kill & duel tracking
-	if (isSpectatingOther || cl.snap.ps.pm_type == PM_SPECTATOR) {
-		g_lastKills = -1;
-		g_lastDuelInProgress = qfalse;
+	if (isSpectatingOther) {
 		return;
 	}
 
-	// 2. Player Kill tracking via PERS_SCORE (during active play)
+	// 1. Direct Death tracking via PERS_KILLED & Health transition
+	int currentDeaths = cl.snap.ps.persistant[PERS_KILLED];
+	int currentHealth = cl.snap.ps.stats[STAT_HEALTH];
+
+	if (g_lastDeaths != -1 && currentDeaths > g_lastDeaths) {
+		int diff = currentDeaths - g_lastDeaths;
+		if (diff > 0 && diff <= 5) {
+			for (int i = 0; i < diff; i++) {
+				CL_XP_OnPlayerDeath();
+			}
+		}
+	} else if (g_lastHealth > 0 && currentHealth <= 0 && g_lastDeaths != -1 && currentDeaths == g_lastDeaths) {
+		CL_XP_OnPlayerDeath();
+	}
+	g_lastDeaths = currentDeaths;
+	g_lastHealth = currentHealth;
+
+	// 2. Player Kill tracking via PERS_SCORE
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
 	if (g_lastKills != -1 && currentKills > g_lastKills) {
 		int diff = currentKills - g_lastKills;
@@ -396,7 +387,7 @@ void CL_XP_CheckGameEvents(void) {
 	// 3. Private 1v1 Saber Duel Win / Loss tracking via duelInProgress
 	qboolean currentDuel = (cl.snap.ps.duelInProgress != 0) ? qtrue : qfalse;
 	if (g_lastDuelInProgress && !currentDuel) {
-		if (cl.snap.ps.stats[STAT_HEALTH] > 0) {
+		if (currentHealth > 0) {
 			CL_XP_OnDuelWin();
 		} else {
 			CL_XP_OnDuelLoss();
