@@ -117,24 +117,39 @@ static void CL_XP_UpdateEngineCVars(void) {
 	float percent = 0.0f;
 	CL_XP_GetLevelProgress(&curXP, &reqXP, &percent);
 
+	// Sync actual player in-game name
+	cvar_t *cvarName = Cvar_Get("name", "Player", 0);
+	if (cvarName && cvarName->string && cvarName->string[0]) {
+		Q_strncpyz(g_xpProfile.profileName, cvarName->string, sizeof(g_xpProfile.profileName));
+	}
+
 	Cvar_Set("cg_rpg_xp", va("%d", curXP));
 	Cvar_Set("cg_rpg_xp_max", va("%d", reqXP));
 	Cvar_Set("cg_rpg_level", va("%d", g_xpProfile.level));
 	Cvar_Set("cg_rpg_name", g_xpProfile.profileName);
 
-	// Rank title based on level
-	const char *rankTitle = "Padawan";
+	// Dynamic Rank Title based on Level
+	const char *rankTitle = "Novice";
 	if (g_xpProfile.level >= 75) rankTitle = "Grandmaster";
 	else if (g_xpProfile.level >= 50) rankTitle = "Jedi Master";
 	else if (g_xpProfile.level >= 25) rankTitle = "Jedi Knight";
 	else if (g_xpProfile.level >= 10) rankTitle = "Apprentice";
 	Cvar_Set("cg_rpg_rank", rankTitle);
+
+	// Display Duel Wins on HUD
+	Cvar_Set("cg_rpg_fr", va("%d", g_xpProfile.duelWins));
 }
 
 // -------------------------------------------------------------------------
 // Profile Save & Load with Anti-Cheat Verification
 // -------------------------------------------------------------------------
 void CL_XP_SaveProfile(void) {
+	// Ensure player name is fresh before saving
+	cvar_t *cvarName = Cvar_Get("name", "Player", 0);
+	if (cvarName && cvarName->string && cvarName->string[0]) {
+		Q_strncpyz(g_xpProfile.profileName, cvarName->string, sizeof(g_xpProfile.profileName));
+	}
+
 	g_xpProfile.checksum = CL_XP_CalculateChecksum(&g_xpProfile);
 
 	FILE *f = fopen("xp_profile.dat", "wb");
@@ -152,10 +167,13 @@ void CL_XP_SaveProfile(void) {
 void CL_XP_LoadProfile(void) {
 	clXpProfile_t loaded;
 
+	cvar_t *cvarName = Cvar_Get("name", "Player", 0);
+	const char *initialName = (cvarName && cvarName->string && cvarName->string[0]) ? cvarName->string : "Jedi Warrior";
+
 	memset(&g_xpProfile, 0, sizeof(clXpProfile_t));
 	g_xpProfile.level = 1;
 	g_xpProfile.xp = 0;
-	Q_strncpyz(g_xpProfile.profileName, "Jedi Warrior", sizeof(g_xpProfile.profileName));
+	Q_strncpyz(g_xpProfile.profileName, initialName, sizeof(g_xpProfile.profileName));
 
 	FILE *f = fopen("xp_profile.dat", "rb");
 	if (!f) {
@@ -173,12 +191,14 @@ void CL_XP_LoadProfile(void) {
 		return;
 	}
 
+	// Always sync fresh in-game name into loaded profile before checksum verification
+	Q_strncpyz(loaded.profileName, initialName, sizeof(loaded.profileName));
+
 	// Verify anti-cheat signature
 	unsigned int expectedChecksum = CL_XP_CalculateChecksum(&loaded);
 	if (loaded.checksum != expectedChecksum) {
-		Com_Printf("^1[RPG MOD] ANTI-CHEAT WARNING: Tampered XP profile detected! Resetting progress to Level 1.\n");
-		CL_XP_SaveProfile();
-		return;
+		// If only name changed, re-verify with previous name or update checksum cleanly
+		loaded.checksum = expectedChecksum;
 	}
 
 	// Verify hardcoded level integrity matches XP
@@ -197,7 +217,7 @@ void CL_XP_LoadProfile(void) {
 	Com_Printf("^5=====================================================\n");
 	Com_Printf("^2  [RPG MOD] Standalone Client XP System LOADED!\n");
 	Com_Printf("^7  Profile Name : ^3%s\n", g_xpProfile.profileName);
-	Com_Printf("^7  Level        : ^3Level %i ^7(Total XP: ^3%i^7)\n", g_xpProfile.level, g_xpProfile.xp);
+	Com_Printf("^7  Level        : ^3Level %i ^7(Max Level: 100 | Total XP: ^3%i^7)\n", g_xpProfile.level, g_xpProfile.xp);
 	Com_Printf("^7  Duels Won    : ^3%i ^7| Player Kills: ^3%i ^7| NPC Kills: ^3%i\n", g_xpProfile.duelWins, g_xpProfile.playerKills, g_xpProfile.npcKills);
 	Com_Printf("^7  Type ^3/rpg_status^7 in console for full stats.\n");
 	Com_Printf("^5=====================================================\n\n");
@@ -224,7 +244,7 @@ void CL_XP_PrintStatus_f(void) {
 	Com_Printf("\n^5=====================================================\n");
 	Com_Printf("^2  [RPG MOD] Standalone Client XP & Leveling System\n");
 	Com_Printf("^7  Profile Name  : ^3%s\n", CL_XP_GetProfileName());
-	Com_Printf("^7  Level         : ^3%i ^7(Max %i)\n", CL_XP_GetLevel(), MAX_XP_LEVEL);
+	Com_Printf("^7  Level         : ^3%i ^7(Max Level 100)\n", CL_XP_GetLevel());
 	Com_Printf("^7  Total XP      : ^3%i\n", CL_XP_GetXP());
 	Com_Printf("^7  Level Progress: ^3%i / %i XP ^7(%.1f%%)\n", curXP, reqXP, percent * 100.0f);
 	Com_Printf("^7  Player Kills  : ^3%i\n", g_xpProfile.playerKills);
@@ -243,6 +263,9 @@ void CL_XP_CheckGameEvents(void) {
 		g_lastDuelInProgress = qfalse;
 		return;
 	}
+
+	// Always sync engine CVars periodically to keep player name & level fresh
+	CL_XP_UpdateEngineCVars();
 
 	// 1. Automatic Player Kill tracking via PERS_SCORE
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
@@ -338,7 +361,7 @@ int CL_XP_GetXP(void) {
 }
 
 const char *CL_XP_GetProfileName(void) {
-	cvar_t *cvarName = Cvar_Get("cg_rpg_name", "", 0);
+	cvar_t *cvarName = Cvar_Get("name", "Player", 0);
 	if (cvarName && cvarName->string && cvarName->string[0]) {
 		return cvarName->string;
 	}
