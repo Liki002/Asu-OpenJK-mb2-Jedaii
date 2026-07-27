@@ -17,6 +17,7 @@ Standalone Engine-Level Client XP & Leveling System for MBII / OpenJK Executable
 #define XP_GRANT_DUEL_WIN    100
 #define XP_GRANT_ROUND_WIN   150
 #define XP_GRANT_FLAWLESS    50
+#define XP_GRANT_ASSIST      25
 
 // Faction types
 typedef enum {
@@ -83,3 +84,4 @@ const char *CL_XP_GetRankTitle(int level, int faction);
 
 extern clXpProfile_t g_xpProfile;
 extern qboolean g_xpDrawCard;
+extern int g_roundWon;

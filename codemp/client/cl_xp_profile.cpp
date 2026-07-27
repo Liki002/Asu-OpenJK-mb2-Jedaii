@@ -354,15 +354,19 @@ void CL_XP_PrintRanks_f(void) {
 	Com_Printf("^5=====================================================\n\n");
 }
 
-// -------------------------------------------------------------------------
-// Automated Event Detection & Triggers
-// -------------------------------------------------------------------------
+// Tracking state
+static int g_lastSpawnCount = -1;   // detects round resets (new spawn)
+static int g_lastAssists    = -1;   // assist counter
+static int g_roundWon       = -1;   // 1 = team won last round, 0 = lost, -1 = unknown
+
 void CL_XP_CheckGameEvents(void) {
 	if (cls.state != CA_ACTIVE || !cl.snap.valid) {
 		g_lastKills = -1;
 		g_lastHealth = -1;
 		g_playerIsDead = qfalse;
 		g_lastDuelInProgress = qfalse;
+		g_lastSpawnCount = -1;
+		g_lastAssists = -1;
 		return;
 	}
 
@@ -375,13 +379,43 @@ void CL_XP_CheckGameEvents(void) {
 		g_lastHealth = -1;
 		g_playerIsDead = qfalse;
 		g_lastDuelInProgress = qfalse;
+		g_lastSpawnCount = -1;
+		g_lastAssists = -1;
 		return;
 	}
 
 	int currentHealth = cl.snap.ps.stats[STAT_HEALTH];
 	int pmType = cl.snap.ps.pm_type;
+	int currentSpawnCount = cl.snap.ps.persistant[PERS_SPAWN_COUNT];
 
-	// 1. Direct Death tracking via health drop & PM_DEAD transition
+	// -----------------------------------------------------------------------
+	// 1. Round Win/Loss detection via spawn count reset + roundWon flag
+	//    When a new round starts, PERS_SPAWN_COUNT goes up.
+	//    g_roundWon is set in CL_XP_OnPrintMessage when we see the result.
+	// -----------------------------------------------------------------------
+	if (g_lastSpawnCount != -1 && currentSpawnCount != g_lastSpawnCount) {
+		// Player just respawned → new round started, apply pending round result
+		if (g_roundWon == 1) {
+			cvar_t *mbmodeCvar = Cvar_Get("g_mbmode", "0", 0);
+			if (!mbmodeCvar || mbmodeCvar->integer == 0) mbmodeCvar = Cvar_Get("mbmode", "0", 0);
+			int mbmode = mbmodeCvar ? mbmodeCvar->integer : 0;
+			CL_XP_OnRoundWin(mbmode);
+		} else if (g_roundWon == 0) {
+			cvar_t *mbmodeCvar = Cvar_Get("g_mbmode", "0", 0);
+			if (!mbmodeCvar || mbmodeCvar->integer == 0) mbmodeCvar = Cvar_Get("mbmode", "0", 0);
+			int mbmode = mbmodeCvar ? mbmodeCvar->integer : 0;
+			CL_XP_OnRoundLoss(mbmode);
+		}
+		g_roundWon = -1;
+		// Reset kill baseline for new round
+		g_lastKills = cl.snap.ps.persistant[PERS_SCORE];
+		g_lastAssists = -1;
+	}
+	g_lastSpawnCount = currentSpawnCount;
+
+	// -----------------------------------------------------------------------
+	// 2. Death tracking via health drop & PM_DEAD state
+	// -----------------------------------------------------------------------
 	if (currentHealth > 0 && pmType != PM_DEAD && pmType != PM_SPECTATOR) {
 		g_playerIsDead = qfalse;
 	} else if (!g_playerIsDead) {
@@ -392,14 +426,15 @@ void CL_XP_CheckGameEvents(void) {
 	}
 	g_lastHealth = currentHealth;
 
-	// Skip kills and duels if dead or spectating
+	// Skip kills, assists and duels if dead or spectating
 	if (pmType == PM_SPECTATOR || pmType == PM_DEAD || currentHealth <= 0) {
-		g_lastKills = -1;
 		g_lastDuelInProgress = qfalse;
 		return;
 	}
 
-	// 2. Player Kill tracking via PERS_SCORE (with weapon type detection)
+	// -----------------------------------------------------------------------
+	// 3. Player Kill tracking via PERS_SCORE
+	// -----------------------------------------------------------------------
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
 	if (g_lastKills != -1 && currentKills > g_lastKills) {
 		int diff = currentKills - g_lastKills;
@@ -411,12 +446,41 @@ void CL_XP_CheckGameEvents(void) {
 	}
 	g_lastKills = currentKills;
 
-	// 3. Private 1v1 Saber Duel Win / Loss tracking via duelInProgress
+	// -----------------------------------------------------------------------
+	// 4. Assist tracking via PERS_HITS (used as assist count in MB2)
+	//    Only grants XP in Open (0), Full Authentic (2), and Legends (4).
+	//    NOT in Duel mode (3).
+	// -----------------------------------------------------------------------
+	cvar_t *mbmodeCvar = Cvar_Get("g_mbmode", "0", 0);
+	if (!mbmodeCvar || mbmodeCvar->integer == 0) mbmodeCvar = Cvar_Get("mbmode", "0", 0);
+	int mbmode = mbmodeCvar ? mbmodeCvar->integer : 0;
+
+	if (mbmode != 3) { // Not Duel mode
+		int currentAssists = cl.snap.ps.persistant[PERS_HITS];
+		if (g_lastAssists != -1 && currentAssists > g_lastAssists) {
+			int diff = currentAssists - g_lastAssists;
+			if (diff > 0 && diff <= 5) {
+				for (int i = 0; i < diff; i++) {
+					CL_XP_AddXP(XP_GRANT_ASSIST, "Assist Kill");
+					Com_Printf("^3[RPG MOD] Assist Kill! (+%d XP)\n", XP_GRANT_ASSIST);
+				}
+			}
+		}
+		if (g_lastAssists == -1) g_lastAssists = currentAssists;
+		else g_lastAssists = currentAssists;
+	}
+
+	// -----------------------------------------------------------------------
+	// 5. Private 1v1 Saber Duel Win / Loss tracking via duelInProgress
+	// -----------------------------------------------------------------------
 	qboolean currentDuel = (cl.snap.ps.duelInProgress != 0) ? qtrue : qfalse;
 	if (!g_lastDuelInProgress && currentDuel) {
+		// Duel just started — record starting health
 		g_duelStartHealth = currentHealth;
 	} else if (g_lastDuelInProgress && !currentDuel) {
-		if (currentHealth > 0) {
+		// Duel just ended — check outcome
+		// We check health now AND also if we were dead at end
+		if (!g_playerIsDead && currentHealth > 0) {
 			qboolean flawless = (currentHealth >= g_duelStartHealth) ? qtrue : qfalse;
 			CL_XP_OnDuelWin(flawless);
 		} else {
@@ -425,6 +489,7 @@ void CL_XP_CheckGameEvents(void) {
 	}
 	g_lastDuelInProgress = currentDuel;
 }
+
 
 void CL_XP_OnPrintMessage(const char *msg) {
 	if (!msg || !msg[0]) {
@@ -449,25 +514,37 @@ void CL_XP_OnPrintMessage(const char *msg) {
 	Q_CleanStr(cleanMsg);
 
 	// Check if print message is a MB2 Round Win/Loss broadcast
-	if (Q_stristr(cleanMsg, "win the round") || Q_stristr(cleanMsg, "round won by") || Q_stristr(cleanMsg, "wins the round")) {
-		cvar_t *mbmodeCvar = Cvar_Get("g_mbmode", "0", 0);
-		if (!mbmodeCvar || !mbmodeCvar->integer) mbmodeCvar = Cvar_Get("mbmode", "0", 0);
-		int mbmode = mbmodeCvar ? mbmodeCvar->integer : 0;
+	// We set g_roundWon flag here; it's applied when the player respawns (new round)
+	qboolean isRoundEndMsg = (Q_stristr(cleanMsg, "win the round") ||
+	                          Q_stristr(cleanMsg, "wins the round") ||
+	                          Q_stristr(cleanMsg, "round won") ||
+	                          Q_stristr(cleanMsg, "round over") ||
+	                          Q_stristr(cleanMsg, "round ends") ||
+	                          Q_stristr(cleanMsg, "team wins") ||
+	                          Q_stristr(cleanMsg, "heroes win") ||
+	                          Q_stristr(cleanMsg, "villains win") ||
+	                          Q_stristr(cleanMsg, "rebels win") ||
+	                          Q_stristr(cleanMsg, "empire wins") ||
+	                          Q_stristr(cleanMsg, "clones win") ||
+	                          Q_stristr(cleanMsg, "separatists win")) ? qtrue : qfalse;
 
+	if (isRoundEndMsg) {
 		static int lastRoundTime = 0;
 		if (cls.realtime - lastRoundTime > 3000) {
 			lastRoundTime = cls.realtime;
-
-			// Check if your team won
-			if (cl.snap.ps.stats[STAT_HEALTH] > 0 || Q_stristr(cleanMsg, "victorious")) {
-				CL_XP_OnRoundWin(mbmode);
+			// Determine win or loss: player alive = win, player dead = loss
+			if (cl.snap.ps.stats[STAT_HEALTH] > 0 && cl.snap.ps.pm_type != PM_DEAD) {
+				g_roundWon = 1;
 			} else {
-				CL_XP_OnRoundLoss(mbmode);
+				g_roundWon = 0;
 			}
 		}
 	}
 
-	// Check if print message is a kill obituary ("was slain", "was killed", "was destroyed", "was sliced")
+	// Check if print message is a kill obituary for an NPC
+	// ("was slain", "was killed", "was destroyed", "was sliced", "was vaporized")
+	// Only count it as an NPC kill if the player name appears as the killer
+	// AND the victim is NOT the player themselves.
 	qboolean isKillMsg = (Q_stristr(cleanMsg, "was slain") ||
 	                      Q_stristr(cleanMsg, "was killed") ||
 	                      Q_stristr(cleanMsg, "was destroyed") ||
@@ -475,23 +552,35 @@ void CL_XP_OnPrintMessage(const char *msg) {
 	                      Q_stristr(cleanMsg, "was vaporized")) ? qtrue : qfalse;
 
 	if (isKillMsg) {
-		const char *byPos = Q_stristr(cleanMsg, "by ");
-		qboolean isMyKill = qfalse;
-
-		if (byPos) {
-			const char *killerName = byPos + 3;
-			if (Q_stristr(killerName, cleanMyName) || Q_stristr(cleanMsg, cleanMyName)) {
-				isMyKill = qtrue;
+		// Make sure the message starts with a victim that is NOT the local player
+		// (Player obituaries start with the player's name or "You")
+		qboolean victimIsMe = qfalse;
+		if (Q_stristr(cleanMsg, cleanMyName)) {
+			// Check if player name appears BEFORE "was" (i.e., is the victim)
+			const char *wasPos = Q_stristr(cleanMsg, "was ");
+			const char *namePos = Q_stristr(cleanMsg, cleanMyName);
+			if (namePos && wasPos && namePos < wasPos) {
+				// Name appears before "was" — local player is the victim, not the killer
+				victimIsMe = qtrue;
 			}
-		} else {
-			isMyKill = qtrue;
 		}
 
-		if (isMyKill) {
-			static int lastNPCKillTime = 0;
-			if (cls.realtime - lastNPCKillTime > 500) {
-				lastNPCKillTime = cls.realtime;
-				CL_XP_OnNPCKill();
+		if (!victimIsMe) {
+			// Check if player name appears after "by" (is the killer)
+			const char *byPos = Q_stristr(cleanMsg, "by ");
+			qboolean isMyKill = qfalse;
+			if (byPos) {
+				const char *killerName = byPos + 3;
+				if (Q_stristr(killerName, cleanMyName)) {
+					isMyKill = qtrue;
+				}
+			}
+			if (isMyKill) {
+				static int lastNPCKillTime = 0;
+				if (cls.realtime - lastNPCKillTime > 500) {
+					lastNPCKillTime = cls.realtime;
+					CL_XP_OnNPCKill();
+				}
 			}
 		}
 	}

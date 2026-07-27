@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "client.h"
 #include "cl_cgameapi.h"
 #include "cl_uiapi.h"
+#include "cl_xp_profile.h"
 #include "qcommon/stringed_ingame.h"
 /*
 
@@ -1350,6 +1351,12 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 
 		if ( !(Key_GetCatcher() & KEYCATCH_UI) ) {
+			// Close RPG profile card first if it is open
+			if ( g_xpDrawCard ) {
+				g_xpDrawCard = qfalse;
+				return;
+			}
+
 			if ( cg_drawLeaderboard && cg_drawLeaderboard->integer ) {
 				Cvar_Set( "cg_drawLeaderboard", "0" );
 				return;
