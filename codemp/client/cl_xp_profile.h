@@ -45,6 +45,7 @@ void CL_XP_OnPrintMessage(const char *msg);
 void CL_XP_PrintStatus_f(void);
 void CL_XP_PrintRanks_f(void);
 void CL_XP_SetFaction_f(void);
+void CL_XP_ToggleCard_f(void);
 
 void CL_XP_AddXP(int amount, const char *reason);
 void CL_XP_OnPlayerKill(void);
@@ -63,3 +64,4 @@ void CL_XP_SetProfileName(const char *name);
 const char *CL_XP_GetRankTitle(int level, int faction);
 
 extern clXpProfile_t g_xpProfile;
+extern qboolean g_xpDrawCard;

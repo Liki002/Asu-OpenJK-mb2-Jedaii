@@ -12,6 +12,7 @@ Standalone Engine-Level Client XP & Leveling System for MBII / OpenJK Executable
 #include <math.h>
 
 clXpProfile_t g_xpProfile;
+qboolean g_xpDrawCard = qfalse;
 static qboolean g_xpInitialized = qfalse;
 
 // Popup notification state
@@ -242,7 +243,7 @@ void CL_XP_LoadProfile(void) {
 	Com_Printf("^7  Rank Title   : ^3%s\n", CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction));
 	Com_Printf("^7  Kills / Deaths: ^3%i Kills ^7| ^1%i Deaths\n", g_xpProfile.kills, g_xpProfile.deaths);
 	Com_Printf("^7  Private Duels: ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.duelWins, g_xpProfile.duelLosses);
-	Com_Printf("^7  Type ^3/rpg_status^7, ^3/rpg_ranks^7, or ^3/rpg_sith^7 / ^3/rpg_jedi^7.\n");
+	Com_Printf("^7  Type ^3/rpg_card^7, ^3/rpg_status^7, ^3/rpg_ranks^7, or ^3/rpg_sith^7 / ^3/rpg_jedi^7.\n");
 	Com_Printf("^5=====================================================\n\n");
 }
 
@@ -263,6 +264,11 @@ void CL_XP_SetFaction_f(void) {
 	}
 }
 
+void CL_XP_ToggleCard_f(void) {
+	g_xpDrawCard = (g_xpDrawCard == qtrue) ? qfalse : qtrue;
+	Com_Printf("^5[RPG MOD] Profile Stats Card %s\n", (g_xpDrawCard == qtrue) ? "^2ENABLED" : "^1DISABLED");
+}
+
 void CL_XP_Init(void) {
 	if (g_xpInitialized) {
 		return;
@@ -272,6 +278,7 @@ void CL_XP_Init(void) {
 	g_lastHealth = -1;
 	g_lastDuelInProgress = qfalse;
 
+	Cmd_AddCommand("rpg_card",    CL_XP_ToggleCard_f,  "Toggle full-screen RPG Profile Stats Card");
 	Cmd_AddCommand("rpg_status",  CL_XP_PrintStatus_f, "Print RPG client profile status");
 	Cmd_AddCommand("rpg_ranks",   CL_XP_PrintRanks_f,  "Print RPG rank progression tiers and required XP");
 	Cmd_AddCommand("rpg_jedi",    CL_XP_SetFaction_f,  "Switch rank title path to Jedi Light Side");

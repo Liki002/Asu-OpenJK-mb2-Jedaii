@@ -908,6 +908,67 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float xpTextX = barX + barW - textWidthPixels - 3.0f;
 	if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
 	SCR_DrawVirtualString( xpTextX, barY + 1.5f, 3.8f, xpText, whiteColor );
+
+	if ( g_xpDrawCard ) {
+		SCR_DrawProfileCardOverlay();
+	}
+}
+
+void SCR_DrawProfileCardOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+
+	float cardW = 340.0f;
+	float cardH = 210.0f;
+	float cardX = 320.0f - cardW * 0.5f;
+	float cardY = 240.0f - cardH * 0.5f;
+
+	vec4_t whiteColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t bgColor     = { 0.02f, 0.04f, 0.08f, 0.92f };
+	vec4_t borderColor = { 0.00f, 0.70f, 0.95f, 0.95f };
+
+	if ( g_xpProfile.faction == FACTION_SITH ) {
+		borderColor[0] = 0.95f; borderColor[1] = 0.15f; borderColor[2] = 0.15f;
+	}
+
+	SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
+
+	char headerStr[128];
+	Com_sprintf( headerStr, sizeof(headerStr), "^7%.20s ^3[Lvl %d %s^3]",
+		CL_XP_GetProfileName(), g_xpProfile.level, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI" );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 14.0f, 5.8f, headerStr, whiteColor );
+
+	const char *rankTitle = CL_XP_GetRankTitle( g_xpProfile.level, g_xpProfile.faction );
+	char rankSub[64];
+	Com_sprintf( rankSub, sizeof(rankSub), "^3Rank Title: ^7%s", rankTitle );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 34.0f, 4.8f, rankSub, whiteColor );
+
+	vec4_t lineCol = { 1.0f, 1.0f, 1.0f, 0.25f };
+	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 48.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
+
+	int curXP = 0, reqXP = 0;
+	float percent = 0.0f;
+	CL_XP_GetLevelProgress( &curXP, &reqXP, &percent );
+
+	char xpStr[96];
+	Com_sprintf( xpStr, sizeof(xpStr), "^7XP Progress: ^2%d ^7/ ^2%d XP ^7(%.1f%%)", curXP, reqXP, percent * 100.0f );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 56.0f, 4.2f, xpStr, whiteColor );
+
+	float kdRatio = (g_xpProfile.deaths > 0) ? ((float)g_xpProfile.kills / (float)g_xpProfile.deaths) : (float)g_xpProfile.kills;
+	char kdStr[96];
+	Com_sprintf( kdStr, sizeof(kdStr), "^7Combat Kills: ^3%d  ^7Deaths: ^1%d  ^7K/D: ^2%.2f", g_xpProfile.kills, g_xpProfile.deaths, kdRatio );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 85.0f, 4.5f, kdStr, whiteColor );
+
+	int totalDuels = g_xpProfile.duelWins + g_xpProfile.duelLosses;
+	float duelWinRate = (totalDuels > 0) ? (((float)g_xpProfile.duelWins / (float)totalDuels) * 100.0f) : 0.0f;
+	char duelStr[96];
+	Com_sprintf( duelStr, sizeof(duelStr), "^7Private Duels: ^2%dW ^7- ^1%dL  ^7Win Rate: ^3%.1f%%", g_xpProfile.duelWins, g_xpProfile.duelLosses, duelWinRate );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 107.0f, 4.5f, duelStr, whiteColor );
+
+	char npcTotalStr[96];
+	Com_sprintf( npcTotalStr, sizeof(npcTotalStr), "^7NPC Kills: ^3%d  ^7Total Lifetime XP: ^3%d", g_xpProfile.npcKills, g_xpProfile.xp );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 129.0f, 4.5f, npcTotalStr, whiteColor );
+
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + cardH - 18.0f, 3.8f, "^5Type /rpg_card to toggle this profile card", whiteColor );
 }
 
 topLeaderboardEntry_t g_topLeaderboard[10];
