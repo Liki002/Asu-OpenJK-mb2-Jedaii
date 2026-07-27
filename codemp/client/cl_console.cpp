@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "client.h"
 #include "cl_cgameapi.h"
+#include "cl_xp_profile.h"
 #include "qcommon/stringed_ingame.h"
 #include "qcommon/game_version.h"
 
@@ -69,6 +70,10 @@ Con_ToggleMenu_f
 ===================
 */
 void Con_ToggleMenu_f( void ) {
+	if ( g_xpDrawCard ) {
+		g_xpDrawCard = qfalse;
+		return;
+	}
 	CL_KeyEvent( A_ESCAPE, qtrue, Sys_Milliseconds() );
 	CL_KeyEvent( A_ESCAPE, qfalse, Sys_Milliseconds() );
 }

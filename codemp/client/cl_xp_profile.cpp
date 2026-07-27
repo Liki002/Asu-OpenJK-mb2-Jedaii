@@ -432,19 +432,32 @@ void CL_XP_OnPrintMessage(const char *msg) {
 	Q_strncpyz(cleanMsg, msg, sizeof(cleanMsg));
 	Q_CleanStr(cleanMsg);
 
-	// Check for NPC kill print message (e.g. "Stormtrooper was slain by PlayerA")
-	if (Q_stristr(cleanMsg, "was slain by") || Q_stristr(cleanMsg, "was killed by")) {
-		const char *byPos = Q_stristr(cleanMsg, "was slain by");
-		if (!byPos) byPos = Q_stristr(cleanMsg, "was killed by");
+	// Check if print message is a kill obituary ("was slain", "was killed", "was destroyed", "was sliced")
+	qboolean isKillMsg = (Q_stristr(cleanMsg, "was slain") ||
+	                      Q_stristr(cleanMsg, "was killed") ||
+	                      Q_stristr(cleanMsg, "was destroyed") ||
+	                      Q_stristr(cleanMsg, "was sliced") ||
+	                      Q_stristr(cleanMsg, "was vaporized")) ? qtrue : qfalse;
+
+	if (isKillMsg) {
+		const char *byPos = Q_stristr(cleanMsg, "by ");
+		qboolean isMyKill = qfalse;
 
 		if (byPos) {
-			const char *killerPart = byPos + 12;
-			if (Q_stristr(killerPart, cleanMyName)) {
-				static int lastNPCKillTime = 0;
-				if (cls.realtime - lastNPCKillTime > 1000) {
-					lastNPCKillTime = cls.realtime;
-					CL_XP_OnNPCKill();
-				}
+			const char *killerName = byPos + 3;
+			if (Q_stristr(killerName, cleanMyName) || Q_stristr(cleanMsg, cleanMyName)) {
+				isMyKill = qtrue;
+			}
+		} else {
+			// Message specifies no killer (e.g. "Stormtrooper was slain"), assume active player kill
+			isMyKill = qtrue;
+		}
+
+		if (isMyKill) {
+			static int lastNPCKillTime = 0;
+			if (cls.realtime - lastNPCKillTime > 500) {
+				lastNPCKillTime = cls.realtime;
+				CL_XP_OnNPCKill();
 			}
 		}
 	}
