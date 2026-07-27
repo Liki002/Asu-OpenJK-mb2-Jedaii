@@ -143,7 +143,7 @@ void CG_XP_LoadProfile(void) {
 
 	trap->FS_Open("xp_profile.dat", &f, FS_READ);
 	if (!f) {
-		trap->Print("^5[XP System] Creating new client XP profile...\n");
+		trap->Print("^5[RPG MOD] Creating new client XP profile...\n");
 		CG_XP_SaveProfile();
 		return;
 	}
@@ -152,7 +152,7 @@ void CG_XP_LoadProfile(void) {
 	trap->FS_Close(f);
 
 	if (bytesRead < (int)sizeof(xpProfile_t)) {
-		trap->Print("^3[XP System] Warning: Corrupted profile file. Resetting profile.\n");
+		trap->Print("^3[RPG MOD] Warning: Corrupted profile file. Resetting profile.\n");
 		CG_XP_SaveProfile();
 		return;
 	}
@@ -160,7 +160,7 @@ void CG_XP_LoadProfile(void) {
 	// Verify anti-cheat signature
 	unsigned int expectedChecksum = CG_XP_CalculateChecksum(&loaded);
 	if (loaded.checksum != expectedChecksum) {
-		trap->Print("^1[XP System] ANTI-CHEAT WARNING: Tampered XP profile detected! Resetting progress to Level 1.\n");
+		trap->Print("^1[RPG MOD] ANTI-CHEAT WARNING: Tampered XP profile detected! Resetting progress to Level 1.\n");
 		CG_XP_SaveProfile();
 		return;
 	}
@@ -168,13 +168,21 @@ void CG_XP_LoadProfile(void) {
 	// Verify hardcoded level integrity matches XP
 	int expectedLevel = CG_XP_CalculateLevelFromXP(loaded.xp);
 	if (loaded.level != expectedLevel) {
-		trap->Print(va("^1[XP System] ANTI-CHEAT WARNING: Level mismatch detected! Correcting level to %i.\n", expectedLevel));
+		trap->Print(va("^1[RPG MOD] ANTI-CHEAT WARNING: Level mismatch detected! Correcting level to %i.\n", expectedLevel));
 		loaded.level = expectedLevel;
 	}
 
 	g_xpProfile = loaded;
-	trap->Print(va("^2[XP System] Profile loaded successfully! Level: %i | XP: %i | Duel Wins: %i\n",
-		g_xpProfile.level, g_xpProfile.xp, g_xpProfile.duelWins));
+
+	// Print prominent console banner
+	trap->Print("\n");
+	trap->Print("^5=====================================================\n");
+	trap->Print("^2  [RPG MOD] Standalone Client XP System LOADED!\n");
+	trap->Print(va("^7  Profile Name : ^3%s\n", g_xpProfile.profileName));
+	trap->Print(va("^7  Level        : ^3Level %i ^7(Total XP: ^3%i^7)\n", g_xpProfile.level, g_xpProfile.xp));
+	trap->Print(va("^7  Duels Won    : ^3%i ^7| Player Kills: ^3%i ^7| NPC Kills: ^3%i\n", g_xpProfile.duelWins, g_xpProfile.playerKills, g_xpProfile.npcKills));
+	trap->Print("^7  Type ^3/rpg_status^7 in console for full stats.\n");
+	trap->Print("^5=====================================================\n\n");
 }
 
 void CG_XP_Init(void) {
@@ -186,6 +194,24 @@ void CG_XP_Init(void) {
 	g_lastDuelInProgress = qfalse;
 	g_lastDuelWinner = -1;
 	CG_XP_LoadProfile();
+}
+
+void CG_XP_PrintStatus_f(void) {
+	int curXP = 0, reqXP = 0;
+	float percent = 0.0f;
+	CG_XP_GetLevelProgress(&curXP, &reqXP, &percent);
+
+	trap->Print("\n^5=====================================================\n");
+	trap->Print("^2  [RPG MOD] Standalone Client XP & Leveling System\n");
+	trap->Print(va("^7  Profile Name  : ^3%s\n", CG_XP_GetProfileName()));
+	trap->Print(va("^7  Level         : ^3%i ^7(Max %i)\n", CG_XP_GetLevel(), MAX_XP_LEVEL));
+	trap->Print(va("^7  Total XP      : ^3%i\n", CG_XP_GetXP()));
+	trap->Print(va("^7  Level Progress: ^3%i / %i XP ^7(%.1f%%)\n", curXP, reqXP, percent * 100.0f));
+	trap->Print(va("^7  Player Kills  : ^3%i\n", g_xpProfile.playerKills));
+	trap->Print(va("^7  NPC Kills     : ^3%i\n", g_xpProfile.npcKills));
+	trap->Print(va("^7  Duels Won     : ^3%i\n", g_xpProfile.duelWins));
+	trap->Print("^2  Anti-Cheat Protection: ENABLED & ACTIVE\n");
+	trap->Print("^5=====================================================\n\n");
 }
 
 // -------------------------------------------------------------------------
@@ -342,19 +368,24 @@ void CG_XP_DrawHUD(void) {
 	// Always run game event checks for kills and duel victories
 	CG_XP_CheckGameEvents();
 
-	if (!cg_drawLevelProfile.integer) {
+	// Check if explicitly disabled via console
+	if (cg_drawLevelProfile.string && cg_drawLevelProfile.string[0] == '0') {
 		return;
 	}
 
 	float x = cg_levelProfileX.value;
 	float y = cg_levelProfileY.value;
+
+	if (x <= 0.0f) x = 10.0f;
+	if (y <= 0.0f) y = 10.0f;
+
 	float w = 210.0f;
 	float h = 50.0f;
 
-	vec4_t bgColor = {0.05f, 0.05f, 0.08f, 0.75f};
-	vec4_t borderColor = {0.2f, 0.6f, 1.0f, 0.8f};
-	vec4_t barBgColor = {0.1f, 0.1f, 0.15f, 0.9f};
-	vec4_t barFillColor = {0.1f, 0.7f, 1.0f, 0.9f};
+	vec4_t bgColor = {0.05f, 0.05f, 0.08f, 0.85f};
+	vec4_t borderColor = {0.2f, 0.6f, 1.0f, 0.9f};
+	vec4_t barBgColor = {0.1f, 0.1f, 0.15f, 0.95f};
+	vec4_t barFillColor = {0.1f, 0.7f, 1.0f, 0.95f};
 
 	// Draw Background Box & Border
 	CG_FillRect(x, y, w, h, bgColor);
@@ -365,18 +396,19 @@ void CG_XP_DrawHUD(void) {
 	int level = CG_XP_GetLevel();
 
 	if (level >= 75) {
-		badgeShader = trap->R_RegisterShaderNoMip("gfx/2d/hud_rank3");
+		badgeShader = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_saberstaff");
 	} else if (level >= 50) {
-		badgeShader = trap->R_RegisterShaderNoMip("gfx/2d/hud_rank2");
+		badgeShader = trap->R_RegisterShaderNoMip("gfx/hud/w_icon_duallightsaber");
 	} else if (level >= 25) {
-		badgeShader = trap->R_RegisterShaderNoMip("gfx/2d/hud_rank1");
-	} else if (level >= 10) {
 		badgeShader = trap->R_RegisterShaderNoMip("gfx/mp/pduel_icon_double");
 	} else {
 		badgeShader = trap->R_RegisterShaderNoMip("gfx/mp/pduel_icon_lone");
 	}
 
-	// Draw Profile Badge Icon
+	// Draw Profile Badge Icon (fallback to white box if missing)
+	if (!badgeShader) {
+		badgeShader = cgs.media.whiteShader;
+	}
 	if (badgeShader) {
 		CG_DrawPic(x + 5.0f, y + 5.0f, 40.0f, 40.0f, badgeShader);
 	}
@@ -385,7 +417,7 @@ void CG_XP_DrawHUD(void) {
 	const char *profName = CG_XP_GetProfileName();
 	char headerStr[128];
 	Com_sprintf(headerStr, sizeof(headerStr), "^3Lvl %i ^7| %s", level, profName);
-	CG_DrawStringExt((int)(x + 50.0f), (int)(y + 6.0f), headerStr, colorWhite, qtrue, qtrue, 12, 12, 0);
+	CG_DrawStringExt((int)(x + 50.0f), (int)(y + 6.0f), headerStr, colorWhite, qtrue, qtrue, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT, 0);
 
 	// Draw XP Progress Bar
 	int curXP = 0, reqXP = 0;
@@ -406,7 +438,7 @@ void CG_XP_DrawHUD(void) {
 	// Draw XP Text below bar
 	char xpText[64];
 	Com_sprintf(xpText, sizeof(xpText), "^7%i / %i XP", curXP, reqXP);
-	CG_DrawStringExt((int)(barX), (int)(y + 36.0f), xpText, colorWhite, qtrue, qfalse, 9, 9, 0);
+	CG_DrawStringExt((int)(barX), (int)(y + 36.0f), xpText, colorWhite, qtrue, qfalse, 8, 10, 0);
 
 	// Render Recent XP Popup Notification (+50 XP) for 3 seconds
 	if (g_xpPopupTime > 0 && (cg.time - g_xpPopupTime) < 3000) {
@@ -419,6 +451,6 @@ void CG_XP_DrawHUD(void) {
 		} else {
 			Com_sprintf(popupStr, sizeof(popupStr), "+%i XP", g_xpPopupAmount);
 		}
-		CG_DrawStringExt((int)(x + w + 10.0f), (int)(y + 15.0f), popupStr, popupColor, qtrue, qtrue, 12, 12, 0);
+		CG_DrawStringExt((int)(x + w + 10.0f), (int)(y + 15.0f), popupStr, popupColor, qtrue, qtrue, SMALLCHAR_WIDTH, SMALLCHAR_HEIGHT, 0);
 	}
 }
