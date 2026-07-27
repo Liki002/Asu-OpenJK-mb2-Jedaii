@@ -22,8 +22,8 @@ static int g_xpPopupTime = 0;
 
 // Tracking state for automated detection
 static int g_lastKills = -1;
-static int g_lastDeaths = -1;
 static int g_lastHealth = -1;
+static qboolean g_playerIsDead = qfalse;
 static qboolean g_lastDuelInProgress = qfalse;
 
 // Secret salt for anti-cheat hash signature
@@ -231,6 +231,11 @@ void CL_XP_LoadProfile(void) {
 		loaded.level = expectedLevel;
 	}
 
+	// Auto-sanitize legacy death bug (where deaths equaled kills)
+	if (loaded.deaths > 0 && loaded.deaths == loaded.kills) {
+		loaded.deaths = 0;
+	}
+
 	g_xpProfile = loaded;
 
 	CL_XP_UpdateEngineCVars();
@@ -277,6 +282,7 @@ void CL_XP_Init(void) {
 	g_xpInitialized = qtrue;
 	g_lastKills = -1;
 	g_lastHealth = -1;
+	g_playerIsDead = qfalse;
 	g_lastDuelInProgress = qfalse;
 
 	Cmd_AddCommand("rpg_card",    CL_XP_ToggleCard_f,  "Toggle full-screen RPG Profile Stats Card");
@@ -341,36 +347,44 @@ void CL_XP_PrintRanks_f(void) {
 void CL_XP_CheckGameEvents(void) {
 	if (cls.state != CA_ACTIVE || !cl.snap.valid) {
 		g_lastKills = -1;
-		g_lastDeaths = -1;
 		g_lastHealth = -1;
+		g_playerIsDead = qfalse;
 		g_lastDuelInProgress = qfalse;
 		return;
 	}
 
 	CL_XP_UpdateEngineCVars();
 
-	// Check if local player is active (not spectating another entity)
+	// Check if local player is spectating another entity
 	qboolean isSpectatingOther = (cl.snap.ps.clientNum != clc.clientNum || (cl.snap.ps.pm_flags & PMF_FOLLOW)) ? qtrue : qfalse;
 	if (isSpectatingOther) {
+		g_lastKills = -1;
+		g_lastHealth = -1;
+		g_playerIsDead = qfalse;
+		g_lastDuelInProgress = qfalse;
 		return;
 	}
 
-	// 1. Direct Death tracking via PERS_KILLED & Health transition
-	int currentDeaths = cl.snap.ps.persistant[PERS_KILLED];
 	int currentHealth = cl.snap.ps.stats[STAT_HEALTH];
+	int pmType = cl.snap.ps.pm_type;
 
-	if (g_lastDeaths != -1 && currentDeaths > g_lastDeaths) {
-		int diff = currentDeaths - g_lastDeaths;
-		if (diff > 0 && diff <= 5) {
-			for (int i = 0; i < diff; i++) {
-				CL_XP_OnPlayerDeath();
-			}
+	// 1. Direct Death tracking via health drop & PM_DEAD transition
+	if (currentHealth > 0 && pmType != PM_DEAD && pmType != PM_SPECTATOR) {
+		g_playerIsDead = qfalse;
+	} else if (!g_playerIsDead) {
+		if ((g_lastHealth > 0 && currentHealth <= 0) || pmType == PM_DEAD) {
+			g_playerIsDead = qtrue;
+			CL_XP_OnPlayerDeath();
 		}
-	} else if (g_lastHealth > 0 && currentHealth <= 0 && g_lastDeaths != -1 && currentDeaths == g_lastDeaths) {
-		CL_XP_OnPlayerDeath();
 	}
-	g_lastDeaths = currentDeaths;
 	g_lastHealth = currentHealth;
+
+	// Skip kills and duels if dead or spectating
+	if (pmType == PM_SPECTATOR || pmType == PM_DEAD || currentHealth <= 0) {
+		g_lastKills = -1;
+		g_lastDuelInProgress = qfalse;
+		return;
+	}
 
 	// 2. Player Kill tracking via PERS_SCORE
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
