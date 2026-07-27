@@ -16,6 +16,12 @@ Standalone Engine-Level Client XP & Leveling System for MBII / OpenJK Executable
 #define XP_GRANT_NPC_KILL    20
 #define XP_GRANT_DUEL_WIN    100
 
+// Faction types
+typedef enum {
+    FACTION_JEDI = 0,
+    FACTION_SITH = 1
+} rpgFaction_t;
+
 typedef struct {
     int level;
     int xp;
@@ -24,6 +30,7 @@ typedef struct {
     int npcKills;    // NPC Kills (+20 XP)
     int duelWins;    // Private Duel Wins (+100 XP)
     int duelLosses;  // Private Duel Losses
+    int faction;     // 0 = Jedi, 1 = Sith
     char profileName[64];
     unsigned int checksum;
 } clXpProfile_t;
@@ -36,6 +43,8 @@ void CL_XP_LoadProfile(void);
 void CL_XP_CheckGameEvents(void);
 void CL_XP_OnPrintMessage(const char *msg);
 void CL_XP_PrintStatus_f(void);
+void CL_XP_PrintRanks_f(void);
+void CL_XP_SetFaction_f(void);
 
 void CL_XP_AddXP(int amount, const char *reason);
 void CL_XP_OnPlayerKill(void);
@@ -51,5 +60,6 @@ void CL_XP_GetLevelProgress(int *currentLevelXP, int *nextLevelXP, float *percen
 
 const char *CL_XP_GetProfileName(void);
 void CL_XP_SetProfileName(const char *name);
+const char *CL_XP_GetRankTitle(int level, int faction);
 
 extern clXpProfile_t g_xpProfile;

@@ -21,11 +21,36 @@ static int g_xpPopupTime = 0;
 
 // Tracking state for automated detection
 static int g_lastKills = -1;
-static int g_lastDeaths = -1;
+static int g_lastHealth = -1;
 static qboolean g_lastDuelInProgress = qfalse;
 
 // Secret salt for anti-cheat hash signature
 static const char XP_SECRET_SALT[] = "JEDAII_XP_STANDALONE_SECURE_SALT_2026_x89!";
+
+// -------------------------------------------------------------------------
+// Rank Titles (Jedi & Sith Factions)
+// -------------------------------------------------------------------------
+const char *CL_XP_GetRankTitle(int level, int faction) {
+	if (faction == FACTION_SITH) {
+		if (level >= 750) return "Sith Emperor";
+		if (level >= 500) return "Dark Council Master";
+		if (level >= 350) return "Sith Lord";
+		if (level >= 200) return "Sith Warrior";
+		if (level >= 100) return "Sith Assassin";
+		if (level >= 50)  return "Sith Apprentice";
+		if (level >= 25)  return "Sith Hopeful";
+		return "Sith Acolyte";
+	} else {
+		if (level >= 750) return "Grandmaster";
+		if (level >= 500) return "High Council Master";
+		if (level >= 350) return "Jedi Master";
+		if (level >= 200) return "Jedi Knight";
+		if (level >= 100) return "Jedi Guardian";
+		if (level >= 50)  return "Apprentice";
+		if (level >= 25)  return "Initiate";
+		return "Youngling";
+	}
+}
 
 // -------------------------------------------------------------------------
 // Anti-Cheat Signature Calculation
@@ -45,6 +70,7 @@ static unsigned int CL_XP_CalculateChecksum(const clXpProfile_t *prof) {
 	hash = ((hash << 5) + hash) + (unsigned int)prof->npcKills;
 	hash = ((hash << 5) + hash) + (unsigned int)prof->duelWins;
 	hash = ((hash << 5) + hash) + (unsigned int)prof->duelLosses;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->faction;
 
 	for (p = prof->profileName; *p; p++) {
 		hash = ((hash << 5) + hash) + (unsigned char)(*p);
@@ -131,15 +157,9 @@ static void CL_XP_UpdateEngineCVars(void) {
 	Cvar_Set("cg_rpg_level", va("%d", g_xpProfile.level));
 	Cvar_Set("cg_rpg_name", g_xpProfile.profileName);
 
-	// Dynamic Rank Title based on Level
-	const char *rankTitle = "Novice";
-	if (g_xpProfile.level >= 500) rankTitle = "Grandmaster";
-	else if (g_xpProfile.level >= 250) rankTitle = "Jedi Master";
-	else if (g_xpProfile.level >= 100) rankTitle = "Jedi Knight";
-	else if (g_xpProfile.level >= 25) rankTitle = "Apprentice";
+	const char *rankTitle = CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction);
 	Cvar_Set("cg_rpg_rank", rankTitle);
-
-	// Display Duel Wins on HUD
+	Cvar_Set("cg_rpg_faction", (g_xpProfile.faction == FACTION_SITH) ? "sith" : "jedi");
 	Cvar_Set("cg_rpg_fr", va("%d", g_xpProfile.duelWins));
 }
 
@@ -175,6 +195,7 @@ void CL_XP_LoadProfile(void) {
 	memset(&g_xpProfile, 0, sizeof(clXpProfile_t));
 	g_xpProfile.level = 1;
 	g_xpProfile.xp = 0;
+	g_xpProfile.faction = FACTION_JEDI;
 	Q_strncpyz(g_xpProfile.profileName, initialName, sizeof(g_xpProfile.profileName));
 
 	FILE *f = fopen("xp_profile.dat", "rb");
@@ -193,7 +214,6 @@ void CL_XP_LoadProfile(void) {
 		return;
 	}
 
-	// Always sync fresh in-game name into loaded profile before checksum verification
 	Q_strncpyz(loaded.profileName, initialName, sizeof(loaded.profileName));
 
 	// Verify anti-cheat signature
@@ -217,12 +237,30 @@ void CL_XP_LoadProfile(void) {
 	Com_Printf("\n");
 	Com_Printf("^5=====================================================\n");
 	Com_Printf("^2  [RPG MOD] Standalone Client XP System LOADED!\n");
-	Com_Printf("^7  Profile Name : ^3%s\n", g_xpProfile.profileName);
+	Com_Printf("^7  Profile Name : ^3%s ^7(^3%s^7)\n", g_xpProfile.profileName, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI");
 	Com_Printf("^7  Level        : ^3Level %i ^7(Max Level: %i | Total XP: ^3%i^7)\n", g_xpProfile.level, MAX_XP_LEVEL, g_xpProfile.xp);
+	Com_Printf("^7  Rank Title   : ^3%s\n", CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction));
 	Com_Printf("^7  Kills / Deaths: ^3%i Kills ^7| ^1%i Deaths\n", g_xpProfile.kills, g_xpProfile.deaths);
 	Com_Printf("^7  Private Duels: ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.duelWins, g_xpProfile.duelLosses);
-	Com_Printf("^7  Type ^3/rpg_status^7 in console for full stats.\n");
+	Com_Printf("^7  Type ^3/rpg_status^7, ^3/rpg_ranks^7, or ^3/rpg_sith^7 / ^3/rpg_jedi^7.\n");
 	Com_Printf("^5=====================================================\n\n");
+}
+
+void CL_XP_SetFaction_f(void) {
+	const char *cmd = Cmd_Argv(0);
+	const char *arg = Cmd_Argv(1);
+
+	if (!Q_stricmp(cmd, "rpg_sith") || (!Q_stricmp(cmd, "rpg_faction") && !Q_stricmp(arg, "sith"))) {
+		g_xpProfile.faction = FACTION_SITH;
+		CL_XP_SaveProfile();
+		Com_Printf("^1[RPG MOD] Faction changed to SITH! Rank title updated to: ^3%s\n", CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction));
+	} else if (!Q_stricmp(cmd, "rpg_jedi") || (!Q_stricmp(cmd, "rpg_faction") && !Q_stricmp(arg, "jedi"))) {
+		g_xpProfile.faction = FACTION_JEDI;
+		CL_XP_SaveProfile();
+		Com_Printf("^6[RPG MOD] Faction changed to JEDI! Rank title updated to: ^3%s\n", CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction));
+	} else {
+		Com_Printf("^5Usage: ^3/rpg_jedi ^5or ^3/rpg_sith ^5(Current Faction: %s)\n", (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI");
+	}
 }
 
 void CL_XP_Init(void) {
@@ -231,10 +269,14 @@ void CL_XP_Init(void) {
 	}
 	g_xpInitialized = qtrue;
 	g_lastKills = -1;
-	g_lastDeaths = -1;
+	g_lastHealth = -1;
 	g_lastDuelInProgress = qfalse;
 
-	Cmd_AddCommand("rpg_status", CL_XP_PrintStatus_f, "Print RPG client profile status");
+	Cmd_AddCommand("rpg_status",  CL_XP_PrintStatus_f, "Print RPG client profile status");
+	Cmd_AddCommand("rpg_ranks",   CL_XP_PrintRanks_f,  "Print RPG rank progression tiers and required XP");
+	Cmd_AddCommand("rpg_jedi",    CL_XP_SetFaction_f,  "Switch rank title path to Jedi Light Side");
+	Cmd_AddCommand("rpg_sith",    CL_XP_SetFaction_f,  "Switch rank title path to Sith Dark Side");
+	Cmd_AddCommand("rpg_faction", CL_XP_SetFaction_f,  "Switch rank title path (jedi or sith)");
 
 	CL_XP_LoadProfile();
 }
@@ -246,8 +288,9 @@ void CL_XP_PrintStatus_f(void) {
 
 	Com_Printf("\n^5=====================================================\n");
 	Com_Printf("^2  [RPG MOD] Standalone Client XP & Leveling System\n");
-	Com_Printf("^7  Profile Name  : ^3%s\n", CL_XP_GetProfileName());
+	Com_Printf("^7  Profile Name  : ^3%s ^7(Faction: %s^7)\n", CL_XP_GetProfileName(), (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI");
 	Com_Printf("^7  Level         : ^3%i ^7(Max Level %i)\n", CL_XP_GetLevel(), MAX_XP_LEVEL);
+	Com_Printf("^7  Rank Title    : ^3%s\n", CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction));
 	Com_Printf("^7  Total XP      : ^3%i\n", CL_XP_GetXP());
 	Com_Printf("^7  Level Progress: ^3%i / %i XP ^7(%.1f%%)\n", curXP, reqXP, percent * 100.0f);
 	Com_Printf("^7  Kills / Deaths: ^3%i Kills ^7| ^1%i Deaths\n", g_xpProfile.kills, g_xpProfile.deaths);
@@ -257,29 +300,55 @@ void CL_XP_PrintStatus_f(void) {
 	Com_Printf("^5=====================================================\n\n");
 }
 
+void CL_XP_PrintRanks_f(void) {
+	Com_Printf("\n^5=====================================================\n");
+	Com_Printf("^2  [RPG MOD] Rank Progression & XP Thresholds\n");
+	Com_Printf("^5=====================================================\n");
+	Com_Printf("^7  Level Range  | ^6JEDI RANK            ^7| ^1SITH RANK            ^7| Required XP\n");
+	Com_Printf("^7  -------------+----------------------+----------------------+-------------\n");
+	Com_Printf("^7  Lvl 1   - 24 | Youngling            | Sith Acolyte         | 0 XP\n");
+	Com_Printf("^7  Lvl 25  - 49 | Initiate             | Sith Hopeful         | %i XP\n", CL_XP_GetRequiredXP(25));
+	Com_Printf("^7  Lvl 50  - 99 | Apprentice           | Sith Apprentice      | %i XP\n", CL_XP_GetRequiredXP(50));
+	Com_Printf("^7  Lvl 100 - 199| Jedi Guardian        | Sith Assassin        | %i XP\n", CL_XP_GetRequiredXP(100));
+	Com_Printf("^7  Lvl 200 - 349| Jedi Knight          | Sith Warrior         | %i XP\n", CL_XP_GetRequiredXP(200));
+	Com_Printf("^7  Lvl 350 - 499| Jedi Master          | Sith Lord            | %i XP\n", CL_XP_GetRequiredXP(350));
+	Com_Printf("^7  Lvl 500 - 749| High Council Master  | Dark Council Master  | %i XP\n", CL_XP_GetRequiredXP(500));
+	Com_Printf("^7  Lvl 750 - 1000| Grandmaster          | Sith Emperor         | %i XP\n", CL_XP_GetRequiredXP(750));
+	Com_Printf("^5=====================================================\n");
+
+	int curXP = 0, reqXP = 0;
+	float percent = 0.0f;
+	CL_XP_GetLevelProgress(&curXP, &reqXP, &percent);
+
+	const char *currentRank = CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction);
+
+	Com_Printf("^7  Your Rank: ^3Level %i ^7(^3%s^7 - %s^7) | ^3%i / %i XP^7\n",
+		CL_XP_GetLevel(), currentRank, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI", curXP, reqXP);
+	Com_Printf("^5=====================================================\n\n");
+}
+
 // -------------------------------------------------------------------------
 // Automated Event Detection & Triggers
 // -------------------------------------------------------------------------
 void CL_XP_CheckGameEvents(void) {
 	if (cls.state != CA_ACTIVE || !cl.snap.valid) {
 		g_lastKills = -1;
-		g_lastDeaths = -1;
+		g_lastHealth = -1;
 		g_lastDuelInProgress = qfalse;
 		return;
 	}
 
-	// Do NOT track score/deaths diffs if spectating, following, or snapshot is for another entity!
+	// Do NOT track events if spectating or snapshot is for another entity
 	if (cl.snap.ps.clientNum != clc.clientNum || cl.snap.ps.pm_type == PM_SPECTATOR || (cl.snap.ps.pm_flags & PMF_FOLLOW)) {
 		g_lastKills = -1;
-		g_lastDeaths = -1;
+		g_lastHealth = -1;
 		g_lastDuelInProgress = qfalse;
 		return;
 	}
 
-	// Always sync engine CVars periodically to keep player name & level fresh
 	CL_XP_UpdateEngineCVars();
 
-	// 1. Automatic Player Kill tracking via PERS_SCORE (only during active local play)
+	// 1. Player Kill tracking via PERS_SCORE (during active play)
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
 	if (g_lastKills != -1 && currentKills > g_lastKills) {
 		int diff = currentKills - g_lastKills;
@@ -291,19 +360,14 @@ void CL_XP_CheckGameEvents(void) {
 	}
 	g_lastKills = currentKills;
 
-	// 2. Automatic Death tracking via PERS_KILLED
-	int currentDeaths = cl.snap.ps.persistant[PERS_KILLED];
-	if (g_lastDeaths != -1 && currentDeaths > g_lastDeaths) {
-		int diff = currentDeaths - g_lastDeaths;
-		if (diff > 0 && diff <= 5) {
-			for (int i = 0; i < diff; i++) {
-				CL_XP_OnPlayerDeath();
-			}
-		}
+	// 2. Direct Death tracking via Health transition (suicide / killed in combat)
+	int currentHealth = cl.snap.ps.stats[STAT_HEALTH];
+	if (g_lastHealth > 0 && currentHealth <= 0 && cl.snap.ps.pm_type == PM_NORMAL) {
+		CL_XP_OnPlayerDeath();
 	}
-	g_lastDeaths = currentDeaths;
+	g_lastHealth = currentHealth;
 
-	// 3. Automatic Private 1v1 Saber Duel Win / Loss tracking via duelInProgress
+	// 3. Private 1v1 Saber Duel Win / Loss tracking via duelInProgress
 	qboolean currentDuel = (cl.snap.ps.duelInProgress != 0) ? qtrue : qfalse;
 	if (g_lastDuelInProgress && !currentDuel) {
 		if (cl.snap.ps.stats[STAT_HEALTH] > 0 && cl.snap.ps.pm_type == PM_NORMAL) {
@@ -372,7 +436,7 @@ void CL_XP_AddXP(int amount, const char *reason) {
 	CL_XP_SaveProfile();
 
 	if (newLevel > oldLevel) {
-		Com_Printf("^2*** LEVEL UP! You reached Level %i! ***\n", newLevel);
+		Com_Printf("^2*** LEVEL UP! You reached Level %i (%s)! ***\n", newLevel, CL_XP_GetRankTitle(newLevel, g_xpProfile.faction));
 	}
 }
 
@@ -393,6 +457,7 @@ void CL_XP_OnNPCKill(void) {
 
 void CL_XP_OnDuelWin(void) {
 	g_xpProfile.duelWins++;
+	g_xpProfile.kills++; // Private duel win counts as a player kill as well!
 	CL_XP_AddXP(XP_GRANT_DUEL_WIN, "Private Duel Victory");
 }
 

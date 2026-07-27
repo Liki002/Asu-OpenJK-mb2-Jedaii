@@ -808,8 +808,11 @@ void SCR_DrawRPGHUDOverlay( void ) {
 			if ( s_hBarFill ) {
 				SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
 			} else {
-				vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-				SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
+				vec4_t factionFill = { 0.00f, 0.70f, 0.95f, 0.95f };
+				if ( g_xpProfile.faction == FACTION_SITH ) {
+					factionFill[0] = 0.95f; factionFill[1] = 0.15f; factionFill[2] = 0.15f;
+				}
+				SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, factionFill, NULL );
 			}
 		}
 
