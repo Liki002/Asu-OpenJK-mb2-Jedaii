@@ -9,7 +9,7 @@ Standalone Engine-Level Client XP & Leveling System for MBII / OpenJK Executable
 
 #include "client.h"
 
-#define MAX_XP_LEVEL 100
+#define MAX_XP_LEVEL 1000
 
 // Fixed XP Grants (Non-cheatable, hardcoded)
 #define XP_GRANT_PLAYER_KILL 50

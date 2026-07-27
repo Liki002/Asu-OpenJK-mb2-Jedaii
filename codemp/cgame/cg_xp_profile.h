@@ -9,7 +9,7 @@ Standalone Client-Side XP & Leveling System with Anti-Cheat Tamper Protection
 
 #include "cg_local.h"
 
-#define MAX_XP_LEVEL 100
+#define MAX_XP_LEVEL 1000
 
 // Fixed XP Grants (Non-cheatable, hardcoded)
 #define XP_GRANT_PLAYER_KILL 50

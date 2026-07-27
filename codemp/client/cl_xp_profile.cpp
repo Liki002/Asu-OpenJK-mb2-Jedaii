@@ -130,10 +130,10 @@ static void CL_XP_UpdateEngineCVars(void) {
 
 	// Dynamic Rank Title based on Level
 	const char *rankTitle = "Novice";
-	if (g_xpProfile.level >= 75) rankTitle = "Grandmaster";
-	else if (g_xpProfile.level >= 50) rankTitle = "Jedi Master";
-	else if (g_xpProfile.level >= 25) rankTitle = "Jedi Knight";
-	else if (g_xpProfile.level >= 10) rankTitle = "Apprentice";
+	if (g_xpProfile.level >= 500) rankTitle = "Grandmaster";
+	else if (g_xpProfile.level >= 250) rankTitle = "Jedi Master";
+	else if (g_xpProfile.level >= 100) rankTitle = "Jedi Knight";
+	else if (g_xpProfile.level >= 25) rankTitle = "Apprentice";
 	Cvar_Set("cg_rpg_rank", rankTitle);
 
 	// Display Duel Wins on HUD
@@ -217,7 +217,7 @@ void CL_XP_LoadProfile(void) {
 	Com_Printf("^5=====================================================\n");
 	Com_Printf("^2  [RPG MOD] Standalone Client XP System LOADED!\n");
 	Com_Printf("^7  Profile Name : ^3%s\n", g_xpProfile.profileName);
-	Com_Printf("^7  Level        : ^3Level %i ^7(Max Level: 100 | Total XP: ^3%i^7)\n", g_xpProfile.level, g_xpProfile.xp);
+	Com_Printf("^7  Level        : ^3Level %i ^7(Max Level: %i | Total XP: ^3%i^7)\n", g_xpProfile.level, MAX_XP_LEVEL, g_xpProfile.xp);
 	Com_Printf("^7  Duels Won    : ^3%i ^7| Player Kills: ^3%i ^7| NPC Kills: ^3%i\n", g_xpProfile.duelWins, g_xpProfile.playerKills, g_xpProfile.npcKills);
 	Com_Printf("^7  Type ^3/rpg_status^7 in console for full stats.\n");
 	Com_Printf("^5=====================================================\n\n");
@@ -244,7 +244,7 @@ void CL_XP_PrintStatus_f(void) {
 	Com_Printf("\n^5=====================================================\n");
 	Com_Printf("^2  [RPG MOD] Standalone Client XP & Leveling System\n");
 	Com_Printf("^7  Profile Name  : ^3%s\n", CL_XP_GetProfileName());
-	Com_Printf("^7  Level         : ^3%i ^7(Max Level 100)\n", CL_XP_GetLevel());
+	Com_Printf("^7  Level         : ^3%i ^7(Max Level %i)\n", CL_XP_GetLevel(), MAX_XP_LEVEL);
 	Com_Printf("^7  Total XP      : ^3%i\n", CL_XP_GetXP());
 	Com_Printf("^7  Level Progress: ^3%i / %i XP ^7(%.1f%%)\n", curXP, reqXP, percent * 100.0f);
 	Com_Printf("^7  Player Kills  : ^3%i\n", g_xpProfile.playerKills);
@@ -258,7 +258,14 @@ void CL_XP_PrintStatus_f(void) {
 // Automated Event Detection & Triggers
 // -------------------------------------------------------------------------
 void CL_XP_CheckGameEvents(void) {
-	if (cl.snap.ping == 0 && cls.state != CA_ACTIVE) {
+	if (cls.state != CA_ACTIVE || !cl.snap.valid) {
+		g_lastKills = -1;
+		g_lastDuelInProgress = qfalse;
+		return;
+	}
+
+	// Do NOT track score diffs if spectating, following, or snapshot is for another entity!
+	if (cl.snap.ps.clientNum != clc.clientNum || cl.snap.ps.pm_type == PM_SPECTATOR || (cl.snap.ps.pm_flags & PMF_FOLLOW)) {
 		g_lastKills = -1;
 		g_lastDuelInProgress = qfalse;
 		return;
@@ -267,12 +274,14 @@ void CL_XP_CheckGameEvents(void) {
 	// Always sync engine CVars periodically to keep player name & level fresh
 	CL_XP_UpdateEngineCVars();
 
-	// 1. Automatic Player Kill tracking via PERS_SCORE
+	// 1. Automatic Player Kill tracking via PERS_SCORE (only when active local player)
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
 	if (g_lastKills != -1 && currentKills > g_lastKills) {
 		int diff = currentKills - g_lastKills;
-		for (int i = 0; i < diff; i++) {
-			CL_XP_OnPlayerKill();
+		if (diff > 0 && diff <= 5) {
+			for (int i = 0; i < diff; i++) {
+				CL_XP_OnPlayerKill();
+			}
 		}
 	}
 	g_lastKills = currentKills;
@@ -280,7 +289,7 @@ void CL_XP_CheckGameEvents(void) {
 	// 2. Automatic Duel Victory tracking via duelInProgress
 	qboolean currentDuel = (cl.snap.ps.duelInProgress != 0) ? qtrue : qfalse;
 	if (g_lastDuelInProgress && !currentDuel) {
-		if (cl.snap.ps.stats[STAT_HEALTH] > 0) {
+		if (cl.snap.ps.stats[STAT_HEALTH] > 0 && cl.snap.ps.pm_type == PM_NORMAL) {
 			CL_XP_OnDuelWin();
 		}
 	}
@@ -292,25 +301,57 @@ void CL_XP_OnPrintMessage(const char *msg) {
 		return;
 	}
 
-	cvar_t *clName = Cvar_Get("name", "Player", 0);
-	const char *myName = (clName && clName->string[0]) ? clName->string : NULL;
+	if (cls.state != CA_ACTIVE || cl.snap.ps.pm_type == PM_SPECTATOR || (cl.snap.ps.pm_flags & PMF_FOLLOW)) {
+		return;
+	}
 
-	if (Q_stristr((char*)msg, "won the duel") || Q_stristr((char*)msg, "wins the duel") || Q_stristr((char*)msg, "won duel")) {
-		if (!myName || Q_stristr((char*)msg, myName)) {
-			static int lastDuelMsgTime = 0;
-			if (cls.realtime - lastDuelMsgTime > 2000) {
-				lastDuelMsgTime = cls.realtime;
-				CL_XP_OnDuelWin();
+	cvar_t *clName = Cvar_Get("name", "Player", 0);
+	if (!clName || !clName->string || !clName->string[0]) {
+		return;
+	}
+
+	char cleanMyName[64];
+	Q_strncpyz(cleanMyName, clName->string, sizeof(cleanMyName));
+	Q_CleanStr(cleanMyName);
+
+	char cleanMsg[512];
+	Q_strncpyz(cleanMsg, msg, sizeof(cleanMsg));
+	Q_CleanStr(cleanMsg);
+
+	// 1. Check for Duel Victory print message (e.g. "PlayerA won the duel against PlayerB")
+	if (Q_stristr(cleanMsg, "won the duel") || Q_stristr(cleanMsg, "wins the duel")) {
+		const char *wonPos = Q_stristr(cleanMsg, "won the duel");
+		if (!wonPos) wonPos = Q_stristr(cleanMsg, "wins the duel");
+
+		if (wonPos) {
+			char winnerPart[256];
+			size_t len = (size_t)(wonPos - cleanMsg);
+			if (len < sizeof(winnerPart)) {
+				Q_strncpyz(winnerPart, cleanMsg, len + 1);
+				if (Q_stristr(winnerPart, cleanMyName)) {
+					static int lastDuelMsgTime = 0;
+					if (cls.realtime - lastDuelMsgTime > 3000) {
+						lastDuelMsgTime = cls.realtime;
+						CL_XP_OnDuelWin();
+					}
+				}
 			}
 		}
 	}
 
-	if (Q_stristr((char*)msg, "was slain by") || Q_stristr((char*)msg, "was killed by") || Q_stristr((char*)msg, "slain by")) {
-		if (myName && Q_stristr((char*)msg, myName)) {
-			static int lastNPCKillTime = 0;
-			if (cls.realtime - lastNPCKillTime > 500) {
-				lastNPCKillTime = cls.realtime;
-				CL_XP_OnNPCKill();
+	// 2. Check for NPC kill print message (e.g. "Stormtrooper was slain by PlayerA")
+	if (Q_stristr(cleanMsg, "was slain by") || Q_stristr(cleanMsg, "was killed by")) {
+		const char *byPos = Q_stristr(cleanMsg, "was slain by");
+		if (!byPos) byPos = Q_stristr(cleanMsg, "was killed by");
+
+		if (byPos) {
+			const char *killerPart = byPos + 12;
+			if (Q_stristr(killerPart, cleanMyName)) {
+				static int lastNPCKillTime = 0;
+				if (cls.realtime - lastNPCKillTime > 1000) {
+					lastNPCKillTime = cls.realtime;
+					CL_XP_OnNPCKill();
+				}
 			}
 		}
 	}
