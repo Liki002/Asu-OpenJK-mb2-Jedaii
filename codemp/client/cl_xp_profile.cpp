@@ -11,7 +11,7 @@ Standalone Engine-Level Client XP & Leveling System for MBII / OpenJK Executable
 #include <string.h>
 #include <math.h>
 
-static clXpProfile_t g_xpProfile;
+clXpProfile_t g_xpProfile;
 static qboolean g_xpInitialized = qfalse;
 
 // Popup notification state
@@ -21,6 +21,7 @@ static int g_xpPopupTime = 0;
 
 // Tracking state for automated detection
 static int g_lastKills = -1;
+static int g_lastDeaths = -1;
 static qboolean g_lastDuelInProgress = qfalse;
 
 // Secret salt for anti-cheat hash signature
@@ -39,9 +40,11 @@ static unsigned int CL_XP_CalculateChecksum(const clXpProfile_t *prof) {
 
 	hash = ((hash << 5) + hash) + (unsigned int)prof->level;
 	hash = ((hash << 5) + hash) + (unsigned int)prof->xp;
-	hash = ((hash << 5) + hash) + (unsigned int)prof->playerKills;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->kills;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->deaths;
 	hash = ((hash << 5) + hash) + (unsigned int)prof->npcKills;
 	hash = ((hash << 5) + hash) + (unsigned int)prof->duelWins;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->duelLosses;
 
 	for (p = prof->profileName; *p; p++) {
 		hash = ((hash << 5) + hash) + (unsigned char)(*p);
@@ -144,7 +147,6 @@ static void CL_XP_UpdateEngineCVars(void) {
 // Profile Save & Load with Anti-Cheat Verification
 // -------------------------------------------------------------------------
 void CL_XP_SaveProfile(void) {
-	// Ensure player name is fresh before saving
 	cvar_t *cvarName = Cvar_Get("name", "Player", 0);
 	if (cvarName && cvarName->string && cvarName->string[0]) {
 		Q_strncpyz(g_xpProfile.profileName, cvarName->string, sizeof(g_xpProfile.profileName));
@@ -197,7 +199,6 @@ void CL_XP_LoadProfile(void) {
 	// Verify anti-cheat signature
 	unsigned int expectedChecksum = CL_XP_CalculateChecksum(&loaded);
 	if (loaded.checksum != expectedChecksum) {
-		// If only name changed, re-verify with previous name or update checksum cleanly
 		loaded.checksum = expectedChecksum;
 	}
 
@@ -218,7 +219,8 @@ void CL_XP_LoadProfile(void) {
 	Com_Printf("^2  [RPG MOD] Standalone Client XP System LOADED!\n");
 	Com_Printf("^7  Profile Name : ^3%s\n", g_xpProfile.profileName);
 	Com_Printf("^7  Level        : ^3Level %i ^7(Max Level: %i | Total XP: ^3%i^7)\n", g_xpProfile.level, MAX_XP_LEVEL, g_xpProfile.xp);
-	Com_Printf("^7  Duels Won    : ^3%i ^7| Player Kills: ^3%i ^7| NPC Kills: ^3%i\n", g_xpProfile.duelWins, g_xpProfile.playerKills, g_xpProfile.npcKills);
+	Com_Printf("^7  Kills / Deaths: ^3%i Kills ^7| ^1%i Deaths\n", g_xpProfile.kills, g_xpProfile.deaths);
+	Com_Printf("^7  Private Duels: ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.duelWins, g_xpProfile.duelLosses);
 	Com_Printf("^7  Type ^3/rpg_status^7 in console for full stats.\n");
 	Com_Printf("^5=====================================================\n\n");
 }
@@ -229,6 +231,7 @@ void CL_XP_Init(void) {
 	}
 	g_xpInitialized = qtrue;
 	g_lastKills = -1;
+	g_lastDeaths = -1;
 	g_lastDuelInProgress = qfalse;
 
 	Cmd_AddCommand("rpg_status", CL_XP_PrintStatus_f, "Print RPG client profile status");
@@ -247,9 +250,9 @@ void CL_XP_PrintStatus_f(void) {
 	Com_Printf("^7  Level         : ^3%i ^7(Max Level %i)\n", CL_XP_GetLevel(), MAX_XP_LEVEL);
 	Com_Printf("^7  Total XP      : ^3%i\n", CL_XP_GetXP());
 	Com_Printf("^7  Level Progress: ^3%i / %i XP ^7(%.1f%%)\n", curXP, reqXP, percent * 100.0f);
-	Com_Printf("^7  Player Kills  : ^3%i\n", g_xpProfile.playerKills);
+	Com_Printf("^7  Kills / Deaths: ^3%i Kills ^7| ^1%i Deaths\n", g_xpProfile.kills, g_xpProfile.deaths);
 	Com_Printf("^7  NPC Kills     : ^3%i\n", g_xpProfile.npcKills);
-	Com_Printf("^7  Duels Won     : ^3%i\n", g_xpProfile.duelWins);
+	Com_Printf("^7  Private Duels : ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.duelWins, g_xpProfile.duelLosses);
 	Com_Printf("^2  Anti-Cheat Protection: ENABLED & ACTIVE\n");
 	Com_Printf("^5=====================================================\n\n");
 }
@@ -260,13 +263,15 @@ void CL_XP_PrintStatus_f(void) {
 void CL_XP_CheckGameEvents(void) {
 	if (cls.state != CA_ACTIVE || !cl.snap.valid) {
 		g_lastKills = -1;
+		g_lastDeaths = -1;
 		g_lastDuelInProgress = qfalse;
 		return;
 	}
 
-	// Do NOT track score diffs if spectating, following, or snapshot is for another entity!
+	// Do NOT track score/deaths diffs if spectating, following, or snapshot is for another entity!
 	if (cl.snap.ps.clientNum != clc.clientNum || cl.snap.ps.pm_type == PM_SPECTATOR || (cl.snap.ps.pm_flags & PMF_FOLLOW)) {
 		g_lastKills = -1;
+		g_lastDeaths = -1;
 		g_lastDuelInProgress = qfalse;
 		return;
 	}
@@ -274,7 +279,7 @@ void CL_XP_CheckGameEvents(void) {
 	// Always sync engine CVars periodically to keep player name & level fresh
 	CL_XP_UpdateEngineCVars();
 
-	// 1. Automatic Player Kill tracking via PERS_SCORE (only when active local player)
+	// 1. Automatic Player Kill tracking via PERS_SCORE (only during active local play)
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
 	if (g_lastKills != -1 && currentKills > g_lastKills) {
 		int diff = currentKills - g_lastKills;
@@ -286,11 +291,25 @@ void CL_XP_CheckGameEvents(void) {
 	}
 	g_lastKills = currentKills;
 
-	// 2. Automatic Duel Victory tracking via duelInProgress
+	// 2. Automatic Death tracking via PERS_KILLED
+	int currentDeaths = cl.snap.ps.persistant[PERS_KILLED];
+	if (g_lastDeaths != -1 && currentDeaths > g_lastDeaths) {
+		int diff = currentDeaths - g_lastDeaths;
+		if (diff > 0 && diff <= 5) {
+			for (int i = 0; i < diff; i++) {
+				CL_XP_OnPlayerDeath();
+			}
+		}
+	}
+	g_lastDeaths = currentDeaths;
+
+	// 3. Automatic Private 1v1 Saber Duel Win / Loss tracking via duelInProgress
 	qboolean currentDuel = (cl.snap.ps.duelInProgress != 0) ? qtrue : qfalse;
 	if (g_lastDuelInProgress && !currentDuel) {
 		if (cl.snap.ps.stats[STAT_HEALTH] > 0 && cl.snap.ps.pm_type == PM_NORMAL) {
 			CL_XP_OnDuelWin();
+		} else {
+			CL_XP_OnDuelLoss();
 		}
 	}
 	g_lastDuelInProgress = currentDuel;
@@ -318,28 +337,7 @@ void CL_XP_OnPrintMessage(const char *msg) {
 	Q_strncpyz(cleanMsg, msg, sizeof(cleanMsg));
 	Q_CleanStr(cleanMsg);
 
-	// 1. Check for Duel Victory print message (e.g. "PlayerA won the duel against PlayerB")
-	if (Q_stristr(cleanMsg, "won the duel") || Q_stristr(cleanMsg, "wins the duel")) {
-		const char *wonPos = Q_stristr(cleanMsg, "won the duel");
-		if (!wonPos) wonPos = Q_stristr(cleanMsg, "wins the duel");
-
-		if (wonPos) {
-			char winnerPart[256];
-			size_t len = (size_t)(wonPos - cleanMsg);
-			if (len < sizeof(winnerPart)) {
-				Q_strncpyz(winnerPart, cleanMsg, len + 1);
-				if (Q_stristr(winnerPart, cleanMyName)) {
-					static int lastDuelMsgTime = 0;
-					if (cls.realtime - lastDuelMsgTime > 3000) {
-						lastDuelMsgTime = cls.realtime;
-						CL_XP_OnDuelWin();
-					}
-				}
-			}
-		}
-	}
-
-	// 2. Check for NPC kill print message (e.g. "Stormtrooper was slain by PlayerA")
+	// Check for NPC kill print message (e.g. "Stormtrooper was slain by PlayerA")
 	if (Q_stristr(cleanMsg, "was slain by") || Q_stristr(cleanMsg, "was killed by")) {
 		const char *byPos = Q_stristr(cleanMsg, "was slain by");
 		if (!byPos) byPos = Q_stristr(cleanMsg, "was killed by");
@@ -379,8 +377,13 @@ void CL_XP_AddXP(int amount, const char *reason) {
 }
 
 void CL_XP_OnPlayerKill(void) {
-	g_xpProfile.playerKills++;
+	g_xpProfile.kills++;
 	CL_XP_AddXP(XP_GRANT_PLAYER_KILL, "Player Kill");
+}
+
+void CL_XP_OnPlayerDeath(void) {
+	g_xpProfile.deaths++;
+	CL_XP_SaveProfile();
 }
 
 void CL_XP_OnNPCKill(void) {
@@ -390,7 +393,12 @@ void CL_XP_OnNPCKill(void) {
 
 void CL_XP_OnDuelWin(void) {
 	g_xpProfile.duelWins++;
-	CL_XP_AddXP(XP_GRANT_DUEL_WIN, "Duel Victory");
+	CL_XP_AddXP(XP_GRANT_DUEL_WIN, "Private Duel Victory");
+}
+
+void CL_XP_OnDuelLoss(void) {
+	g_xpProfile.duelLosses++;
+	CL_XP_SaveProfile();
 }
 
 int CL_XP_GetLevel(void) {

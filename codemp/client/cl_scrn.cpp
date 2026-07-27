@@ -779,9 +779,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%.22s ^3Lv %d", playerName, level );
 		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, nameLvlStr, whiteColor );
 
-		// Line 2: Rank Title & Duel Wins
+		// Line 2: Rank Title & Private Duel Record (Wins - Losses)
 		char rankStr[96];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 Wins: %d", rankTitle, fr );
+		Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
 
 		// Line 3: Sleek Horizontal XP Bar (TGA Background)
@@ -865,9 +865,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	Com_sprintf( nameStr, sizeof(nameStr), "^7%.18s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
 
-	// Line 2: Rank Title & Duel Wins
+	// Line 2: Rank Title & Private Duel Record (Wins - Losses)
 	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 Wins: %d", rankTitle, fr );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
 	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.3f, rankStr, whiteColor );
 
 	// Line 3: Dynamic XP Progress Bar (TGA Background)

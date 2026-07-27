@@ -19,9 +19,11 @@ Standalone Engine-Level Client XP & Leveling System for MBII / OpenJK Executable
 typedef struct {
     int level;
     int xp;
-    int playerKills;
-    int npcKills;
-    int duelWins;
+    int kills;       // Player Kills (+50 XP)
+    int deaths;      // Player Deaths
+    int npcKills;    // NPC Kills (+20 XP)
+    int duelWins;    // Private Duel Wins (+100 XP)
+    int duelLosses;  // Private Duel Losses
     char profileName[64];
     unsigned int checksum;
 } clXpProfile_t;
@@ -37,8 +39,10 @@ void CL_XP_PrintStatus_f(void);
 
 void CL_XP_AddXP(int amount, const char *reason);
 void CL_XP_OnPlayerKill(void);
+void CL_XP_OnPlayerDeath(void);
 void CL_XP_OnNPCKill(void);
 void CL_XP_OnDuelWin(void);
+void CL_XP_OnDuelLoss(void);
 
 int  CL_XP_GetLevel(void);
 int  CL_XP_GetXP(void);
@@ -47,3 +51,5 @@ void CL_XP_GetLevelProgress(int *currentLevelXP, int *nextLevelXP, float *percen
 
 const char *CL_XP_GetProfileName(void);
 void CL_XP_SetProfileName(const char *name);
+
+extern clXpProfile_t g_xpProfile;
