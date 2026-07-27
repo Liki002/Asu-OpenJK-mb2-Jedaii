@@ -951,11 +951,12 @@ void SCR_DrawProfileCardOverlay( void ) {
 	int headerMaxLen = (nameCleanLen + 20 > rankCleanLen + 15) ? (nameCleanLen + 20) : (rankCleanLen + 15);
 
 	float calculatedCardW = 32.0f + headerMaxLen * 5.8f + 25.0f;
-	float minCardW = 360.0f;
+	float minCardW = 380.0f;
 	float cardW = (calculatedCardW > minCardW) ? calculatedCardW : minCardW;
-	if ( cardW > 580.0f ) cardW = 580.0f;
+	if ( cardW > 600.0f ) cardW = 600.0f;
 
-	float cardH = 210.0f;
+	// Expanded height to fit mode stats section
+	float cardH = 310.0f;
 	float cardX = 320.0f - cardW * 0.5f;
 	float cardY = 240.0f - cardH * 0.5f;
 
@@ -969,6 +970,7 @@ void SCR_DrawProfileCardOverlay( void ) {
 
 	SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
 
+	// --- Header: Name & Level ---
 	char headerStr[128];
 	Com_sprintf( headerStr, sizeof(headerStr), "^7%s ^3[Lvl %d %s^3]",
 		profName, g_xpProfile.level, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI" );
@@ -979,33 +981,75 @@ void SCR_DrawProfileCardOverlay( void ) {
 	SCR_DrawVirtualString( cardX + 16.0f, cardY + 34.0f, 4.8f, rankSub, whiteColor );
 
 	vec4_t lineCol = { 1.0f, 1.0f, 1.0f, 0.25f };
-	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 48.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
+	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 50.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
 
+	// --- XP Progress ---
 	int curXP = 0, reqXP = 0;
 	float percent = 0.0f;
 	CL_XP_GetLevelProgress( &curXP, &reqXP, &percent );
 
 	char xpStr[96];
-	Com_sprintf( xpStr, sizeof(xpStr), "^7XP Progress: ^2%d ^7/ ^2%d XP ^7(%.1f%%)", curXP, reqXP, percent * 100.0f );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 56.0f, 4.2f, xpStr, whiteColor );
+	Com_sprintf( xpStr, sizeof(xpStr), "^7XP Progress: ^2%d ^7/ ^2%d ^7(^3%.1f%%^7)", curXP, reqXP, percent * 100.0f );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 58.0f, 4.2f, xpStr, whiteColor );
 
+	// --- Combat Stats ---
 	float kdRatio = (g_xpProfile.deaths > 0) ? ((float)g_xpProfile.kills / (float)g_xpProfile.deaths) : (float)g_xpProfile.kills;
-	char kdStr[96];
-	Com_sprintf( kdStr, sizeof(kdStr), "^7Combat Kills: ^3%d  ^7Deaths: ^1%d  ^7K/D: ^2%.2f", g_xpProfile.kills, g_xpProfile.deaths, kdRatio );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 85.0f, 4.5f, kdStr, whiteColor );
+	char kdStr[128];
+	Com_sprintf( kdStr, sizeof(kdStr), "^7Kills: ^3%d  ^7Deaths: ^1%d  ^7K/D: ^2%.2f  ^7NPC: ^3%d",
+		g_xpProfile.kills, g_xpProfile.deaths, kdRatio, g_xpProfile.npcKills );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 80.0f, 4.5f, kdStr, whiteColor );
+
+	char weaponStr[128];
+	Com_sprintf( weaponStr, sizeof(weaponStr), "^3Saber Kills: ^7%d   ^3Gunner Kills: ^7%d   ^7Total Lifetime XP: ^3%d",
+		g_xpProfile.saberKills, g_xpProfile.gunnerKills, g_xpProfile.xp );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 98.0f, 4.2f, weaponStr, whiteColor );
+
+	// --- Divider ---
+	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 114.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
+
+	// --- MB2 Game Mode Stats ---
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 120.0f, 4.2f, "^5MB2 Game Mode Breakdown", whiteColor );
+
+	int totalOpen = g_xpProfile.openWins + g_xpProfile.openLosses;
+	float openWinRate = (totalOpen > 0) ? (((float)g_xpProfile.openWins / (float)totalOpen) * 100.0f) : 0.0f;
+	char openStr[128];
+	Com_sprintf( openStr, sizeof(openStr), "^7Open Mode:    ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)",
+		g_xpProfile.openWins, g_xpProfile.openLosses, openWinRate );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 136.0f, 4.3f, openStr, whiteColor );
+
+	int totalLegends = g_xpProfile.legendsWins + g_xpProfile.legendsLosses;
+	float legendsWinRate = (totalLegends > 0) ? (((float)g_xpProfile.legendsWins / (float)totalLegends) * 100.0f) : 0.0f;
+	char legendsStr[128];
+	Com_sprintf( legendsStr, sizeof(legendsStr), "^7Legends Mode: ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)",
+		g_xpProfile.legendsWins, g_xpProfile.legendsLosses, legendsWinRate );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 154.0f, 4.3f, legendsStr, whiteColor );
+
+	int totalFA = g_xpProfile.faWins + g_xpProfile.faLosses;
+	float faWinRate = (totalFA > 0) ? (((float)g_xpProfile.faWins / (float)totalFA) * 100.0f) : 0.0f;
+	char faStr[128];
+	Com_sprintf( faStr, sizeof(faStr), "^7Full Auth:    ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)",
+		g_xpProfile.faWins, g_xpProfile.faLosses, faWinRate );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 172.0f, 4.3f, faStr, whiteColor );
 
 	int totalDuels = g_xpProfile.duelWins + g_xpProfile.duelLosses;
 	float duelWinRate = (totalDuels > 0) ? (((float)g_xpProfile.duelWins / (float)totalDuels) * 100.0f) : 0.0f;
-	char duelStr[96];
-	Com_sprintf( duelStr, sizeof(duelStr), "^7Private Duels: ^2%dW ^7- ^1%dL  ^7Win Rate: ^3%.1f%%", g_xpProfile.duelWins, g_xpProfile.duelLosses, duelWinRate );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 107.0f, 4.5f, duelStr, whiteColor );
+	char duelStr[128];
+	Com_sprintf( duelStr, sizeof(duelStr), "^7Private Duel: ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)  ^5%d Flawless",
+		g_xpProfile.duelWins, g_xpProfile.duelLosses, duelWinRate, g_xpProfile.flawlessWins );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 190.0f, 4.3f, duelStr, whiteColor );
 
-	char npcTotalStr[96];
-	Com_sprintf( npcTotalStr, sizeof(npcTotalStr), "^7NPC Kills: ^3%d  ^7Total Lifetime XP: ^3%d", g_xpProfile.npcKills, g_xpProfile.xp );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 129.0f, 4.5f, npcTotalStr, whiteColor );
+	// --- Divider ---
+	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 208.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
 
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + cardH - 18.0f, 3.8f, "^5Type /rpg_card to toggle this profile card", whiteColor );
+	// XP grants legend
+	char xpLegend[128];
+	Com_sprintf( xpLegend, sizeof(xpLegend), "^3XP Grants: ^7Player Kill +%d  Duel Win +%d  Round Win +%d  NPC +%d",
+		XP_GRANT_PLAYER_KILL, XP_GRANT_DUEL_WIN, XP_GRANT_ROUND_WIN, XP_GRANT_NPC_KILL );
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + 215.0f, 3.8f, xpLegend, whiteColor );
+
+	SCR_DrawVirtualString( cardX + 16.0f, cardY + cardH - 16.0f, 3.8f, "^5Press ESC or type /rpg_card to close", whiteColor );
 }
+
 
 topLeaderboardEntry_t g_topLeaderboard[10];
 int g_topLeaderboardCount = 0;

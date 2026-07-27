@@ -15,6 +15,8 @@ Standalone Engine-Level Client XP & Leveling System for MBII / OpenJK Executable
 #define XP_GRANT_PLAYER_KILL 50
 #define XP_GRANT_NPC_KILL    20
 #define XP_GRANT_DUEL_WIN    100
+#define XP_GRANT_ROUND_WIN   150
+#define XP_GRANT_FLAWLESS    50
 
 // Faction types
 typedef enum {
@@ -31,6 +33,20 @@ typedef struct {
     int duelWins;    // Private Duel Wins (+100 XP)
     int duelLosses;  // Private Duel Losses
     int faction;     // 0 = Jedi, 1 = Sith
+
+    // MB2 Mode Stats
+    int openWins;      // Open Mode Wins (+150 XP)
+    int openLosses;    // Open Mode Losses
+    int legendsWins;   // Legends Mode Wins (+150 XP)
+    int legendsLosses; // Legends Mode Losses
+    int faWins;        // Full Authentic Wins (+150 XP)
+    int faLosses;      // Full Authentic Losses
+
+    // Weapon/Style Breakdown
+    int saberKills;    // Saber Kills
+    int gunnerKills;   // Blaster / Gun Kills
+    int flawlessWins;  // Flawless Duel Wins (no damage taken)
+
     char profileName[64];
     unsigned int checksum;
 } clXpProfile_t;
@@ -48,11 +64,13 @@ void CL_XP_SetFaction_f(void);
 void CL_XP_ToggleCard_f(void);
 
 void CL_XP_AddXP(int amount, const char *reason);
-void CL_XP_OnPlayerKill(void);
+void CL_XP_OnPlayerKill(int weapon);
 void CL_XP_OnPlayerDeath(void);
 void CL_XP_OnNPCKill(void);
-void CL_XP_OnDuelWin(void);
+void CL_XP_OnDuelWin(qboolean flawless);
 void CL_XP_OnDuelLoss(void);
+void CL_XP_OnRoundWin(int mbmode);
+void CL_XP_OnRoundLoss(int mbmode);
 
 int  CL_XP_GetLevel(void);
 int  CL_XP_GetXP(void);

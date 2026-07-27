@@ -15,16 +15,12 @@ clXpProfile_t g_xpProfile;
 qboolean g_xpDrawCard = qfalse;
 static qboolean g_xpInitialized = qfalse;
 
-// Popup notification state
-static int g_xpPopupAmount = 0;
-static char g_xpPopupReason[64] = {0};
-static int g_xpPopupTime = 0;
-
 // Tracking state for automated detection
 static int g_lastKills = -1;
 static int g_lastHealth = -1;
 static qboolean g_playerIsDead = qfalse;
 static qboolean g_lastDuelInProgress = qfalse;
+static int g_duelStartHealth = 100;
 
 // Secret salt for anti-cheat hash signature
 static const char XP_SECRET_SALT[] = "JEDAII_XP_STANDALONE_SECURE_SALT_2026_x89!";
@@ -73,6 +69,17 @@ static unsigned int CL_XP_CalculateChecksum(const clXpProfile_t *prof) {
 	hash = ((hash << 5) + hash) + (unsigned int)prof->duelWins;
 	hash = ((hash << 5) + hash) + (unsigned int)prof->duelLosses;
 	hash = ((hash << 5) + hash) + (unsigned int)prof->faction;
+
+	hash = ((hash << 5) + hash) + (unsigned int)prof->openWins;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->openLosses;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->legendsWins;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->legendsLosses;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->faWins;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->faLosses;
+
+	hash = ((hash << 5) + hash) + (unsigned int)prof->saberKills;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->gunnerKills;
+	hash = ((hash << 5) + hash) + (unsigned int)prof->flawlessWins;
 
 	for (p = prof->profileName; *p; p++) {
 		hash = ((hash << 5) + hash) + (unsigned char)(*p);
@@ -248,7 +255,9 @@ void CL_XP_LoadProfile(void) {
 	Com_Printf("^7  Level        : ^3Level %i ^7(Max Level: %i | Total XP: ^3%i^7)\n", g_xpProfile.level, MAX_XP_LEVEL, g_xpProfile.xp);
 	Com_Printf("^7  Rank Title   : ^3%s\n", CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction));
 	Com_Printf("^7  Kills / Deaths: ^3%i Kills ^7| ^1%i Deaths\n", g_xpProfile.kills, g_xpProfile.deaths);
-	Com_Printf("^7  Private Duels: ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.duelWins, g_xpProfile.duelLosses);
+	Com_Printf("^7  Combat Types : ^3%i Saber Kills ^7| ^3%i Gunner Kills\n", g_xpProfile.saberKills, g_xpProfile.gunnerKills);
+	Com_Printf("^7  MB2 Modes    : ^2Open: %dW-%dL ^7| ^2Legends: %dW-%dL ^7| ^2Duels: %dW-%dL (%d Flawless)\n",
+		g_xpProfile.openWins, g_xpProfile.openLosses, g_xpProfile.legendsWins, g_xpProfile.legendsLosses, g_xpProfile.duelWins, g_xpProfile.duelLosses, g_xpProfile.flawlessWins);
 	Com_Printf("^7  Type ^3/rpg_card^7, ^3/rpg_status^7, ^3/rpg_ranks^7, or ^3/rpg_sith^7 / ^3/rpg_jedi^7.\n");
 	Com_Printf("^5=====================================================\n\n");
 }
@@ -284,6 +293,7 @@ void CL_XP_Init(void) {
 	g_lastHealth = -1;
 	g_playerIsDead = qfalse;
 	g_lastDuelInProgress = qfalse;
+	g_duelStartHealth = 100;
 
 	Cmd_AddCommand("rpg_card",    CL_XP_ToggleCard_f,  "Toggle full-screen RPG Profile Stats Card");
 	Cmd_AddCommand("rpg_status",  CL_XP_PrintStatus_f, "Print RPG client profile status");
@@ -308,8 +318,11 @@ void CL_XP_PrintStatus_f(void) {
 	Com_Printf("^7  Total XP      : ^3%i\n", CL_XP_GetXP());
 	Com_Printf("^7  Level Progress: ^3%i / %i XP ^7(%.1f%%)\n", curXP, reqXP, percent * 100.0f);
 	Com_Printf("^7  Kills / Deaths: ^3%i Kills ^7| ^1%i Deaths\n", g_xpProfile.kills, g_xpProfile.deaths);
-	Com_Printf("^7  NPC Kills     : ^3%i\n", g_xpProfile.npcKills);
-	Com_Printf("^7  Private Duels : ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.duelWins, g_xpProfile.duelLosses);
+	Com_Printf("^7  Combat Breakdown: ^3%i Saber Kills ^7| ^3%i Gunner Kills\n", g_xpProfile.saberKills, g_xpProfile.gunnerKills);
+	Com_Printf("^7  Open Mode     : ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.openWins, g_xpProfile.openLosses);
+	Com_Printf("^7  Legends Mode  : ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.legendsWins, g_xpProfile.legendsLosses);
+	Com_Printf("^7  Full Authentic: ^2%i Wins ^7| ^1%i Losses\n", g_xpProfile.faWins, g_xpProfile.faLosses);
+	Com_Printf("^7  Private Duels : ^2%i Wins ^7| ^1%i Losses ^7(^3%i Flawless^7)\n", g_xpProfile.duelWins, g_xpProfile.duelLosses, g_xpProfile.flawlessWins);
 	Com_Printf("^2  Anti-Cheat Protection: ENABLED & ACTIVE\n");
 	Com_Printf("^5=====================================================\n\n");
 }
@@ -386,13 +399,13 @@ void CL_XP_CheckGameEvents(void) {
 		return;
 	}
 
-	// 2. Player Kill tracking via PERS_SCORE
+	// 2. Player Kill tracking via PERS_SCORE (with weapon type detection)
 	int currentKills = cl.snap.ps.persistant[PERS_SCORE];
 	if (g_lastKills != -1 && currentKills > g_lastKills) {
 		int diff = currentKills - g_lastKills;
 		if (diff > 0 && diff <= 5) {
 			for (int i = 0; i < diff; i++) {
-				CL_XP_OnPlayerKill();
+				CL_XP_OnPlayerKill(cl.snap.ps.weapon);
 			}
 		}
 	}
@@ -400,9 +413,12 @@ void CL_XP_CheckGameEvents(void) {
 
 	// 3. Private 1v1 Saber Duel Win / Loss tracking via duelInProgress
 	qboolean currentDuel = (cl.snap.ps.duelInProgress != 0) ? qtrue : qfalse;
-	if (g_lastDuelInProgress && !currentDuel) {
+	if (!g_lastDuelInProgress && currentDuel) {
+		g_duelStartHealth = currentHealth;
+	} else if (g_lastDuelInProgress && !currentDuel) {
 		if (currentHealth > 0) {
-			CL_XP_OnDuelWin();
+			qboolean flawless = (currentHealth >= g_duelStartHealth) ? qtrue : qfalse;
+			CL_XP_OnDuelWin(flawless);
 		} else {
 			CL_XP_OnDuelLoss();
 		}
@@ -432,6 +448,25 @@ void CL_XP_OnPrintMessage(const char *msg) {
 	Q_strncpyz(cleanMsg, msg, sizeof(cleanMsg));
 	Q_CleanStr(cleanMsg);
 
+	// Check if print message is a MB2 Round Win/Loss broadcast
+	if (Q_stristr(cleanMsg, "win the round") || Q_stristr(cleanMsg, "round won by") || Q_stristr(cleanMsg, "wins the round")) {
+		cvar_t *mbmodeCvar = Cvar_Get("g_mbmode", "0", 0);
+		if (!mbmodeCvar || !mbmodeCvar->integer) mbmodeCvar = Cvar_Get("mbmode", "0", 0);
+		int mbmode = mbmodeCvar ? mbmodeCvar->integer : 0;
+
+		static int lastRoundTime = 0;
+		if (cls.realtime - lastRoundTime > 3000) {
+			lastRoundTime = cls.realtime;
+
+			// Check if your team won
+			if (cl.snap.ps.stats[STAT_HEALTH] > 0 || Q_stristr(cleanMsg, "victorious")) {
+				CL_XP_OnRoundWin(mbmode);
+			} else {
+				CL_XP_OnRoundLoss(mbmode);
+			}
+		}
+	}
+
 	// Check if print message is a kill obituary ("was slain", "was killed", "was destroyed", "was sliced")
 	qboolean isKillMsg = (Q_stristr(cleanMsg, "was slain") ||
 	                      Q_stristr(cleanMsg, "was killed") ||
@@ -449,7 +484,6 @@ void CL_XP_OnPrintMessage(const char *msg) {
 				isMyKill = qtrue;
 			}
 		} else {
-			// Message specifies no killer (e.g. "Stormtrooper was slain"), assume active player kill
 			isMyKill = qtrue;
 		}
 
@@ -484,8 +518,13 @@ void CL_XP_AddXP(int amount, const char *reason) {
 	}
 }
 
-void CL_XP_OnPlayerKill(void) {
+void CL_XP_OnPlayerKill(int weapon) {
 	g_xpProfile.kills++;
+	if (weapon == 10) { // WP_SABER
+		g_xpProfile.saberKills++;
+	} else {
+		g_xpProfile.gunnerKills++;
+	}
 	CL_XP_AddXP(XP_GRANT_PLAYER_KILL, "Player Kill");
 }
 
@@ -499,14 +538,46 @@ void CL_XP_OnNPCKill(void) {
 	CL_XP_AddXP(XP_GRANT_NPC_KILL, "NPC Kill");
 }
 
-void CL_XP_OnDuelWin(void) {
+void CL_XP_OnDuelWin(qboolean flawless) {
 	g_xpProfile.duelWins++;
-	g_xpProfile.kills++; // Private duel win counts as a player kill as well!
-	CL_XP_AddXP(XP_GRANT_DUEL_WIN, "Private Duel Victory");
+	g_xpProfile.kills++;
+	g_xpProfile.saberKills++;
+
+	int grantedXP = XP_GRANT_DUEL_WIN;
+	if (flawless) {
+		g_xpProfile.flawlessWins++;
+		grantedXP += XP_GRANT_FLAWLESS;
+		Com_Printf("^3*** FLAWLESS DUEL VICTORY! (+%d XP Bonus) ***\n", XP_GRANT_FLAWLESS);
+	}
+
+	CL_XP_AddXP(grantedXP, "Private Duel Victory");
 }
 
 void CL_XP_OnDuelLoss(void) {
 	g_xpProfile.duelLosses++;
+	CL_XP_SaveProfile();
+}
+
+void CL_XP_OnRoundWin(int mbmode) {
+	if (mbmode == 4) {
+		g_xpProfile.legendsWins++;
+	} else if (mbmode == 2) {
+		g_xpProfile.faWins++;
+	} else {
+		g_xpProfile.openWins++;
+	}
+	Com_Printf("^2*** ROUND VICTORY! (+%d XP) ***\n", XP_GRANT_ROUND_WIN);
+	CL_XP_AddXP(XP_GRANT_ROUND_WIN, "Round Victory");
+}
+
+void CL_XP_OnRoundLoss(int mbmode) {
+	if (mbmode == 4) {
+		g_xpProfile.legendsLosses++;
+	} else if (mbmode == 2) {
+		g_xpProfile.faLosses++;
+	} else {
+		g_xpProfile.openLosses++;
+	}
 	CL_XP_SaveProfile();
 }
 
