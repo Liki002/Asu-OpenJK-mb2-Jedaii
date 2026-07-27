@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // cl_scrn.c -- master for refresh, status bar, console, chat, notify, etc
 
 #include "client.h"
+#include "cl_xp_profile.h"
 #include "cl_uiapi.h"
 #include "cl_cgameapi.h"
 
@@ -500,6 +501,8 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "rpg_hud_style", SCR_RPGHUDStyle_f, "Select RPG HUD style: classic (0) or bottom (1)" );
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
 
+	CL_XP_Init();
+
 	scr_initialized = qtrue;
 }
 
@@ -676,6 +679,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) {
 		return;
 	}
+
+	CL_XP_CheckGameEvents();
+
 	if ( !cg_drawRPGHUD || !cg_drawRPGHUD->integer ) {
 		return;
 	}

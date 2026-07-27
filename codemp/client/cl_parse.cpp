@@ -25,6 +25,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 // cl_parse.c  -- parse a message received from the server
 
 #include "client.h"
+#include "cl_xp_profile.h"
 #include "cl_cgameapi.h"
 #include "qcommon/stringed_ingame.h"
 
@@ -797,6 +798,8 @@ void CL_ParseCommandString( msg_t *msg ) {
 	}
 	*/
 	Q_strncpyz( clc.serverCommands[ index ], s, sizeof( clc.serverCommands[ index ] ) );
+
+	CL_XP_OnPrintMessage( s );
 
 	// RPG Client Data Sync Parser
 	if ( !Q_strncmp( s, "rpg_sync", 8 ) ) {
