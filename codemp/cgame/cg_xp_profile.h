@@ -31,6 +31,9 @@ void CG_XP_Init(void);
 void CG_XP_SaveProfile(void);
 void CG_XP_LoadProfile(void);
 
+void CG_XP_CheckGameEvents(void);
+void CG_XP_OnPrintMessage(const char *msg);
+
 void CG_XP_AddXP(int amount, const char *reason);
 void CG_XP_OnPlayerKill(void);
 void CG_XP_OnNPCKill(void);

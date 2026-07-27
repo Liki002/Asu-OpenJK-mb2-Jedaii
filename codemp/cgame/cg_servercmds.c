@@ -1479,6 +1479,7 @@ static void CG_CenterPrint_f( void ) {
 	char strEd[MAX_STRINGED_SV_STRING] = {0};
 
 	CG_CheckSVStringEdRef( strEd, CG_Argv( 1 ) );
+	CG_XP_OnPrintMessage( strEd );
 	CG_CenterPrint( strEd, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
 }
 
@@ -1490,6 +1491,7 @@ static void CG_CenterPrintSE_f( void ) {
 		x++;
 
 	trap->SE_GetStringTextString( x, strEd, MAX_STRINGED_SV_STRING );
+	CG_XP_OnPrintMessage( strEd );
 	CG_CenterPrint( strEd, SCREEN_HEIGHT * 0.30, BIGCHAR_WIDTH );
 }
 
@@ -1497,6 +1499,7 @@ static void CG_Print_f( void ) {
 	char strEd[MAX_STRINGED_SV_STRING] = {0};
 
 	CG_CheckSVStringEdRef( strEd, CG_Argv( 1 ) );
+	CG_XP_OnPrintMessage( strEd );
 	trap->Print( "%s", strEd );
 }
 

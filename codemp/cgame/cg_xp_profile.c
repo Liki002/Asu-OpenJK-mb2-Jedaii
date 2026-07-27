@@ -16,6 +16,11 @@ static int g_xpPopupAmount = 0;
 static char g_xpPopupReason[64] = {0};
 static int g_xpPopupTime = 0;
 
+// Tracking state for automated detection
+static int g_lastKills = -1;
+static qboolean g_lastDuelInProgress = qfalse;
+static int g_lastDuelWinner = -1;
+
 // Secret salt for anti-cheat hash signature
 static const char XP_SECRET_SALT[] = "JEDAII_XP_STANDALONE_SECURE_SALT_2026_x89!";
 
@@ -177,7 +182,80 @@ void CG_XP_Init(void) {
 		return;
 	}
 	g_xpInitialized = qtrue;
+	g_lastKills = -1;
+	g_lastDuelInProgress = qfalse;
+	g_lastDuelWinner = -1;
 	CG_XP_LoadProfile();
+}
+
+// -------------------------------------------------------------------------
+// Automated Event Detection & Triggers
+// -------------------------------------------------------------------------
+void CG_XP_CheckGameEvents(void) {
+	if (!cg.snap) {
+		g_lastKills = -1;
+		g_lastDuelInProgress = qfalse;
+		return;
+	}
+
+	// 1. Automatic Player Kill tracking via PERS_SCORE
+	int currentKills = cg.snap->ps.persistant[PERS_SCORE];
+	if (g_lastKills != -1 && currentKills > g_lastKills) {
+		int diff = currentKills - g_lastKills;
+		int i;
+		for (i = 0; i < diff; i++) {
+			CG_XP_OnPlayerKill();
+		}
+	}
+	g_lastKills = currentKills;
+
+	// 2. Automatic Duel Victory tracking via duelInProgress
+	qboolean currentDuel = (cg.snap->ps.duelInProgress != 0) ? qtrue : qfalse;
+	if (g_lastDuelInProgress && !currentDuel) {
+		// Duel ended! Check if player survived
+		if (cg.snap->ps.stats[STAT_HEALTH] > 0) {
+			CG_XP_OnDuelWin();
+		}
+	}
+	g_lastDuelInProgress = currentDuel;
+
+	// 3. Configstring duelWinner check
+	if (cgs.duelWinner != g_lastDuelWinner) {
+		if (cgs.duelWinner != -1 && cgs.duelWinner == cg.snap->ps.clientNum) {
+			CG_XP_OnDuelWin();
+		}
+		g_lastDuelWinner = cgs.duelWinner;
+	}
+}
+
+void CG_XP_OnPrintMessage(const char *msg) {
+	if (!msg || !msg[0]) {
+		return;
+	}
+
+	const char *myName = (cgs.clientinfo[cg.clientNum].name[0]) ? cgs.clientinfo[cg.clientNum].name : NULL;
+
+	// Check for Duel Victory print message
+	if (Q_stristr((char*)msg, "won the duel") || Q_stristr((char*)msg, "wins the duel") || Q_stristr((char*)msg, "won duel")) {
+		if (!myName || Q_stristr((char*)msg, myName)) {
+			static int lastDuelMsgTime = 0;
+			if (cg.time - lastDuelMsgTime > 2000) {
+				lastDuelMsgTime = cg.time;
+				CG_XP_OnDuelWin();
+			}
+		}
+	}
+
+	// Check for NPC kill print message
+	if (Q_stristr((char*)msg, "was slain by") || Q_stristr((char*)msg, "was killed by") || Q_stristr((char*)msg, "slain by")) {
+		if (myName && Q_stristr((char*)msg, myName)) {
+			static int lastNPCKillTime = 0;
+			if (cg.time - lastNPCKillTime > 500) {
+				lastNPCKillTime = cg.time;
+				CG_XP_OnNPCKill();
+			}
+		}
+	}
 }
 
 // -------------------------------------------------------------------------
@@ -257,12 +335,15 @@ void CG_XP_SetProfileName(const char *name) {
 // HUD Rendering
 // -------------------------------------------------------------------------
 void CG_XP_DrawHUD(void) {
-	if (!cg_drawLevelProfile.integer) {
-		return;
-	}
-
 	if (!g_xpInitialized) {
 		CG_XP_Init();
+	}
+
+	// Always run game event checks for kills and duel victories
+	CG_XP_CheckGameEvents();
+
+	if (!cg_drawLevelProfile.integer) {
+		return;
 	}
 
 	float x = cg_levelProfileX.value;
