@@ -1,49 +1,59 @@
-gfx/hud/rpg_hud_box
+gfx/rpg_hud/panel_bg
 {
 	nopicmip
-	cull disable
+	nomipmaps
 	{
-		map gfx/hud/rpg_hud_box.tga
+		map gfx/rpg_hud/panel_bg.tga
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
 
-gfx/hud/rpg_bar_bg
+gfx/rpg_hud/leaderboard_bg
 {
 	nopicmip
-	cull disable
+	nomipmaps
 	{
-		map gfx/hud/rpg_bar_bg.tga
+		map gfx/rpg_hud/leaderboard_bg.tga
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
 
-gfx/hud/rpg_bar_fill
+gfx/rpg_hud/bar_bg
 {
 	nopicmip
-	cull disable
+	nomipmaps
 	{
-		map gfx/hud/rpg_bar_fill.tga
+		map gfx/rpg_hud/bar_bg.tga
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
 
-gfx/hud/avatar_default
+gfx/rpg_hud/bar_fill
 {
 	nopicmip
-	cull disable
+	nomipmaps
 	{
-		map gfx/hud/avatar_default.jpg
+		map gfx/rpg_hud/bar_fill.tga
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
 
-gfx/hud/avatar_sith
+gfx/rpg_hud/avatar_frame
 {
 	nopicmip
-	cull disable
+	nomipmaps
 	{
-		map gfx/hud/avatar_sith.jpg
+		map gfx/rpg_hud/avatar_frame.tga
+		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+	}
+}
+
+gfx/rpg_hud/avatar_default
+{
+	nopicmip
+	nomipmaps
+	{
+		map gfx/rpg_hud/avatar_default.tga
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
@@ -51,19 +61,62 @@ gfx/hud/avatar_sith
 gfx/rpg_hud/wanted_bg
 {
 	nopicmip
-	cull disable
+	nomipmaps
 	{
 		map gfx/rpg_hud/wanted_bg.tga
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
 
-gfx/rpg_hud/panel_bg
+gfx/rpg_hud/shop_bg
 {
 	nopicmip
-	cull disable
+	nomipmaps
 	{
-		map gfx/rpg_hud/panel_bg.tga
+		map gfx/rpg_hud/shop_bg.tga
 		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
 	}
 }
+
+gfx/rpg_hud/quest_bg
+{
+	nopicmip
+	nomipmaps
+	{
+		map gfx/rpg_hud/quest_bg.tga
+		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+	}
+}
+
+gfx/rpg_hud/ach_bg
+{
+	nopicmip
+	nomipmaps
+	{
+		map gfx/rpg_hud/ach_bg.tga
+		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+	}
+}
+
+gfx/rpg_hud/adv_bg
+{
+	nopicmip
+	nomipmaps
+	{
+		map gfx/rpg_hud/adv_bg.tga
+		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+	}
+}
+
+gfx/rpg_hud/potato
+{
+	nopicmip
+	nomipmaps
+	{
+		map gfx/rpg_hud/potato.tga
+		blendFunc GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA
+	}
+}
+
+
+

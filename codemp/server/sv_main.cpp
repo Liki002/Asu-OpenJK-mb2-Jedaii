@@ -1261,6 +1261,10 @@ void SV_Frame(int msec) {
   if (!com_dedicated->integer)
     SV_BotFrame(sv.time + sv.timeResidual);
 
+  extern void SV_Ranked_Party_Heartbeat(void);
+  SV_Ranked_Party_Heartbeat();
+
+
   // if time is about to hit the 32nd bit, kick all clients
   // and clear sv.time, rather
   // than checking for negative time wraparound everywhere.

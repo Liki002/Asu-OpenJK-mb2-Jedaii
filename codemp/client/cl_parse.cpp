@@ -871,14 +871,16 @@ void CL_ParseCommandString( msg_t *msg ) {
 	} else if ( !Q_strncmp( s, "stats_close", 11 ) ) {
 		Cvar_Set( "cg_drawStats", "0" );
 	} else if ( !Q_strncmp( s, "toast_win", 9 ) ) {
-		int eloDelta = 0, cr = 0, xp = 0;
+		int eloDelta = 0, cr = 0, xp = 0, hp = 0, bp = 0;
 		char oppBuf[64] = "";
-		sscanf( s, "toast_win %d %d %d \"%63[^\"]\"", &eloDelta, &cr, &xp, oppBuf );
+		sscanf( s, "toast_win %d %d %d \"%63[^\"]\" %d %d", &eloDelta, &cr, &xp, oppBuf, &hp, &bp );
 		g_rpgToast.active       = qtrue;
 		g_rpgToast.isWin        = qtrue;
 		g_rpgToast.eloDelta     = eloDelta;
 		g_rpgToast.credits      = cr;
 		g_rpgToast.xp           = xp;
+		g_rpgToast.health       = hp;
+		g_rpgToast.bp           = bp;
 		g_rpgToast.startTimeMs  = cls.realtime;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
 	} else if ( !Q_strncmp( s, "toast_lose", 10 ) ) {
@@ -890,9 +892,12 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgToast.eloDelta     = eloDelta;
 		g_rpgToast.credits      = cr;
 		g_rpgToast.xp           = xp;
+		g_rpgToast.health       = 0;
+		g_rpgToast.bp           = 0;
 		g_rpgToast.startTimeMs  = cls.realtime;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
-	} else if ( !Q_strncmp( s, "inspect_data", 12 ) ) {
+	}
+ else if ( !Q_strncmp( s, "inspect_data", 12 ) ) {
 		int tNum = 0, lvl = 1, fr = 1000;
 		char rankBuf[32] = "";
 		char nameBuf[64] = "";
@@ -931,8 +936,232 @@ void CL_ParseCommandString( msg_t *msg ) {
 	} else if ( !Q_strncmp( s, "bounty_close", 12 ) ) {
 		g_rpgBounty.active = qfalse;
 		Cvar_Set( "cg_drawBounty", "0" );
+	} else if ( !Q_strncmp( s, "potato_holder", 13 ) ) {
+		int holder = -1;
+		sscanf( s, "potato_holder %d", &holder );
+		g_hotPotatoHolder = holder;
+	} else if ( !Q_strncmp( s, "shop_clear", 10 ) ) {
+		g_rpgShop.count = 0;
+	} else if ( !Q_strncmp( s, "shop_entry", 10 ) ) {
+		if ( g_rpgShop.count < 20 ) {
+			rpgShopItem_t *item = &g_rpgShop.items[g_rpgShop.count];
+			int pr = 0, sb = 0;
+			char keyBuf[32] = "", dispBuf[64] = "";
+			int num = sscanf( s, "shop_entry %d %d \"%31[^\"]\" \"%63[^\"]\"", &pr, &sb, keyBuf, dispBuf );
+			if ( num >= 4 ) {
+				item->price = pr;
+				item->sellBack = sb;
+				Q_strncpyz( item->key, keyBuf, sizeof( item->key ) );
+				Q_strncpyz( item->display, dispBuf, sizeof( item->display ) );
+				g_rpgShop.count++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "shop_open", 9 ) ) {
+		int cr = 0;
+		sscanf( s, "shop_open %d", &cr );
+		g_rpgShop.credits = cr;
+		g_rpgShop.scroll = 0;
+		g_rpgShop.active = qtrue;
+		Cvar_Set( "cg_drawShop", "1" );
+	} else if ( !Q_strncmp( s, "stats_data", 10 ) ) {
+		char nameBuf[64] = "", titleBuf[64] = "", favBuf[64] = "", rivalBuf[64] = "";
+		int lvl = 1, xp = 0, elo = 1000, cr = 0, w = 0, l = 0, k = 0, d = 0, streak = 0, tw = 0, rc = 0;
+		int num = sscanf( s, "stats_data \"%63[^\"]\" %d %d \"%63[^\"]\" %d %d %d %d %d %d %d \"%63[^\"]\" %d \"%63[^\"]\" %d",
+			nameBuf, &lvl, &xp, titleBuf, &elo, &cr, &w, &l, &k, &d, &streak, favBuf, &tw, rivalBuf, &rc );
+		if ( num >= 11 ) {
+			Q_strncpyz( g_rpgStats.name, nameBuf, sizeof( g_rpgStats.name ) );
+			g_rpgStats.level = lvl;
+			g_rpgStats.xp = xp;
+			Q_strncpyz( g_rpgStats.rankTitle, titleBuf, sizeof( g_rpgStats.rankTitle ) );
+			g_rpgStats.elo = elo;
+			g_rpgStats.credits = cr;
+			g_rpgStats.wins = w;
+			g_rpgStats.losses = l;
+			g_rpgStats.kills = k;
+			g_rpgStats.deaths = d;
+			g_rpgStats.highestStreak = streak;
+			Q_strncpyz( g_rpgStats.favWeapon, favBuf[0] ? favBuf : "None", sizeof( g_rpgStats.favWeapon ) );
+			g_rpgStats.triviaWins = tw;
+			Q_strncpyz( g_rpgStats.topRivalName, rivalBuf[0] ? rivalBuf : "None", sizeof( g_rpgStats.topRivalName ) );
+			g_rpgStats.topRivalCount = rc;
+			g_rpgStats.active = qtrue;
+			Cvar_Set( "cg_drawStats", "1" );
+		}
+	} else if ( !Q_strncmp( s, "adv_node", 8 ) ) {
+		char titleBuf[64] = "", descBuf[1024] = "", c1[256] = "", c2[256] = "", c3[256] = "";
+		int num = sscanf( s, "adv_node \"%63[^\"]\" \"%1023[^\"]\" \"%255[^\"]\" \"%255[^\"]\" \"%255[^\"]\"",
+			titleBuf, descBuf, c1, c2, c3 );
+		if ( num >= 2 ) {
+			Q_strncpyz( g_rpgAdv.title, titleBuf, sizeof( g_rpgAdv.title ) );
+			Q_strncpyz( g_rpgAdv.text, descBuf, sizeof( g_rpgAdv.text ) );
+			Q_strncpyz( g_rpgAdv.choice1, c1, sizeof( g_rpgAdv.choice1 ) );
+			Q_strncpyz( g_rpgAdv.choice2, c2, sizeof( g_rpgAdv.choice2 ) );
+			Q_strncpyz( g_rpgAdv.choice3, c3, sizeof( g_rpgAdv.choice3 ) );
+			g_rpgAdv.active = qtrue;
+			Cvar_Set( "cg_drawAdv", "1" );
+		}
+
+
+	} else if ( !Q_strncmp( s, "party_clear", 11 ) ) {
+		g_rpgParty.active = qfalse;
+		g_rpgParty.memberCount = 0;
+	} else if ( !Q_strncmp( s, "party_info", 10 ) ) {
+		Cmd_TokenizeString( s );
+		int argc = Cmd_Argc();
+		if ( argc >= 5 ) {
+			Q_strncpyz( g_rpgParty.teamName, Cmd_Argv( 1 ), sizeof( g_rpgParty.teamName ) );
+			int colIdx = atoi( Cmd_Argv( 2 ) );
+			g_rpgParty.teamColorIdx = ( colIdx >= 0 && colIdx < 8 ) ? colIdx : 0;
+			g_rpgParty.score = atoi( Cmd_Argv( 3 ) );
+			int cnt = atoi( Cmd_Argv( 4 ) );
+			if ( cnt < 0 ) cnt = 0;
+			if ( cnt > MAX_PARTY_MEMBERS ) cnt = MAX_PARTY_MEMBERS;
+			g_rpgParty.memberCount = cnt;
+
+			int argIdx = 5;
+			for ( int i = 0; i < cnt && argIdx + 6 < argc; i++ ) {
+				rpgPartyMember_t *m = &g_rpgParty.members[i];
+				m->clientNum = atoi( Cmd_Argv( argIdx++ ) );
+				Q_strncpyz( m->name, Cmd_Argv( argIdx++ ), sizeof( m->name ) );
+				m->level = atoi( Cmd_Argv( argIdx++ ) );
+				m->health = atoi( Cmd_Argv( argIdx++ ) );
+				m->maxHealth = atoi( Cmd_Argv( argIdx++ ) );
+				m->bp = atoi( Cmd_Argv( argIdx++ ) );
+				m->maxBP = atoi( Cmd_Argv( argIdx++ ) );
+				if ( m->maxHealth <= 0 ) m->maxHealth = 100;
+				if ( m->maxBP <= 0 ) m->maxBP = 100;
+			}
+			g_rpgParty.active = qtrue;
+		}
+
+
+	} else if ( !Q_strncmp( s, "shop_close", 10 ) ) {
+
+		g_rpgShop.active = qfalse;
+		Cvar_Set( "cg_drawShop", "0" );
+	} else if ( !Q_strncmp( s, "quest_clear", 11 ) ) {
+		g_rpgQuestInv.questCount = 0;
+	} else if ( !Q_strncmp( s, "quest_entry", 11 ) ) {
+		if ( g_rpgQuestInv.questCount < 10 ) {
+			rpgQuestEntry_t *q = &g_rpgQuestInv.quests[g_rpgQuestInv.questCount];
+			int qid = 0, pr = 0, gl = 1, rCr = 0, rFr = 0, isDone = 0;
+			char modeBuf[16] = "", descBuf[80] = "";
+			int num = sscanf( s, "quest_entry %d %d %d %d %d %d \"%15[^\"]\" \"%79[^\"]\"", &qid, &pr, &gl, &rCr, &rFr, &isDone, modeBuf, descBuf );
+			if ( num >= 8 ) {
+				q->id = qid; q->prog = pr; q->goal = gl; q->rewardCr = rCr; q->rewardFr = rFr; q->done = (isDone != 0) ? qtrue : qfalse;
+				Q_strncpyz( q->mode, modeBuf, sizeof( q->mode ) );
+				Q_strncpyz( q->desc, descBuf, sizeof( q->desc ) );
+				g_rpgQuestInv.questCount++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "quest_open", 10 ) ) {
+		g_rpgQuestInv.activeTab = 0; // Daily Quests tab
+		g_rpgQuestInv.active = qtrue;
+		Cvar_Set( "cg_drawQuestInv", "1" );
+	} else if ( !Q_strncmp( s, "quest_close", 11 ) ) {
+		g_rpgQuestInv.active = qfalse;
+		Cvar_Set( "cg_drawQuestInv", "0" );
+	} else if ( !Q_strncmp( s, "inv_clear", 9 ) ) {
+		g_rpgQuestInv.invCount = 0;
+	} else if ( !Q_strncmp( s, "inv_entry", 9 ) ) {
+		if ( g_rpgQuestInv.invCount < 20 ) {
+			rpgInvEntry_t *item = &g_rpgQuestInv.inv[g_rpgQuestInv.invCount];
+			int q = 0;
+			char keyBuf[32] = "", dispBuf[64] = "";
+			int num = sscanf( s, "inv_entry %d \"%31[^\"]\" \"%63[^\"]\"", &q, keyBuf, dispBuf );
+			if ( num >= 3 ) {
+				item->qty = q;
+				Q_strncpyz( item->key, keyBuf, sizeof( item->key ) );
+				Q_strncpyz( item->display, dispBuf, sizeof( item->display ) );
+				g_rpgQuestInv.invCount++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "inv_open", 8 ) ) {
+		g_rpgQuestInv.activeTab = 1; // Inventory tab
+		g_rpgQuestInv.active = qtrue;
+		Cvar_Set( "cg_drawQuestInv", "1" );
+	} else if ( !Q_strncmp( s, "inv_close", 9 ) ) {
+		g_rpgQuestInv.active = qfalse;
+		Cvar_Set( "cg_drawQuestInv", "0" );
+	} else if ( !Q_strncmp( s, "ach_clear", 9 ) ) {
+		g_rpgAch.count = 0;
+	} else if ( !Q_strncmp( s, "ach_entry", 9 ) ) {
+		if ( g_rpgAch.count < 30 ) {
+			rpgAchEntry_t *e = &g_rpgAch.entries[g_rpgAch.count];
+			int rCr = 0, isUnl = 0;
+			char nameBuf[64] = "";
+			int num = sscanf( s, "ach_entry %d %d \"%63[^\"]\"", &rCr, &isUnl, nameBuf );
+			if ( num >= 3 ) {
+				e->rewardCr = rCr;
+				e->unlocked = (isUnl != 0) ? qtrue : qfalse;
+				Q_strncpyz( e->name, nameBuf, sizeof( e->name ) );
+				g_rpgAch.count++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "ach_open", 8 ) ) {
+		g_rpgAch.active = qtrue;
+		Cvar_Set( "cg_drawAch", "1" );
+	} else if ( !Q_strncmp( s, "ach_close", 9 ) ) {
+		g_rpgAch.active = qfalse;
+		Cvar_Set( "cg_drawAch", "0" );
+	} else if ( !Q_strncmp( s, "topcr_clear", 11 ) ) {
+		g_rpgTopCredits.count = 0;
+	} else if ( !Q_strncmp( s, "topcr_entry", 11 ) ) {
+		if ( g_rpgTopCredits.count < 10 ) {
+			topCreditsEntry_t *e = &g_rpgTopCredits.entries[g_rpgTopCredits.count];
+			int rNum = 0, cr = 0;
+			char nameBuf[64] = "";
+			int num = sscanf( s, "topcr_entry %d %d \"%63[^\"]\"", &rNum, &cr, nameBuf );
+			if ( num >= 3 ) {
+				e->rank = rNum;
+				e->credits = cr;
+				Q_strncpyz( e->name, nameBuf, sizeof( e->name ) );
+				g_rpgTopCredits.count++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "topcr_open", 10 ) ) {
+		g_rpgTopCredits.active = qtrue;
+		Cvar_Set( "cg_drawTopCredits", "1" );
+	} else if ( !Q_strncmp( s, "topcr_close", 11 ) ) {
+		g_rpgTopCredits.active = qfalse;
+		Cvar_Set( "cg_drawTopCredits", "0" );
+	} else if ( !Q_strncmp( s, "toppotato_clear", 15 ) ) {
+		g_rpgTopPotato.count = 0;
+	} else if ( !Q_strncmp( s, "toppotato_entry", 15 ) ) {
+		if ( g_rpgTopPotato.count < 10 ) {
+			topPotatoEntry_t *e = &g_rpgTopPotato.entries[g_rpgTopPotato.count];
+			int rNum = 0, tk = 0;
+			char nameBuf[64] = "";
+			int num = sscanf( s, "toppotato_entry %d %d \"%63[^\"]\"", &rNum, &tk, nameBuf );
+			if ( num >= 3 ) {
+				e->rank = rNum;
+				e->ticks = tk;
+				Q_strncpyz( e->name, nameBuf, sizeof( e->name ) );
+				g_rpgTopPotato.count++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "toppotato_open", 14 ) ) {
+		g_rpgTopPotato.active = qtrue;
+		Cvar_Set( "cg_drawTopPotato", "1" );
+	} else if ( !Q_strncmp( s, "toppotato_close", 15 ) ) {
+		g_rpgTopPotato.active = qfalse;
+		Cvar_Set( "cg_drawTopPotato", "0" );
+	} else if ( !Q_strncmp( s, "adv_open", 8 ) ) {
+		char titleBuf[64] = "", textBuf[256] = "", c1Buf[64] = "", c2Buf[64] = "", c3Buf[64] = "";
+		sscanf( s, "adv_open \"%63[^\"]\" \"%255[^\"]\" \"%63[^\"]\" \"%63[^\"]\" \"%63[^\"]\"", titleBuf, textBuf, c1Buf, c2Buf, c3Buf );
+		Q_strncpyz( g_rpgAdv.title, titleBuf, sizeof( g_rpgAdv.title ) );
+		Q_strncpyz( g_rpgAdv.text, textBuf, sizeof( g_rpgAdv.text ) );
+		Q_strncpyz( g_rpgAdv.choice1, c1Buf, sizeof( g_rpgAdv.choice1 ) );
+		Q_strncpyz( g_rpgAdv.choice2, c2Buf, sizeof( g_rpgAdv.choice2 ) );
+		Q_strncpyz( g_rpgAdv.choice3, c3Buf, sizeof( g_rpgAdv.choice3 ) );
+		g_rpgAdv.active = qtrue;
+		Cvar_Set( "cg_drawAdv", "1" );
+	} else if ( !Q_strncmp( s, "adv_close", 9 ) ) {
+		g_rpgAdv.active = qfalse;
+		Cvar_Set( "cg_drawAdv", "0" );
 	}
 }
+
 
 
 /*

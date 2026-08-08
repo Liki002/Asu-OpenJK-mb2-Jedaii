@@ -1773,15 +1773,27 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
     return;
   }
 
-  // Intercept Ranked Chat Commands
-  if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team")) {
+  // Intercept Ranked Chat Commands & Translate Emojis
+  if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team") || !Q_stricmp(Cmd_Argv(0), "tell")) {
     const char *chatText = Cmd_Argv(1);
     if (chatText && (chatText[0] == '!' || chatText[0] == '#')) {
         if (SV_Ranked_ProcessCommand(cl, chatText)) {
             return; // Command handled internally
         }
     }
+
+    // Auto-translate chat emoji shortcodes (:fire:, :swords:, :crown:, :potato:, etc.)
+    const char *rawArgs = Cmd_Args();
+    if (rawArgs && rawArgs[0]) {
+      extern void SV_Ranked_TranslateEmojis(const char *inStr, char *outStr, int outSize);
+      char translated[MAX_STRING_CHARS];
+      SV_Ranked_TranslateEmojis(rawArgs, translated, sizeof(translated));
+      if (strcmp(rawArgs, translated) != 0) {
+        Cmd_TokenizeString(va("%s %s", Cmd_Argv(0), translated));
+      }
+    }
   }
+
 
   // Intercept Engine Duel Acceptance
   if (!Q_stricmp(Cmd_Argv(0), "duelaccept")) {

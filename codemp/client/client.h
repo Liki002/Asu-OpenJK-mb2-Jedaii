@@ -600,6 +600,14 @@ qboolean CL_VideoRecording( void );
 extern cvar_t *cg_drawRPGHUD;
 extern cvar_t *cg_drawLeaderboard;
 extern cvar_t *cg_drawStats;
+extern cvar_t *cg_drawBounty;
+extern cvar_t *cg_drawShop;
+extern cvar_t *cg_drawQuestInv;
+extern cvar_t *cg_drawAch;
+extern cvar_t *cg_drawTopCredits;
+extern cvar_t *cg_drawTopPotato;
+extern cvar_t *cg_drawAdv;
+
 
 typedef struct {
 	int rank;
@@ -613,24 +621,32 @@ extern topLeaderboardEntry_t g_topLeaderboard[10];
 extern int g_topLeaderboardCount;
 
 typedef struct {
+	qboolean active;
 	int xp;
 	int level;
 	int credits;
 	int fr;
+	int elo;
 	int wins;
 	int losses;
 	int kills;
 	int deaths;
 	int curStreak;
 	int highStreak;
+	int highestStreak;
 	int triviaWins;
 	int rivalCount;
-	char rankTitle[32];
+	int topRivalCount;
+	char rankTitle[64];
 	char displayName[64];
+	char name[64];
 	char rivalName[64];
+	char topRivalName[64];
+	char favWeapon[64];
 } rpgPlayerStats_t;
 
 extern rpgPlayerStats_t g_rpgStats;
+
 
 void SCR_DrawRPGHUDOverlay( void );
 void SCR_DrawLeaderboardOverlay( void );
@@ -643,11 +659,14 @@ typedef struct {
 	int      eloDelta;
 	int      credits;
 	int      xp;
+	int      health;
+	int      bp;
 	char     opponentName[64];
 	int      startTimeMs;   // cls.realtime when toast was triggered
 } rpgToastNotif_t;
 
 extern rpgToastNotif_t g_rpgToast;
+
 
 // --- Inspect Duelist Hover Card ---
 typedef struct {
@@ -681,3 +700,151 @@ typedef struct {
 } rpgBountyOverlay_t;
 
 extern rpgBountyOverlay_t g_rpgBounty;
+
+// --- Hot Potato Holder ---
+extern int g_hotPotatoHolder;
+
+// --- Shop Overlay ---
+typedef struct {
+	char key[32];
+	char display[64];
+	int  price;
+	int  sellBack;
+} rpgShopItem_t;
+
+typedef struct {
+	qboolean active;
+	int      credits;
+	int      count;
+	int      scroll;
+	rpgShopItem_t items[20];
+} rpgShopOverlay_t;
+
+extern rpgShopOverlay_t g_rpgShop;
+
+#define MAX_PARTY_MEMBERS 6
+typedef struct {
+	char name[64];
+	int  clientNum;
+	int  level;
+	int  health;
+	int  maxHealth;
+	int  bp;
+	int  maxBP;
+} rpgPartyMember_t;
+
+typedef struct {
+	qboolean active;
+	char     teamName[64];
+	int      teamColorIdx;
+	int      score;
+	int      memberCount;
+	rpgPartyMember_t members[MAX_PARTY_MEMBERS];
+} rpgPartyOverlay_t;
+
+extern rpgPartyOverlay_t g_rpgParty;
+extern int g_rpgMouseX;
+extern int g_rpgMouseY;
+
+
+
+
+
+
+
+
+// --- Quests & Inventory Overlay (Combined Tabbed Modal) ---
+typedef struct {
+	int  id;
+	char desc[80];
+	int  prog;
+	int  goal;
+	int  rewardCr;
+	int  rewardFr;
+	char mode[16];
+	qboolean done;
+} rpgQuestEntry_t;
+
+typedef struct {
+	char key[32];
+	char display[64];
+	int  qty;
+} rpgInvEntry_t;
+
+typedef struct {
+	qboolean active;
+	int      activeTab; // 0 = Quests, 1 = Inventory
+	int      questCount;
+	rpgQuestEntry_t quests[10];
+	int      invCount;
+	rpgInvEntry_t inv[20];
+} rpgQuestInvOverlay_t;
+
+extern rpgQuestInvOverlay_t g_rpgQuestInv;
+
+// --- Achievements Overlay ---
+typedef struct {
+	char name[64];
+	int  rewardCr;
+	qboolean unlocked;
+} rpgAchEntry_t;
+
+typedef struct {
+	qboolean active;
+	int      count;
+	rpgAchEntry_t entries[30];
+} rpgAchOverlay_t;
+
+extern rpgAchOverlay_t g_rpgAch;
+
+// --- Top Credits Overlay ---
+typedef struct {
+	int  rank;
+	int  credits;
+	char name[64];
+} topCreditsEntry_t;
+
+typedef struct {
+	qboolean active;
+	int      count;
+	topCreditsEntry_t entries[10];
+} rpgTopCreditsOverlay_t;
+
+extern rpgTopCreditsOverlay_t g_rpgTopCredits;
+
+// --- Top Potato Overlay ---
+typedef struct {
+	int  rank;
+	int  ticks;
+	char name[64];
+} topPotatoEntry_t;
+
+typedef struct {
+	qboolean active;
+	int      count;
+	topPotatoEntry_t entries[10];
+} rpgTopPotatoOverlay_t;
+
+extern rpgTopPotatoOverlay_t g_rpgTopPotato;
+
+// --- RPG Adventure Choice Card ---
+typedef struct {
+	qboolean active;
+	char     title[64];
+	char     text[256];
+	char     choice1[64];
+	char     choice2[64];
+	char     choice3[64];
+} rpgAdventureOverlay_t;
+
+extern rpgAdventureOverlay_t g_rpgAdv;
+
+// Overlay Drawing Declarations
+void SCR_DrawShopOverlay( void );
+void SCR_DrawQuestInvOverlay( void );
+void SCR_DrawAchievementsOverlay( void );
+void SCR_DrawTopCreditsOverlay( void );
+void SCR_DrawTopPotatoOverlay( void );
+void SCR_DrawAdventureOverlay( void );
+void SCR_DrawHotPotatoOverheadIcon( void );
+

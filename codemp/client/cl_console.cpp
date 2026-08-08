@@ -453,10 +453,20 @@ void CL_ConsolePrint( const char *txt) {
 		txt += 1;
 	}
 
+	// Auto-extract MBII duel kill Block Points (BP) and send to server
+	if ( txt && strstr( txt, "BP remaining) was" ) != NULL ) {
+		int hp2 = 0, bp2 = 0;
+		const char *match = strstr( txt, "with " );
+		if ( match && sscanf( match, "with %dHP and %dBP remaining", &hp2, &bp2 ) == 2 ) {
+			CL_AddReliableCommand( va( "my_bp %d", bp2 ), qfalse );
+		}
+	}
+
 	// for some demos we don't want to ever show anything on the console
 	if ( cl_noprint && cl_noprint->integer ) {
 		return;
 	}
+
 
 	if (!con.initialized) {
 		con.color[0] =

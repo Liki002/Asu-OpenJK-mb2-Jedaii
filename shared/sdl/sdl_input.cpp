@@ -637,8 +637,27 @@ uint8_t ConvertUTF32ToExpectedCharset( uint32_t utf32 )
 {
 	switch ( utf32 )
 	{
+		// Visual Emoji Mappings (0x80 .. 0x8F)
+		case 0x1F525: return 0x80; // 🔥 Fire
+		case 0x1F954: return 0x81; // 🥔 Potato
+		case 0x2694:  return 0x82; // ⚔ Swords
+		case 0x1F451: return 0x83; // 👑 Crown
+		case 0x1F3C6: return 0x84; // 🏆 Trophy
+		case 0x1F480: return 0x85; // 💀 Skull
+		case 0x1F4AF: return 0x86; // 💯 100
+		case 0x2764:  return 0x87; // ❤️ Heart
+		case 0x2B50:  return 0x88; // ⭐ Star
+		case 0x26A1:  return 0x89; // ⚡ Zap
+		case 0x1F4AA: return 0x8A; // 💪 Flex
+		case 0x1F3AE: return 0x8B; // 🎮 Game / GG
+		case 0x1F44D: return 0x8C; // 👍 Thumbsup
+		case 0x1F3AF: return 0x8D; // 🎯 Target
+		case 0x1F680: return 0x8E; // 🚀 Rocket
+		case 0x1F4A9: return 0x8F; // 💩 Poop
+
 		// Cyrillic characters - mapped to Windows-1251 encoding
 		case 0x0410: return 192;
+
 		case 0x0411: return 193;
 		case 0x0412: return 194;
 		case 0x0413: return 195;

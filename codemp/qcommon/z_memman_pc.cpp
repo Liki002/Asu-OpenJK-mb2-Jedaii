@@ -271,14 +271,21 @@ void *Z_Malloc(int iSize, memtag_t eTag, qboolean bZeroit /* = qfalse */, int iU
 				}
 			}
 
-			// sigh, dunno what else to try, I guess we'll have to give up and report this as an out-of-mem error...
-			//
-			// findlabel:  "recovermem"
+			// Fallback for temporary workspace memory to prevent fatal out-of-memory crash
+			if (eTag == TAG_TEMP_WORKSPACE || eTag == TAG_TEMP_IMAGE || eTag == TAG_TEMP_PNG || eTag == TAG_BSP_DISKIMAGE || eTag == TAG_SND_RAWDATA) {
+
+				Com_Printf(S_COLOR_YELLOW "Z_Malloc(): Warning: Large temporary alloc (%d bytes, TAG_%s) attempting OS fallback...\n", iSize, psTagStrings[eTag]);
+				pMemory = (zoneHeader_t *) (bZeroit ? calloc(iRealSize, 1) : malloc(iRealSize));
+				if (pMemory) {
+					break;
+				}
+			}
 
 			Com_Printf(S_COLOR_RED"Z_Malloc(): Failed to alloc %d bytes (TAG_%s) !!!!!\n", iSize, psTagStrings[eTag]);
 			Z_Details_f();
 			Com_Error(ERR_FATAL,"(Repeat): Z_Malloc(): Failed to alloc %d bytes (TAG_%s) !!!!!\n", iSize, psTagStrings[eTag]);
 			return NULL;
+
 		}
 	}
 

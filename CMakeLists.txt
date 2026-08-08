@@ -214,6 +214,8 @@ if(MSVC)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /EHsc /arch:SSE2")
 
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc /arch:SSE2")
+	set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LARGEADDRESSAWARE")
+
 
 	# We don't try to control symbol visibility under MSVC.
 	set(OPENJK_VISIBILITY_FLAGS "")

@@ -1320,6 +1320,74 @@ void CL_KeyDownEvent( int key, unsigned time )
 		return;
 	}
 
+	// Adventure UI Modal Choice Shortcuts (Keys 1, 2, 3 OR Mouse Click) - ONLY when NOT typing in chat or console!
+	if ( g_rpgAdv.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+
+
+		if ( key == A_MOUSE1 ) {
+			float winW = 460.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 130.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+
+
+			float cY1 = winY + 110.0f;
+			float cY2 = cY1 + 18.0f;
+			float cY3 = cY2 + 18.0f;
+
+			if ( g_rpgAdv.choice1[0] && mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= cY1 - 2.0f && my <= cY1 + 16.0f ) {
+				CL_AddReliableCommand( "!choose 1", qfalse );
+				return;
+			}
+			if ( g_rpgAdv.choice2[0] && mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= cY2 - 2.0f && my <= cY2 + 16.0f ) {
+				CL_AddReliableCommand( "!choose 2", qfalse );
+				return;
+			}
+			if ( g_rpgAdv.choice3[0] && mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= cY3 - 2.0f && my <= cY3 + 16.0f ) {
+				CL_AddReliableCommand( "!choose 3", qfalse );
+				return;
+			}
+		}
+
+		if ( g_rpgAdv.choice1[0] == '\0' ) {
+			// Adventure outcome card — press 1, Space, Enter, or ESC to dismiss
+			if ( key == '1' || key == A_KP_1 || key == A_SPACE || key == A_ENTER || key == A_ESCAPE || key == A_MOUSE1 ) {
+				g_rpgAdv.active = qfalse;
+				Cvar_Set( "cg_drawAdv", "0" );
+				return;
+			}
+		} else {
+			if ( key == '1' || key == A_KP_1 ) {
+				CL_AddReliableCommand( "!choose 1", qfalse );
+				return;
+			} else if ( key == '2' || key == A_KP_2 ) {
+				CL_AddReliableCommand( "!choose 2", qfalse );
+				return;
+			} else if ( key == '3' || key == A_KP_3 ) {
+				CL_AddReliableCommand( "!choose 3", qfalse );
+				return;
+			}
+		}
+	}
+
+
+
+	// Mouse Wheel Scrolling for Shop UI Overlay
+	if ( g_rpgShop.active ) {
+		if ( key == A_MWHEELUP ) {
+			if ( g_rpgShop.scroll > 0 ) g_rpgShop.scroll--;
+			return;
+		} else if ( key == A_MWHEELDOWN ) {
+			int maxScroll = g_rpgShop.count - 7;
+			if ( maxScroll < 0 ) maxScroll = 0;
+			if ( g_rpgShop.scroll < maxScroll ) g_rpgShop.scroll++;
+			return;
+		}
+	}
+
+
 	// keys can still be used for bound actions
 	if ( cls.state == CA_CINEMATIC && !Key_GetCatcher() ) {
 		if ( !com_cameraMode->integer ) {
@@ -1356,8 +1424,46 @@ void CL_KeyDownEvent( int key, unsigned time )
 			}
 			if ( cg_drawStats && cg_drawStats->integer ) {
 				Cvar_Set( "cg_drawStats", "0" );
+				g_rpgStats.active = qfalse;
 				return;
 			}
+
+			if ( cg_drawBounty && cg_drawBounty->integer ) {
+				Cvar_Set( "cg_drawBounty", "0" );
+				g_rpgBounty.active = qfalse;
+				return;
+			}
+			if ( cg_drawShop && cg_drawShop->integer ) {
+				Cvar_Set( "cg_drawShop", "0" );
+				g_rpgShop.active = qfalse;
+				return;
+			}
+			if ( cg_drawQuestInv && cg_drawQuestInv->integer ) {
+				Cvar_Set( "cg_drawQuestInv", "0" );
+				g_rpgQuestInv.active = qfalse;
+				return;
+			}
+			if ( cg_drawAch && cg_drawAch->integer ) {
+				Cvar_Set( "cg_drawAch", "0" );
+				g_rpgAch.active = qfalse;
+				return;
+			}
+			if ( cg_drawTopCredits && cg_drawTopCredits->integer ) {
+				Cvar_Set( "cg_drawTopCredits", "0" );
+				g_rpgTopCredits.active = qfalse;
+				return;
+			}
+			if ( cg_drawTopPotato && cg_drawTopPotato->integer ) {
+				Cvar_Set( "cg_drawTopPotato", "0" );
+				g_rpgTopPotato.active = qfalse;
+				return;
+			}
+			if ( cg_drawAdv && cg_drawAdv->integer ) {
+				Cvar_Set( "cg_drawAdv", "0" );
+				g_rpgAdv.active = qfalse;
+				return;
+			}
+
 
 			if ( cls.state == CA_ACTIVE && !clc.demoplaying )
 				UIVM_SetActiveMenu( UIMENU_INGAME );

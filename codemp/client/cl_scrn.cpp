@@ -52,10 +52,30 @@ cvar_t		*cg_rpg_rank;
 cvar_t		*cg_drawLeaderboard;
 cvar_t		*cg_drawStats;
 cvar_t		*cg_drawBounty;
-rpgPlayerStats_t g_rpgStats;
-rpgToastNotif_t  g_rpgToast   = {qfalse, qfalse, 0, 0, 0, "", 0};
+cvar_t		*cg_drawShop;
+cvar_t		*cg_drawQuestInv;
+cvar_t		*cg_drawAch;
+cvar_t		*cg_drawTopCredits;
+cvar_t		*cg_drawTopPotato;
+cvar_t		*cg_drawAdv;
+rpgPlayerStats_t g_rpgStats = {qfalse, 0, 1, 0, 1000, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "Padawan", "", "", "", "", "Lightsaber"};
+
+
+rpgToastNotif_t  g_rpgToast   = {qfalse, qfalse, 0, 0, 0, 0, 0, "", 0};
+
 rpgInspectCard_t g_rpgInspect = {qfalse, 1, 1000, "Padawan", "", 0};
 rpgBountyOverlay_t g_rpgBounty = {qfalse, qfalse, 0, {}};
+int                   g_hotPotatoHolder  = -1;
+rpgShopOverlay_t      g_rpgShop          = {qfalse, 0, 0, {}};
+rpgQuestInvOverlay_t  g_rpgQuestInv      = {qfalse, 0, 0, {}, 0, {}};
+rpgAchOverlay_t       g_rpgAch           = {qfalse, 0, {}};
+rpgTopCreditsOverlay_t g_rpgTopCredits   = {qfalse, 0, {}};
+rpgTopPotatoOverlay_t g_rpgTopPotato     = {qfalse, 0, {}};
+rpgAdventureOverlay_t g_rpgAdv           = {qfalse, "", "", "", "", ""};
+rpgPartyOverlay_t     g_rpgParty         = {qfalse, "", 0, 0, {}};
+
+
+
 
 /*
 ================
@@ -90,6 +110,8 @@ void SCR_FillRect( float x, float y, float width, float height, const float *col
 }
 
 
+void SCR_DrawPartyOverlay( void );
+
 /*
 ================
 SCR_DrawPic
@@ -113,6 +135,37 @@ static void SCR_DrawChar( int x, int y, float size, int ch ) {
 	float	ax, ay, aw, ah;
 
 	ch &= 255;
+
+	if ( ch >= 0x80 && ch <= 0x8F ) {
+		static qhandle_t s_hEmojiShaders[16] = { 0 };
+		static const char *s_emojiShaderNames[16] = {
+			"gfx/rpg_hud/emoji_fire",
+			"gfx/rpg_hud/emoji_potato",
+			"gfx/rpg_hud/emoji_swords",
+			"gfx/rpg_hud/emoji_crown",
+			"gfx/rpg_hud/emoji_trophy",
+			"gfx/rpg_hud/emoji_skull",
+			"gfx/rpg_hud/emoji_100",
+			"gfx/rpg_hud/emoji_heart",
+			"gfx/rpg_hud/emoji_star",
+			"gfx/rpg_hud/emoji_zap",
+			"gfx/rpg_hud/emoji_flex",
+			"gfx/rpg_hud/emoji_gg",
+			"gfx/rpg_hud/emoji_thumbsup",
+			"gfx/rpg_hud/emoji_target",
+			"gfx/rpg_hud/emoji_rocket",
+			"gfx/rpg_hud/emoji_poop"
+		};
+		int idx = ch - 0x80;
+		if ( s_hEmojiShaders[idx] <= 0 && re && re->RegisterShader ) {
+			s_hEmojiShaders[idx] = re->RegisterShader( s_emojiShaderNames[idx] );
+		}
+		if ( s_hEmojiShaders[idx] > 0 ) {
+			re->DrawStretchPic( x, y, size * 1.5f, size * 1.5f, 0, 0, 1, 1, s_hEmojiShaders[idx] );
+			return;
+		}
+
+	}
 
 	if ( ch == ' ' ) {
 		return;
@@ -154,6 +207,39 @@ void SCR_DrawSmallChar( int x, int y, int ch ) {
 
 	ch &= 255;
 
+	if ( ch >= 0x80 && ch <= 0x8F ) {
+		static qhandle_t s_hEmojiShadersSmall[16] = { 0 };
+		static const char *s_emojiShaderNamesSmall[16] = {
+			"gfx/rpg_hud/emoji_fire",
+			"gfx/rpg_hud/emoji_potato",
+			"gfx/rpg_hud/emoji_swords",
+			"gfx/rpg_hud/emoji_crown",
+			"gfx/rpg_hud/emoji_trophy",
+			"gfx/rpg_hud/emoji_skull",
+			"gfx/rpg_hud/emoji_100",
+			"gfx/rpg_hud/emoji_heart",
+			"gfx/rpg_hud/emoji_star",
+			"gfx/rpg_hud/emoji_zap",
+			"gfx/rpg_hud/emoji_flex",
+			"gfx/rpg_hud/emoji_gg",
+			"gfx/rpg_hud/emoji_thumbsup",
+			"gfx/rpg_hud/emoji_target",
+			"gfx/rpg_hud/emoji_rocket",
+			"gfx/rpg_hud/emoji_poop"
+		};
+		int idx = ch - 0x80;
+		if ( s_hEmojiShadersSmall[idx] <= 0 && re && re->RegisterShader ) {
+			s_hEmojiShadersSmall[idx] = re->RegisterShader( s_emojiShaderNamesSmall[idx] );
+		}
+		if ( s_hEmojiShadersSmall[idx] > 0 ) {
+			re->DrawStretchPic( x * con.xadjust, y * con.yadjust,
+								SMALLCHAR_WIDTH * 1.6f * con.xadjust, SMALLCHAR_HEIGHT * 1.6f * con.yadjust,
+								0, 0, 1, 1, s_hEmojiShadersSmall[idx] );
+			return;
+		}
+
+	}
+
 	if ( ch == ' ' ) {
 		return;
 	}
@@ -181,6 +267,7 @@ void SCR_DrawSmallChar( int x, int y, int ch ) {
 					   fcol + size, frow + size2,
 					   cls.charSetShader );
 }
+
 
 
 /*
@@ -496,6 +583,13 @@ void SCR_Init( void ) {
 	cg_drawLeaderboard = Cvar_Get ("cg_drawLeaderboard", "0", 0);
 	cg_drawStats = Cvar_Get ("cg_drawStats", "0", 0);
 	cg_drawBounty = Cvar_Get ("cg_drawBounty", "0", 0);
+	cg_drawShop = Cvar_Get ("cg_drawShop", "0", 0);
+	cg_drawQuestInv = Cvar_Get ("cg_drawQuestInv", "0", 0);
+	cg_drawAch = Cvar_Get ("cg_drawAch", "0", 0);
+	cg_drawTopCredits = Cvar_Get ("cg_drawTopCredits", "0", 0);
+	cg_drawTopPotato = Cvar_Get ("cg_drawTopPotato", "0", 0);
+	cg_drawAdv = Cvar_Get ("cg_drawAdv", "0", 0);
+
 
 	Cmd_AddCommand( "rpg_hud_style", SCR_RPGHUDStyle_f, "Select RPG HUD style: classic (0) or bottom (1)" );
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
@@ -670,7 +764,13 @@ static qhandle_t s_hBarFill = 0;
 static qhandle_t s_hAvatar = 0;
 static qhandle_t s_hAvatarFrame = 0;
 static qhandle_t s_hModalBg = 0;
-static qboolean  s_shadersTried = qfalse;
+static qhandle_t s_hWantedBg = 0;
+static qhandle_t s_hShopBg = 0;
+static qhandle_t s_hQuestBg = 0;
+static qhandle_t s_hAchBg = 0;
+static qhandle_t s_hTopBg = 0;
+static qhandle_t s_hAdvBg = 0;
+static qhandle_t s_hPotatoPic = 0;
 
 void SCR_DrawRPGHUDOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) {
@@ -680,21 +780,30 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		return;
 	}
 
-	// Register HD TGA Shaders dynamically once active
-	if ( !s_shadersTried ) {
-		s_shadersTried = qtrue;
-		if ( re && re->RegisterShader ) {
-			s_hBox         = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
-			s_hBarBg       = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
-			s_hBarFill     = re->RegisterShader( "gfx/rpg_hud/bar_fill" );
-			s_hAvatar      = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
-			s_hAvatarFrame = re->RegisterShader( "gfx/rpg_hud/avatar_frame" );
-			s_hModalBg     = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
-		}
+	// Register HD TGA Shaders dynamically whenever active
+	if ( s_hBox <= 0 && re && re->RegisterShader ) {
+		s_hBox         = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
+		s_hBarBg       = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
+		s_hBarFill     = re->RegisterShader( "gfx/rpg_hud/bar_fill" );
+		s_hAvatar      = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
+		s_hAvatarFrame = re->RegisterShader( "gfx/rpg_hud/avatar_frame" );
+		s_hModalBg     = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
 	}
 
+
+
+
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
-	float panelW = (style == 1) ? 175.0f : 140.0f;
+	cvar_t *clName = Cvar_Get( "name", "Padawan", 0 );
+	const char *playerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
+	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
+
+	float nameW = (float)SCR_Strlen( playerName ) * 5.2f * 0.60f;
+	float titleW = (float)SCR_Strlen( rankTitle ) * 4.3f * 0.60f;
+	float maxStrW = (nameW > titleW) ? nameW : titleW;
+	float panelW = (style == 1) ? (maxStrW + 115.0f) : (maxStrW + 55.0f);
+	if ( panelW < 160.0f ) panelW = 160.0f;
+
 	float panelH = 46.0f;
 
 	// Preset position defaults
@@ -716,9 +825,6 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : defaultX;
 	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : defaultY;
 
-	cvar_t *clName = Cvar_Get( "name", "Padawan", 0 );
-	const char *playerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
-	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
 	int level = cg_rpg_level ? cg_rpg_level->integer : 1;
 	int fr = cg_rpg_fr ? cg_rpg_fr->integer : 1000;
 	int xp = cg_rpg_xp ? cg_rpg_xp->integer : 0;
@@ -769,13 +875,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float textX = avatarX + avatarSize + 8.0f;
 
 		// Line 1: Player Name + Level Badge
-		char nameLvlStr[96];
-		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%.22s ^3Lv %d", playerName, level );
+		char nameLvlStr[128];
+		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%s ^3Lv %d", playerName, level );
 		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, nameLvlStr, whiteColor );
 
 		// Line 2: Rank Title & Force Rating ELO
-		char rankStr[96];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d", rankTitle, fr );
+		char rankStr[128];
+		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %d", rankTitle, fr );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
 
 		// Line 3: Sleek Horizontal XP Bar (TGA Background)
@@ -855,20 +961,20 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float textX = avatarX + avatarSize + 6.0f;
 
 	// Line 1: Player Name
-	char nameStr[96];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%.18s", playerName );
+	char nameStr[128];
+	Com_sprintf( nameStr, sizeof(nameStr), "^7%s", playerName );
 	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
 
 	// Line 2: Rank Title & Force Rating ELO
-	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%.18s ^7|^2 %d", rankTitle, fr );
-	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.3f, rankStr, whiteColor );
+	char rankStr[128];
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %d", rankTitle, fr );
+	SCR_DrawVirtualString( textX, panelY + 15.0f, 4.3f, rankStr, whiteColor );
 
-	// Line 3: Dynamic XP Progress Bar (TGA Background)
+	// Line 3: XP Bar
 	float barX = textX;
-	float barY = panelY + 28.5f;
-	float barW = panelX + panelW - barX - 5.0f;
-	float barH = 8.0f;
+	float barY = panelY + 28.0f;
+	float barW = panelX + panelW - barX - 6.0f;
+	float barH = 7.0f;
 
 	if ( s_hBarBg ) {
 		SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
@@ -895,6 +1001,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	char xpText[64];
 	Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", (int)s_visualXP, xpMax );
+
 	float textWidthPixels = (strlen(xpText) * 3.8f * 0.60f);
 	float xpTextX = barX + barW - textWidthPixels - 3.0f;
 	if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
@@ -1011,18 +1118,15 @@ Renders sleek modal popup stats sheet card with full player statistics
 ==================
 */
 void SCR_DrawStatsOverlay( void ) {
-	if ( cls.state != CA_ACTIVE ) {
-		return;
-	}
-	if ( !cg_drawStats || !cg_drawStats->integer ) {
-		return;
-	}
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawStats || !cg_drawStats->integer ) return;
+	if ( !g_rpgStats.active ) return;
 
-	// Modal Window Dimensions (Centered 420x240 card layout)
-	float winW = 420.0f;
-	float winH = 240.0f;
+	// Modal Window Dimensions (Centered 490x270 card layout)
+	float winW = 490.0f;
+	float winH = 270.0f;
 	float winX = 320.0f - winW * 0.5f;
-	float winY = 120.0f;
+	float winY = 105.0f;
 
 	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
 
@@ -1030,7 +1134,7 @@ void SCR_DrawStatsOverlay( void ) {
 	if ( s_hBox ) {
 		SCR_DrawPic( winX, winY, winW, winH, s_hBox );
 	} else {
-		vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.90f };
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
 		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
 	}
 
@@ -1040,14 +1144,14 @@ void SCR_DrawStatsOverlay( void ) {
 	// Title
 	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	SCR_DrawVirtualString( winX + 115.0f, winY + 6.0f, 6.0f, "^3CHARACTER STATISTICS", yellowCol );
+	SCR_DrawVirtualString( winX + 130.0f, winY + 6.0f, 6.0f, "^3CHARACTER STATISTICS", yellowCol );
 
 	// Close Button instruction
 	SCR_DrawVirtualString( winX + winW - 55.0f, winY + 6.0f, 5.0f, "^1[ESC]", yellowCol );
 
 	// LEFT COLUMN - Profile Picture & Title card
 	float avatarX = winX + 15.0f;
-	float avatarY = winY + 38.0f;
+	float avatarY = winY + 36.0f;
 	float avatarSize = 54.0f;
 
 	vec4_t avBg = { 0.06f, 0.12f, 0.25f, 0.50f };
@@ -1062,78 +1166,60 @@ void SCR_DrawStatsOverlay( void ) {
 	// Level Badge
 	char lvlStr[32];
 	Com_sprintf( lvlStr, sizeof(lvlStr), "^3Lv %d", g_rpgStats.level );
-	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 8.0f, 5.0f, lvlStr, whiteColor );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 6.0f, 5.0f, lvlStr, whiteColor );
 
 	// Display Name
-	char dName[64];
-	Com_sprintf( dName, sizeof(dName), "^7%.32s", g_rpgStats.displayName );
-	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 22.0f, 4.8f, dName, whiteColor );
+	char dName[128];
+	Com_sprintf( dName, sizeof(dName), "^7%s", g_rpgStats.name[0] ? g_rpgStats.name : "Player" );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 20.0f, 4.8f, dName, whiteColor );
 
 	// Rank Title
-	char rTitle[64];
-	Com_sprintf( rTitle, sizeof(rTitle), "^3%.16s", g_rpgStats.rankTitle );
-	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 34.0f, 4.5f, rTitle, whiteColor );
+	char rTitle[128];
+	Com_sprintf( rTitle, sizeof(rTitle), "^3%s", g_rpgStats.rankTitle[0] ? g_rpgStats.rankTitle : "Padawan" );
+	SCR_DrawVirtualString( avatarX, avatarY + avatarSize + 32.0f, 4.5f, rTitle, whiteColor );
 
 	// Divider line between columns
 	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
-	SCR_FillRect( winX + 115.0f, winY + 34.0f, 1.0f, winH - 52.0f, divColor );
+	SCR_FillRect( winX + 130.0f, winY + 34.0f, 1.0f, winH - 52.0f, divColor );
 
 	// RIGHT COLUMN - Statistics Rows
-	float rightX = winX + 125.0f;
-	float rightY = winY + 38.0f;
+	float rightX = winX + 140.0f;
+	float rightY = winY + 36.0f;
 
-	// Row 1: XP Progress Bar
-	SCR_DrawVirtualString( rightX, rightY, 4.8f, "^5XP Progress:", whiteColor );
-	float barX = rightX + 75.0f;
-	float barY = rightY + 1.0f;
-	float barW = 100.0f;
-	float barH = 10.0f;
-	vec4_t barBg = { 0.02f, 0.04f, 0.08f, 0.90f };
-	SCR_FillRect( barX, barY, barW, barH, barBg );
-
-	int xpVal = g_rpgStats.xp % 1000;
-	float xpRatio = (float)xpVal / 1000.0f;
-	if ( xpRatio < 0.0f ) xpRatio = 0.0f;
-	if ( xpRatio > 1.0f ) xpRatio = 1.0f;
-	if ( xpRatio > 0.0f ) {
-		vec4_t barFill = { 0.00f, 0.70f, 1.00f, 0.95f };
-		SCR_FillRect( barX + 1.5f, barY + 1.5f, (barW - 3.0f) * xpRatio, barH - 3.0f, barFill );
-	}
-	char xpLabel[32];
-	Com_sprintf( xpLabel, sizeof(xpLabel), "^2%d^7/^21000 XP", xpVal );
-	SCR_DrawVirtualString( barX + barW + 5.0f, rightY, 4.8f, xpLabel, whiteColor );
+	// Row 1: XP Progress & Credits
+	SCR_DrawVirtualString( rightX, rightY, 4.6f, va( "^5Total XP: ^2%d XP  ^7|  ^5Credits: ^3%d CR", g_rpgStats.xp, g_rpgStats.credits ), whiteColor );
 
 	// Row 2: Force Rating (ELO)
-	SCR_DrawVirtualString( rightX, rightY + 18.0f, 4.8f, va( "^5Force Rating: ^7%d FR", g_rpgStats.fr ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 17.0f, 4.6f, va( "^5Force Rating: ^7%d ELO", g_rpgStats.elo ), whiteColor );
 
-	// Row 3: Credits Balance
-	SCR_DrawVirtualString( rightX, rightY + 36.0f, 4.8f, va( "^5Credits: ^7%d Credits", g_rpgStats.credits ), whiteColor );
-
-	// Row 4: Wins / Losses
+	// Row 3: Wins / Losses
 	float wlRatio = g_rpgStats.losses > 0 ? (float)g_rpgStats.wins / (float)g_rpgStats.losses : (float)g_rpgStats.wins;
-	SCR_DrawVirtualString( rightX, rightY + 54.0f, 4.8f, va( "^5Wins / Losses: ^2%d^7/^1%d ^5(Ratio: %.2f)", g_rpgStats.wins, g_rpgStats.losses, wlRatio ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 34.0f, 4.6f, va( "^5Wins / Losses: ^2%d^7/^1%d ^5(W/L: %.2f)", g_rpgStats.wins, g_rpgStats.losses, wlRatio ), whiteColor );
 
-	// Row 5: Kills / Deaths
+	// Row 4: Kills / Deaths
 	float kdRatio = g_rpgStats.deaths > 0 ? (float)g_rpgStats.kills / (float)g_rpgStats.deaths : (float)g_rpgStats.kills;
-	SCR_DrawVirtualString( rightX, rightY + 72.0f, 4.8f, va( "^5Kills / Deaths: ^2%d^7/^1%d ^5(K/D: %.2f)", g_rpgStats.kills, g_rpgStats.deaths, kdRatio ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 51.0f, 4.6f, va( "^5Kills / Deaths: ^2%d^7/^1%d ^5(K/D: %.2f)", g_rpgStats.kills, g_rpgStats.deaths, kdRatio ), whiteColor );
 
-	// Row 6: Kill Streak
-	SCR_DrawVirtualString( rightX, rightY + 90.0f, 4.8f, va( "^5Kill Streak: ^7Current: ^2%d ^7| Highest: ^3%d", g_rpgStats.curStreak, g_rpgStats.highStreak ), whiteColor );
+	// Row 5: Highest Streak
+	SCR_DrawVirtualString( rightX, rightY + 68.0f, 4.6f, va( "^5Highest Streak: ^3%d wins", g_rpgStats.highestStreak ), whiteColor );
+
+	// Row 6: Favorite Weapon
+	SCR_DrawVirtualString( rightX, rightY + 85.0f, 4.6f, va( "^5Fav Weapon: ^7%s", g_rpgStats.favWeapon[0] ? g_rpgStats.favWeapon : "Lightsaber" ), whiteColor );
 
 	// Row 7: Trivia Wins
-	SCR_DrawVirtualString( rightX, rightY + 108.0f, 4.8f, va( "^5Trivia Wins: ^7%d Wins", g_rpgStats.triviaWins ), whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 102.0f, 4.6f, va( "^5Trivia Wins: ^7%d Wins", g_rpgStats.triviaWins ), whiteColor );
 
 	// Row 8: Main Rival
 	char rivalStr[128];
-	if ( g_rpgStats.rivalCount > 0 ) {
-		Com_sprintf( rivalStr, sizeof(rivalStr), "^5Main Rival: ^7%.16s ^5(%d duels)", g_rpgStats.rivalName, g_rpgStats.rivalCount );
+	if ( g_rpgStats.topRivalCount > 0 ) {
+		Com_sprintf( rivalStr, sizeof(rivalStr), "^5Top Rival: ^1%s ^5(%d duels)", g_rpgStats.topRivalName, g_rpgStats.topRivalCount );
 	} else {
-		Com_sprintf( rivalStr, sizeof(rivalStr), "^5Main Rival: ^7None" );
+		Com_sprintf( rivalStr, sizeof(rivalStr), "^5Top Rival: ^7None" );
 	}
-	SCR_DrawVirtualString( rightX, rightY + 126.0f, 4.8f, rivalStr, whiteColor );
+	SCR_DrawVirtualString( rightX, rightY + 119.0f, 4.6f, rivalStr, whiteColor );
 
 	// Footer instruction
-	SCR_DrawVirtualString( winX + 90.0f, winY + winH - 12.0f, 4.5f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!stats^7 to close", whiteColor );
+	SCR_DrawVirtualString( winX + 110.0f, winY + winH - 12.0f, 4.5f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!stats^7 to close", whiteColor );
 }
 
 //=======================================================
@@ -1229,13 +1315,21 @@ void SCR_DrawToastOverlay( void ) {
 	SCR_DrawVirtualString( textX, panelY + 15.0f, 4.0f, vsStr, whiteA );
 
 	// Row 3: Stats row
-	char statsStr[96];
+	char statsStr[128];
 	if ( g_rpgToast.isWin ) {
-		Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp );
+		if ( g_rpgToast.bp > 0 ) {
+			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP ^7(^2%d HP ^7| ^5%d BP^7)", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp, g_rpgToast.health, g_rpgToast.bp );
+		} else if ( g_rpgToast.health > 0 ) {
+			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP ^7(^2%d HP^7)", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp, g_rpgToast.health );
+		} else {
+			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp );
+		}
+
 	} else {
 		Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^1%d ^7| ^6+%d CR", g_rpgToast.eloDelta, g_rpgToast.credits );
 	}
 	SCR_DrawVirtualString( textX, panelY + 26.0f, 4.0f, statsStr, whiteA );
+
 
 	// Progress bar (shrinks left to right as duration elapses)
 	float barW    = panelW - 4.0f;
@@ -1313,21 +1407,11 @@ void SCR_DrawInspectOverlay( void ) {
 	float x = 320.0f - w * 0.5f;
 	float y = 195.0f;                  // Directly under default crosshair name
 
-	// Draw see-through glass background panel behind inspect text
-	float padX = 8.0f;
-	float boxX = x - padX;
-	float boxW = w + padX * 2.0f;
-	float boxY = y - 3.0f;
-	float boxH = 16.0f;
-
-	vec4_t glassBg = { 0.03f, 0.06f, 0.12f, 0.45f * alpha };
-	vec4_t glassBorder = { 0.10f, 0.60f, 0.90f, 0.35f * alpha };
-	SCR_DrawRoundedGlassPanel( boxX, boxY, boxW, boxH, 3.0f, glassBg, glassBorder );
-
-	// Make the text transparent (max 0.75 alpha)
-	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha * 0.75f };
+	// Render see-through transparent text only (no UI box)
+	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha * 0.70f };
 	SCR_DrawVirtualString( x, y, fontSize, statStr, whiteA );
 }
+
 
 
 //=======================================================
@@ -1356,14 +1440,10 @@ void SCR_DrawBountyOverlay( void ) {
 		borderColor[0] = 0.00f; borderColor[1] = 0.70f; borderColor[2] = 1.00f; borderColor[3] = 0.85f;
 	}
 
-	static qhandle_t s_hWantedBg = 0;
-	static qboolean  s_hWantedBgTried = qfalse;
-	if ( !s_hWantedBgTried ) {
-		s_hWantedBgTried = qtrue;
-		if ( re && re->RegisterShader ) {
-			s_hWantedBg = re->RegisterShader( "gfx/rpg_hud/wanted_bg" );
-		}
+	if ( s_hWantedBg <= 0 && re && re->RegisterShader ) {
+		s_hWantedBg = re->RegisterShader( "gfx/rpg_hud/wanted_bg" );
 	}
+
 	if ( s_hWantedBg > 0 ) {
 		SCR_DrawPic( winX, winY, winW, winH, s_hWantedBg );
 	} else {
@@ -1448,7 +1528,763 @@ void SCR_DrawBountyOverlay( void ) {
 }
 
 
+/*
+==================
+SCR_DrawShopOverlay
+
+Interactive Glassmorphic Shop UI with long item description support
+==================
+*/
+void SCR_DrawShopOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawShop || !cg_drawShop->integer ) return;
+	if ( !g_rpgShop.active ) return;
+
+	// Calculate dynamic width based on item descriptions & keys
+	float maxStrWidth = 140.0f;
+	for ( int i = 0; i < g_rpgShop.count; i++ ) {
+		rpgShopItem_t *item = &g_rpgShop.items[i];
+		float strW = (float)SCR_Strlen( item->display ) * 4.8f * 0.60f;
+		if ( strW > maxStrWidth ) maxStrWidth = strW;
+	}
+
+	float winW = maxStrWidth + 240.0f;
+	if ( winW < 460.0f ) winW = 460.0f;
+	if ( winW > 620.0f ) winW = 620.0f;
+
+	float winH = 260.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 110.0f;
+
+	if ( s_hShopBg <= 0 && re && re->RegisterShader ) {
+		s_hShopBg = re->RegisterShader( "gfx/rpg_hud/shop_bg" );
+	}
+
+	if ( s_hShopBg > 0 ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hShopBg );
+	} else {
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
+		vec4_t borderColor = { 0.10f, 0.75f, 0.95f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
+
+
+	vec4_t headerBg = { 0.08f, 0.20f, 0.38f, 0.88f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
+
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	SCR_DrawVirtualString( winX + 16.0f, winY + 7.0f, 6.0f, "^5RANKED SHOP", yellowCol );
+	char crStr[64];
+	Com_sprintf( crStr, sizeof( crStr ), "^7Credits: ^5%d CR", g_rpgShop.credits );
+	SCR_DrawVirtualString( winX + winW - 140.0f, winY + 7.0f, 5.5f, crStr, whiteColor );
+	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 7.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	// Headers
+	float startY = winY + 36.0f;
+	SCR_DrawVirtualString( winX + 16.0f, startY, 4.8f, "^5KEY", yellowCol );
+	SCR_DrawVirtualString( winX + 90.0f, startY, 4.8f, "^5DESCRIPTION", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 130.0f, startY, 4.8f, "^5PRICE", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 65.0f, startY, 4.8f, "^5SELL", yellowCol );
+
+	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
+	SCR_FillRect( winX + 10.0f, startY + 14.0f, winW - 20.0f, 1.0f, divColor );
+
+	if ( g_rpgShop.count == 0 ) {
+		SCR_DrawVirtualString( winX + winW * 0.5f - 60.0f, startY + 40.0f, 5.2f, "^7No shop items available.", whiteColor );
+	} else {
+		int maxVisible = 7;
+		int startIdx = g_rpgShop.scroll;
+		if ( startIdx < 0 ) startIdx = 0;
+
+		float rowY = startY + 20.0f;
+		for ( int i = startIdx; i < g_rpgShop.count && (i - startIdx) < maxVisible; i++ ) {
+			rpgShopItem_t *item = &g_rpgShop.items[i];
+
+			// Key
+			SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^3%s", item->key ), whiteColor );
+
+			// Description
+			SCR_DrawVirtualString( winX + 90.0f, rowY, 4.8f, va( "^7%s", item->display ), whiteColor );
+
+			// Price & Sell
+			SCR_DrawVirtualString( winX + winW - 130.0f, rowY, 4.8f, va( "^5%d cr", item->price ), whiteColor );
+			SCR_DrawVirtualString( winX + winW - 65.0f, rowY, 4.8f, va( "^3%d", item->sellBack ), whiteColor );
+
+			rowY += 18.0f;
+		}
+
+		// Draw Vertical Scroll Bar Indicator if more items than fit
+		if ( g_rpgShop.count > maxVisible ) {
+			float barX = winX + winW - 12.0f;
+			float barY = startY + 20.0f;
+			float barH = maxVisible * 18.0f;
+			vec4_t scrollBg = { 0.05f, 0.10f, 0.20f, 0.60f };
+			vec4_t scrollThumb = { 0.10f, 0.70f, 1.00f, 0.85f };
+			SCR_FillRect( barX, barY, 4.0f, barH, scrollBg );
+
+			float calcH = barH * ((float)maxVisible / (float)g_rpgShop.count);
+			float thumbH = (calcH < 12.0f) ? 12.0f : calcH;
+
+			float maxScroll = (float)(g_rpgShop.count - maxVisible);
+			float thumbY = barY + (barH - thumbH) * ((float)startIdx / maxScroll);
+			SCR_FillRect( barX, thumbY, 4.0f, thumbH, scrollThumb );
+		}
+	}
+
+	SCR_DrawVirtualString( winX + 20.0f, winY + winH - 12.0f, 4.5f, "^7Scroll ^3[Mouse Wheel]^7 | ^3!buy <key>^7 to purchase | ^3!sell <key>^7 to sell | ^1[ESC]", whiteColor );
+}
+
+
+
+/*
+==================
+SCR_DrawQuestInvOverlay
+
+Combined Tabbed Modal for !quests and !inventory
+==================
+*/
+void SCR_DrawQuestInvOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawQuestInv || !cg_drawQuestInv->integer ) return;
+	if ( !g_rpgQuestInv.active ) return;
+
+	float winW = 500.0f;
+	float winH = 260.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 110.0f;
+
+	if ( s_hQuestBg <= 0 && re && re->RegisterShader ) {
+		s_hQuestBg = re->RegisterShader( "gfx/rpg_hud/quest_bg" );
+	}
+
+	if ( s_hQuestBg > 0 ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hQuestBg );
+	} else {
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
+		vec4_t borderColor = { 0.20f, 0.80f, 0.50f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
+
+
+	// Header Tabs
+	vec4_t tabBgActive = { 0.10f, 0.35f, 0.25f, 0.90f };
+	vec4_t tabBgInactive = { 0.05f, 0.10f, 0.18f, 0.60f };
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	qboolean isQuestsTab = ( g_rpgQuestInv.activeTab == 0 ) ? qtrue : qfalse;
+
+
+	SCR_DrawRoundedGlassPanel( winX + 6.0f, winY + 4.0f, 140.0f, 22.0f, 3.0f, isQuestsTab ? tabBgActive : tabBgInactive, NULL );
+	SCR_DrawVirtualString( winX + 16.0f, winY + 7.0f, 5.2f, isQuestsTab ? "^2[1] DAILY QUESTS" : "^7[1] DAILY QUESTS", whiteColor );
+
+	SCR_DrawRoundedGlassPanel( winX + 152.0f, winY + 4.0f, 130.0f, 22.0f, 3.0f, !isQuestsTab ? tabBgActive : tabBgInactive, NULL );
+	SCR_DrawVirtualString( winX + 162.0f, winY + 7.0f, 5.2f, !isQuestsTab ? "^2[2] INVENTORY" : "^7[2] INVENTORY", whiteColor );
+
+	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 7.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	float startY = winY + 36.0f;
+	vec4_t divColor = { 0.20f, 0.80f, 0.50f, 0.35f };
+	SCR_FillRect( winX + 10.0f, startY, winW - 20.0f, 1.0f, divColor );
+
+	if ( isQuestsTab ) {
+		// Daily Quests Content
+		if ( g_rpgQuestInv.questCount == 0 ) {
+			SCR_DrawVirtualString( winX + winW * 0.5f - 80.0f, startY + 40.0f, 5.2f, "^7No daily quests available.", whiteColor );
+		} else {
+			float rowY = startY + 12.0f;
+			for ( int i = 0; i < g_rpgQuestInv.questCount && i < 7; i++ ) {
+				rpgQuestEntry_t *q = &g_rpgQuestInv.quests[i];
+
+				if ( q->done ) {
+					SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^3%d. ^2[DONE] ^7%s", q->id, q->desc ), whiteColor );
+					SCR_DrawVirtualString( winX + winW - 100.0f, rowY, 4.8f, va( "^6[%s]", q->mode ), whiteColor );
+				} else {
+					SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^3%d. ^7%s", q->id, q->desc ), whiteColor );
+					SCR_DrawVirtualString( winX + 270.0f, rowY, 4.8f, va( "^5[%d/%d]", q->prog, q->goal ), whiteColor );
+					SCR_DrawVirtualString( winX + 340.0f, rowY, 4.8f, va( "^3+%d CR ^2+%d FR", q->rewardCr, q->rewardFr ), whiteColor );
+					SCR_DrawVirtualString( winX + winW - 75.0f, rowY, 4.8f, va( "^6[%s]", q->mode ), whiteColor );
+				}
+				rowY += 24.0f;
+			}
+		}
+	} else {
+		// Inventory Content
+		if ( g_rpgQuestInv.invCount == 0 ) {
+			SCR_DrawVirtualString( winX + winW * 0.5f - 60.0f, startY + 40.0f, 5.2f, "^7Inventory is empty.", whiteColor );
+		} else {
+			float rowY = startY + 12.0f;
+			for ( int i = 0; i < g_rpgQuestInv.invCount && i < 8; i++ ) {
+				rpgInvEntry_t *item = &g_rpgQuestInv.inv[i];
+				SCR_DrawVirtualString( winX + 24.0f, rowY, 5.0f, va( "^7%s", item->display ), whiteColor );
+				SCR_DrawVirtualString( winX + 220.0f, rowY, 5.0f, va( "^3(!use %s)", item->key ), whiteColor );
+				SCR_DrawVirtualString( winX + winW - 90.0f, rowY, 5.0f, va( "^5x%d", item->qty ), whiteColor );
+				rowY += 20.0f;
+			}
+		}
+	}
+
+	SCR_DrawVirtualString( winX + 20.0f, winY + winH - 12.0f, 4.5f, "^7Press ^31^7 or ^32^7 to switch tabs  |  Type ^3!use <item>^7  |  ^1[ESC]^7 to close", whiteColor );
+}
+
+
+/*
+==================
+SCR_DrawAchievementsOverlay
+
+Achievements Modal List
+==================
+*/
+void SCR_DrawAchievementsOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawAch || !cg_drawAch->integer ) return;
+	if ( !g_rpgAch.active ) return;
+
+	float winW = 440.0f;
+	float winH = 260.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 110.0f;
+
+	if ( s_hAchBg <= 0 && re && re->RegisterShader ) {
+		s_hAchBg = re->RegisterShader( "gfx/rpg_hud/ach_bg" );
+	}
+
+	if ( s_hAchBg > 0 ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hAchBg );
+	} else {
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
+		vec4_t borderColor = { 0.85f, 0.65f, 0.10f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
+
+
+	vec4_t headerBg = { 0.35f, 0.25f, 0.05f, 0.88f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
+
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	SCR_DrawVirtualString( winX + 16.0f, winY + 7.0f, 6.0f, "^3ACHIEVEMENTS & BADGES", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 7.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	float startY = winY + 36.0f;
+	vec4_t divColor = { 0.85f, 0.65f, 0.10f, 0.35f };
+	SCR_FillRect( winX + 10.0f, startY, winW - 20.0f, 1.0f, divColor );
+
+	if ( g_rpgAch.count == 0 ) {
+		SCR_DrawVirtualString( winX + winW * 0.5f - 80.0f, startY + 40.0f, 5.2f, "^7No achievements loaded.", whiteColor );
+	} else {
+		float rowY = startY + 12.0f;
+		for ( int i = 0; i < g_rpgAch.count && i < 9; i++ ) {
+			rpgAchEntry_t *e = &g_rpgAch.entries[i];
+
+			if ( e->unlocked ) {
+				SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^2[UNLOCKED] ^7%s", e->name ), whiteColor );
+				SCR_DrawVirtualString( winX + winW - 90.0f, rowY, 4.8f, va( "^5+%d CR", e->rewardCr ), whiteColor );
+			} else {
+				SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^7[LOCKED] %s", e->name ), whiteColor );
+				SCR_DrawVirtualString( winX + winW - 90.0f, rowY, 4.8f, va( "^3+%d CR", e->rewardCr ), whiteColor );
+			}
+			rowY += 18.0f;
+		}
+	}
+
+	SCR_DrawVirtualString( winX + winW * 0.5f - 80.0f, winY + winH - 12.0f, 4.5f, "^7Press ^1[ESC]^7 to close", whiteColor );
+}
+
+
+/*
+==================
+SCR_DrawTopCreditsOverlay
+
+Top Credits Leaderboard Card
+==================
+*/
+void SCR_DrawTopCreditsOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawTopCredits || !cg_drawTopCredits->integer ) return;
+	if ( !g_rpgTopCredits.active ) return;
+
+	float maxNameW = 140.0f;
+	for ( int i = 0; i < g_rpgTopCredits.count; i++ ) {
+		float strW = (float)SCR_Strlen( g_rpgTopCredits.entries[i].name ) * 4.8f * 0.60f;
+		if ( strW > maxNameW ) maxNameW = strW;
+	}
+
+	float winW = maxNameW + 180.0f;
+	if ( winW < 380.0f ) winW = 380.0f;
+
+	float winH = 240.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 120.0f;
+
+	if ( s_hTopBg <= 0 && re && re->RegisterShader ) {
+		s_hTopBg = re->RegisterShader( "gfx/rpg_hud/top_bg" );
+	}
+
+	if ( s_hTopBg > 0 ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hTopBg );
+	} else {
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
+		vec4_t borderColor = { 0.20f, 0.85f, 0.40f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
+
+
+	vec4_t headerBg = { 0.05f, 0.30f, 0.12f, 0.88f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
+
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	SCR_DrawVirtualString( winX + 16.0f, winY + 7.0f, 6.0f, "^2TOP WEALTHIEST DUELISTS", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 7.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	float startY = winY + 36.0f;
+	SCR_DrawVirtualString( winX + 16.0f, startY, 4.8f, "^5#", yellowCol );
+	SCR_DrawVirtualString( winX + 45.0f, startY, 4.8f, "^5DUELIST NAME", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 110.0f, startY, 4.8f, "^5CREDITS", yellowCol );
+
+	vec4_t divColor = { 0.20f, 0.85f, 0.40f, 0.35f };
+	SCR_FillRect( winX + 10.0f, startY + 14.0f, winW - 20.0f, 1.0f, divColor );
+
+	if ( g_rpgTopCredits.count == 0 ) {
+		SCR_DrawVirtualString( winX + winW * 0.5f - 60.0f, startY + 40.0f, 5.2f, "^7No top credits data.", whiteColor );
+	} else {
+		float rowY = startY + 20.0f;
+		for ( int i = 0; i < g_rpgTopCredits.count && i < 10; i++ ) {
+			topCreditsEntry_t *e = &g_rpgTopCredits.entries[i];
+
+			SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^3%d", e->rank ), whiteColor );
+			SCR_DrawVirtualString( winX + 45.0f, rowY, 4.8f, va( "^7%s", e->name ), whiteColor );
+			SCR_DrawVirtualString( winX + winW - 110.0f, rowY, 4.8f, va( "^5%d CR", e->credits ), whiteColor );
+
+			rowY += 17.0f;
+		}
+	}
+
+	SCR_DrawVirtualString( winX + winW * 0.5f - 80.0f, winY + winH - 12.0f, 4.5f, "^7Press ^1[ESC]^7 to close", whiteColor );
+}
+
+
+/*
+==================
+SCR_DrawTopPotatoOverlay
+
+Top Hot Potato Leaderboard Card
+==================
+*/
+void SCR_DrawTopPotatoOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawTopPotato || !cg_drawTopPotato->integer ) return;
+	if ( !g_rpgTopPotato.active ) return;
+
+	float maxNameW = 140.0f;
+	for ( int i = 0; i < g_rpgTopPotato.count; i++ ) {
+		float strW = (float)SCR_Strlen( g_rpgTopPotato.entries[i].name ) * 4.8f * 0.60f;
+		if ( strW > maxNameW ) maxNameW = strW;
+	}
+
+	float winW = maxNameW + 180.0f;
+	if ( winW < 380.0f ) winW = 380.0f;
+
+	float winH = 240.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 120.0f;
+
+	if ( s_hTopBg <= 0 && re && re->RegisterShader ) {
+		s_hTopBg = re->RegisterShader( "gfx/rpg_hud/top_bg" );
+	}
+
+	if ( s_hTopBg > 0 ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hTopBg );
+	} else {
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
+		vec4_t borderColor = { 1.00f, 0.45f, 0.10f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
+
+	vec4_t headerBg = { 0.40f, 0.15f, 0.05f, 0.88f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
+
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	SCR_DrawVirtualString( winX + 16.0f, winY + 7.0f, 6.0f, "^1TOP HOT POTATO SURVIVORS", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 7.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	float startY = winY + 36.0f;
+	SCR_DrawVirtualString( winX + 16.0f, startY, 4.8f, "^5#", yellowCol );
+	SCR_DrawVirtualString( winX + 45.0f, startY, 4.8f, "^5PLAYER NAME", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 110.0f, startY, 4.8f, "^5TICKS HELD", yellowCol );
+
+	vec4_t divColor = { 1.00f, 0.45f, 0.10f, 0.35f };
+	SCR_FillRect( winX + 10.0f, startY + 14.0f, winW - 20.0f, 1.0f, divColor );
+
+	if ( g_rpgTopPotato.count == 0 ) {
+		SCR_DrawVirtualString( winX + winW * 0.5f - 60.0f, startY + 40.0f, 5.2f, "^7No potato data.", whiteColor );
+	} else {
+		float rowY = startY + 20.0f;
+		for ( int i = 0; i < g_rpgTopPotato.count && i < 10; i++ ) {
+			topPotatoEntry_t *e = &g_rpgTopPotato.entries[i];
+
+			SCR_DrawVirtualString( winX + 16.0f, rowY, 4.8f, va( "^3%d", e->rank ), whiteColor );
+			SCR_DrawVirtualString( winX + 45.0f, rowY, 4.8f, va( "^7%s", e->name ), whiteColor );
+			SCR_DrawVirtualString( winX + winW - 110.0f, rowY, 4.8f, va( "^1%d ticks", e->ticks ), whiteColor );
+
+			rowY += 17.0f;
+		}
+	}
+
+	SCR_DrawVirtualString( winX + winW * 0.5f - 80.0f, winY + winH - 12.0f, 4.5f, "^7Press ^1[ESC]^7 to close", whiteColor );
+}
+
+
+/*
+==================
+SCR_DrawAdventureOverlay
+
+RPG Adventure Choice Card
+==================
+*/
+void SCR_DrawAdventureOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawAdv || !cg_drawAdv->integer ) return;
+	if ( !g_rpgAdv.active ) return;
+
+	float winW = 460.0f;
+	float winH = 220.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 130.0f;
+
+	if ( s_hAdvBg <= 0 && re && re->RegisterShader ) {
+		s_hAdvBg = re->RegisterShader( "gfx/rpg_hud/adv_bg" );
+	}
+
+	if ( s_hAdvBg > 0 ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hAdvBg );
+	} else {
+		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.92f };
+		vec4_t borderColor = { 0.70f, 0.30f, 0.90f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	}
+
+
+	vec4_t headerBg = { 0.30f, 0.10f, 0.40f, 0.88f };
+	SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
+
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+
+	SCR_DrawVirtualString( winX + 16.0f, winY + 7.0f, 6.0f, va( "^6ADVENTURE: ^3%s", g_rpgAdv.title[0] ? g_rpgAdv.title : "Quest" ), yellowCol );
+	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 7.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	// Story Text
+	float startY = winY + 36.0f;
+	SCR_DrawVirtualString( winX + 16.0f, startY, 4.8f, va( "^7%s", g_rpgAdv.text ), whiteColor );
+
+	// Virtual Mouse Position
+	float mx = (float)g_rpgMouseX;
+	float my = (float)g_rpgMouseY;
+
+
+	// Choices
+	float choiceY = winY + 110.0f;
+	if ( g_rpgAdv.choice1[0] ) {
+		qboolean hover = (qboolean)( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= choiceY - 2.0f && my <= choiceY + 16.0f );
+		if ( hover ) {
+			vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.35f };
+			SCR_FillRect( winX + 16.0f, choiceY - 2.0f, winW - 32.0f, 16.0f, hCol );
+			SCR_DrawVirtualString( winX + 24.0f, choiceY, 4.8f, va( "^5[1] %s", g_rpgAdv.choice1 ), whiteColor );
+		} else {
+			SCR_DrawVirtualString( winX + 24.0f, choiceY, 4.8f, va( "^3[1] %s", g_rpgAdv.choice1 ), whiteColor );
+		}
+		choiceY += 18.0f;
+	}
+	if ( g_rpgAdv.choice2[0] ) {
+		qboolean hover = (qboolean)( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= choiceY - 2.0f && my <= choiceY + 16.0f );
+		if ( hover ) {
+			vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.35f };
+			SCR_FillRect( winX + 16.0f, choiceY - 2.0f, winW - 32.0f, 16.0f, hCol );
+			SCR_DrawVirtualString( winX + 24.0f, choiceY, 4.8f, va( "^5[2] %s", g_rpgAdv.choice2 ), whiteColor );
+		} else {
+			SCR_DrawVirtualString( winX + 24.0f, choiceY, 4.8f, va( "^3[2] %s", g_rpgAdv.choice2 ), whiteColor );
+		}
+		choiceY += 18.0f;
+	}
+	if ( g_rpgAdv.choice3[0] ) {
+		qboolean hover = (qboolean)( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= choiceY - 2.0f && my <= choiceY + 16.0f );
+		if ( hover ) {
+			vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.35f };
+			SCR_FillRect( winX + 16.0f, choiceY - 2.0f, winW - 32.0f, 16.0f, hCol );
+			SCR_DrawVirtualString( winX + 24.0f, choiceY, 4.8f, va( "^5[3] %s", g_rpgAdv.choice3 ), whiteColor );
+		} else {
+			SCR_DrawVirtualString( winX + 24.0f, choiceY, 4.8f, va( "^3[3] %s", g_rpgAdv.choice3 ), whiteColor );
+		}
+		choiceY += 18.0f;
+	}
+
+	SCR_DrawVirtualString( winX + 20.0f, winY + winH - 12.0f, 4.5f, "^7Click or press ^31^7, ^32^7, ^33^7 to choose  |  ^1!adv^7 or ^1[ESC]^7 to close", whiteColor );
+
+	// Render Visible Mouse Cursor
+	static qhandle_t s_hMouseCursor = 0;
+	if ( s_hMouseCursor <= 0 && re && re->RegisterShader ) {
+		s_hMouseCursor = re->RegisterShader( "ui/assets/selectcursor.tga" );
+		if ( s_hMouseCursor <= 0 ) s_hMouseCursor = re->RegisterShader( "ui/assets/sizecursor.tga" );
+		if ( s_hMouseCursor <= 0 ) s_hMouseCursor = re->RegisterShader( "ui/assets/cursor.tga" );
+		if ( s_hMouseCursor <= 0 ) s_hMouseCursor = re->RegisterShader( "gfx/2d/cursor" );
+		if ( s_hMouseCursor <= 0 ) s_hMouseCursor = re->RegisterShader( "gfx/rpg_hud/potato" );
+	}
+	if ( s_hMouseCursor > 0 ) {
+		SCR_DrawPic( mx, my, 24.0f, 24.0f, s_hMouseCursor );
+	}
+
+}
+
+
+
+extern bool FX_WorldToScreen(vec3_t worldCoord, float *x, float *y);
+
+/*
+==================
+SCR_DrawHotPotatoOverheadIcon
+
+3D World Space Overhead Floating Potato Icon
+==================
+*/
+void SCR_DrawHotPotatoOverheadIcon( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( g_hotPotatoHolder < 0 ) return;
+	if ( !cl.snap.valid ) return;
+
+	vec3_t headPos;
+	qboolean found = qfalse;
+
+	// Check if local player holds the hot potato
+	if ( g_hotPotatoHolder == cl.snap.ps.clientNum ) {
+		VectorCopy( cl.snap.ps.origin, headPos );
+		headPos[2] += 42.0f; // Static above head
+		found = qtrue;
+	} else {
+		// Search active snapshot for holder's entity
+		for ( int i = 0; i < cl.snap.numEntities; i++ ) {
+			int parseIdx = ( cl.snap.parseEntitiesNum + i ) & ( MAX_PARSE_ENTITIES - 1 );
+			entityState_t *ent = &cl.parseEntities[parseIdx];
+			if ( ent->number == g_hotPotatoHolder ) {
+				VectorCopy( ent->pos.trBase, headPos );
+				headPos[2] += 42.0f; // Static above head
+				found = qtrue;
+				break;
+			}
+		}
+	}
+
+	if ( found ) {
+		float sx = 0.0f, sy = 0.0f;
+		if ( FX_WorldToScreen( headPos, &sx, &sy ) ) {
+			// Calculate perspective distance scaling so icon shrinks when far away
+			vec3_t delta;
+			VectorSubtract( headPos, cl.snap.ps.origin, delta );
+			float dist = VectorLength( delta );
+			float scale = 350.0f / ( dist + 200.0f );
+			if ( scale > 1.1f ) scale = 1.1f;   // Max size when close
+			if ( scale < 0.35f ) scale = 0.35f; // Min size when far away
+
+			float iconSize = 32.0f * scale;
+
+			if ( s_hPotatoPic <= 0 && re && re->RegisterShader ) {
+				s_hPotatoPic = re->RegisterShader( "gfx/rpg_hud/potato" );
+			}
+
+			if ( s_hPotatoPic > 0 ) {
+				SCR_DrawPic( sx - iconSize * 0.5f, sy - iconSize * 0.5f, iconSize, iconSize, s_hPotatoPic );
+			}
+		}
+	}
+
+}
+
+/*
+==================
+SCR_DrawPartyOverlay
+
+WoW-Style RPG Party HUD Overlay
+Customizable position via cg_partyX and cg_partyY cvars
+==================
+*/void SCR_DrawPartyOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+
+	// Real-time automatic BP syncing to server
+	static int s_lastSentBP = -1;
+	int currentBP = cl.snap.ps.stats[STAT_ARMOR];
+	if ( currentBP != s_lastSentBP ) {
+		s_lastSentBP = currentBP;
+		CL_AddReliableCommand( va( "my_bp %d", currentBP ), qfalse );
+	}
+
+
+	if ( !g_rpgParty.active ) return;
+
+	static cvar_t *cg_partyX = NULL;
+	static cvar_t *cg_partyY = NULL;
+	if ( !cg_partyX ) cg_partyX = Cvar_Get( "cg_partyX", "15", CVAR_ARCHIVE );
+	if ( !cg_partyY ) cg_partyY = Cvar_Get( "cg_partyY", "120", CVAR_ARCHIVE );
+
+	float startX = cg_partyX->value;
+	float startY = cg_partyY->value;
+
+	int members = g_rpgParty.memberCount;
+	if ( members <= 0 ) return;
+	if ( members > MAX_PARTY_MEMBERS ) members = MAX_PARTY_MEMBERS;
+	float cardW = 90.0f;
+	float cardH = 16.0f + ( members * 20.0f );
+
+	vec4_t bgCol = { 0.05f, 0.08f, 0.14f, 0.85f };
+	vec4_t borderCol = { 0.20f, 0.65f, 1.00f, 0.80f };
+	vec4_t whiteCol = { 1.00f, 1.00f, 1.00f, 1.00f };
+	vec4_t hpBgCol = { 0.15f, 0.05f, 0.05f, 0.70f };
+	vec4_t hpFillCol = { 0.15f, 0.85f, 0.25f, 0.90f };
+	vec4_t bpBgCol = { 0.05f, 0.15f, 0.25f, 0.70f };
+	vec4_t bpFillCol = { 0.15f, 0.65f, 1.00f, 0.90f };
+
+	SCR_FillRect( startX, startY, cardW, cardH, bgCol );
+	SCR_FillRect( startX, startY, cardW, 1.0f, borderCol );
+	SCR_FillRect( startX, startY + cardH - 1.0f, cardW, 1.0f, borderCol );
+	SCR_FillRect( startX, startY, 1.0f, cardH, borderCol );
+	SCR_FillRect( startX + cardW - 1.0f, startY, 1.0f, cardH, borderCol );
+
+	// Header: Party Name & Score
+	char headerStr[64];
+	Com_sprintf( headerStr, sizeof( headerStr ), "^5%.8s ^7[^3%dP^7]", g_rpgParty.teamName[0] ? g_rpgParty.teamName : "Party", g_rpgParty.score );
+	SCR_DrawVirtualString( startX + 3.0f, startY + 2.0f, 3.2f, headerStr, whiteCol );
+
+	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.40f };
+	SCR_FillRect( startX + 3.0f, startY + 12.0f, cardW - 6.0f, 1.0f, divColor );
+
+	// Render Party Members
+	float rowY = startY + 14.0f;
+	for ( int i = 0; i < members; i++ ) {
+		rpgPartyMember_t *m = &g_rpgParty.members[i];
+
+		// Real-time local player Health & BP update
+		if ( m->clientNum == cl.snap.ps.clientNum ) {
+			m->health = cl.snap.ps.stats[STAT_HEALTH];
+			m->maxHealth = cl.snap.ps.stats[STAT_MAX_HEALTH] > 0 ? cl.snap.ps.stats[STAT_MAX_HEALTH] : 100;
+			m->bp = cl.snap.ps.stats[STAT_ARMOR];
+		}
+
+		char nameBuf[64];
+		Q_strncpyz( nameBuf, m->name[0] ? m->name : "Player", sizeof( nameBuf ) );
+		int nameLen = SCR_Strlen( nameBuf );
+		float fontScale = 3.6f;
+		if ( nameLen > 8 ) fontScale = 3.0f;
+		if ( nameLen > 14 ) fontScale = 2.5f;
+
+		char lineStr[96];
+		Com_sprintf( lineStr, sizeof( lineStr ), "^3L%d ^7%s", m->level, nameBuf );
+		SCR_DrawVirtualString( startX + 3.0f, rowY, fontScale, lineStr, whiteCol );
+
+		// HP Bar (Green) — full width across card
+		float barX = startX + 3.0f;
+		float barY = rowY + 9.0f;
+		float barW = cardW - 6.0f;
+		float barH = 2.5f;
+
+		float hpFrac = ( m->maxHealth > 0 ) ? ( (float)m->health / (float)m->maxHealth ) : 1.0f;
+		if ( hpFrac < 0.0f ) hpFrac = 0.0f;
+		if ( hpFrac > 1.0f ) hpFrac = 1.0f;
+
+		SCR_FillRect( barX, barY, barW, barH, hpBgCol );
+		if ( hpFrac > 0.0f ) {
+			SCR_FillRect( barX, barY, barW * hpFrac, barH, hpFillCol );
+		}
+
+		// BP Bar (Blue) — full width across card
+		float bpFrac = ( m->maxBP > 0 ) ? ( (float)m->bp / (float)m->maxBP ) : 1.0f;
+		if ( bpFrac < 0.0f ) bpFrac = 0.0f;
+		if ( bpFrac > 1.0f ) bpFrac = 1.0f;
+
+		float barY2 = barY + 3.5f;
+		SCR_FillRect( barX, barY2, barW, 2.0f, bpBgCol );
+		if ( bpFrac > 0.0f ) {
+			SCR_FillRect( barX, barY2, barW * bpFrac, 2.0f, bpFillCol );
+		}
+
+		rowY += 20.0f;
+	}
+}
+
+static qhandle_t s_hShieldPics[8] = { 0 };
+
+
+void SCR_DrawPartyOverheadIcons( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !g_rpgParty.active ) return;
+	if ( g_rpgParty.memberCount <= 0 ) return;
+
+	static const char *shieldPaths[8] = {
+		"gfx/rpg_hud/shield_blue",
+		"gfx/rpg_hud/shield_red",
+		"gfx/rpg_hud/shield_green",
+		"gfx/rpg_hud/shield_yellow",
+		"gfx/rpg_hud/shield_purple",
+		"gfx/rpg_hud/shield_orange",
+		"gfx/rpg_hud/shield_black",
+		"gfx/rpg_hud/shield_white"
+	};
+
+	int colorIdx = g_rpgParty.teamColorIdx;
+	if ( colorIdx < 0 || colorIdx >= 8 ) colorIdx = 0;
+
+	if ( s_hShieldPics[colorIdx] <= 0 && re && re->RegisterShader ) {
+		s_hShieldPics[colorIdx] = re->RegisterShader( shieldPaths[colorIdx] );
+	}
+	qhandle_t hShield = s_hShieldPics[colorIdx];
+	if ( hShield <= 0 ) return;
+
+	for ( int i = 0; i < g_rpgParty.memberCount; i++ ) {
+		rpgPartyMember_t *m = &g_rpgParty.members[i];
+		int targetNum = m->clientNum;
+		if ( targetNum < 0 || targetNum >= MAX_CLIENTS ) continue;
+		if ( targetNum == cl.snap.ps.clientNum ) continue;
+
+		vec3_t headPos;
+		qboolean found = qfalse;
+
+		for ( int e = 0; e < cl.snap.numEntities; e++ ) {
+			int parseIdx = ( cl.snap.parseEntitiesNum + e ) & ( MAX_PARSE_ENTITIES - 1 );
+			entityState_t *ent = &cl.parseEntities[parseIdx];
+			if ( ent->number == targetNum ) {
+				VectorCopy( ent->pos.trBase, headPos );
+				headPos[2] += 78.0f; // Higher above head
+				found = qtrue;
+				break;
+			}
+		}
+
+		if ( found ) {
+			float sx = 0.0f, sy = 0.0f;
+			if ( FX_WorldToScreen( headPos, &sx, &sy ) ) {
+				vec3_t delta;
+				VectorSubtract( headPos, cl.snap.ps.origin, delta );
+				float dist = VectorLength( delta );
+				float scale = 350.0f / ( dist + 200.0f );
+				if ( scale > 1.1f ) scale = 1.1f;
+				if ( scale < 0.35f ) scale = 0.35f;
+
+				float iconSize = 32.0f * scale;
+				SCR_DrawPic( sx - iconSize * 0.5f, sy - iconSize * 0.5f, iconSize, iconSize, hShield );
+			}
+		}
+	}
+}
+
 //=======================================================
+
+
+
 
 /*
 ==================
@@ -1458,6 +2294,7 @@ This will be called twice if rendering in stereo mode
 ==================
 */
 void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
+
 	if ( cls.state != s_lastState ) {
 		s_hBox = 0;
 		s_hBarBg = 0;
@@ -1465,7 +2302,10 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 		s_hAvatar = 0;
 		s_hAvatarFrame = 0;
 		s_hModalBg = 0;
+		s_hWantedBg = 0;
+		s_hPotatoPic = 0;
 		s_lastState = cls.state;
+
 	}
 
 	re->BeginFrame( stereoFrame );
@@ -1515,14 +2355,44 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			break;
 		case CA_ACTIVE:
 			CL_CGameRendering( stereoFrame );
-			SCR_DrawRPGHUDOverlay();
-			SCR_DrawDemoRecording();
-			SCR_DrawLeaderboardOverlay();
-			SCR_DrawStatsOverlay();
-			SCR_DrawToastOverlay();
-			SCR_DrawInspectOverlay();
-			SCR_DrawBountyOverlay();
+			{
+				extern keyGlobals_t kg;
+				qboolean showScore = kg.keys[A_TAB].down;
+
+				if ( !showScore ) {
+					for ( int k = 0; k < MAX_KEYS; k++ ) {
+						if ( kg.keys[k].down && kg.keys[k].binding && kg.keys[k].binding[0] ) {
+							if ( strstr( kg.keys[k].binding, "+scores" ) || strstr( kg.keys[k].binding, "+score" ) ) {
+								showScore = qtrue;
+								break;
+							}
+						}
+					}
+				}
+
+				if ( !showScore ) {
+					SCR_DrawPartyOverlay();
+					SCR_DrawRPGHUDOverlay();
+					SCR_DrawDemoRecording();
+					SCR_DrawLeaderboardOverlay();
+					SCR_DrawStatsOverlay();
+					SCR_DrawToastOverlay();
+					SCR_DrawInspectOverlay();
+					SCR_DrawBountyOverlay();
+					SCR_DrawShopOverlay();
+					SCR_DrawQuestInvOverlay();
+					SCR_DrawAchievementsOverlay();
+					SCR_DrawTopCreditsOverlay();
+					SCR_DrawTopPotatoOverlay();
+					SCR_DrawAdventureOverlay();
+				}
+
+			}
+			SCR_DrawPartyOverheadIcons();
+			SCR_DrawHotPotatoOverheadIcon();
 			break;
+
+
 		}
 	}
 

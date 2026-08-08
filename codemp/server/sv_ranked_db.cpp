@@ -45,15 +45,6 @@ static const shopItem_t sv_shopItems[] = {
     {"jedaii_secret", "^5Jedaii Secret     ^7(forbidden knowledge...)", 1000000,
      0},
     {"win_msg", "^5Custom Win Msg    ^7(Unlock !setwinmsg)", 20000, 0},
-    {"wp_pistol", "^5Bryar Pistol     ^7(Equip Bryar Pistol)", 1000, 400},
-    {"wp_blaster", "^5E-11 Blaster     ^7(Equip Blaster Rifle)", 1500, 600},
-    {"wp_disruptor", "^5Disruptor Rifle  ^7(Equip Disruptor)", 2500, 1000},
-    {"wp_bowcaster", "^5Bowcaster        ^7(Equip Bowcaster)", 2000, 800},
-    {"wp_repeater", "^5Heavy Repeater   ^7(Equip Heavy Repeater)", 2500, 1000},
-    {"wp_demp2", "^5DEMP2            ^7(Equip DEMP2 Pistol)", 2000, 800},
-    {"wp_flechette", "^5Flechette        ^7(Equip Golan Flechette)", 3000, 1200},
-    {"wp_rocket", "^5Rocket Launcher  ^7(Equip Rocket Launcher)", 5000, 2000},
-    {"wp_concussion", "^5Concussion       ^7(Equip Concussion Rifle)", 4000, 1600},
     {NULL, NULL, 0, 0}};
 
 cJSON *accountsDB = NULL; // exported (referenced by sv_ranked_logic/cmds)
@@ -1546,19 +1537,16 @@ void SV_Ranked_ShowStats(client_t *cl) {
   Q_strncpyz(upperMode, currentMode, sizeof(upperMode));
   Q_strupr(upperMode);
 
-  if (!Q_stricmp(currentMode, "open")) {
-    SV_SendServerCommand(
-        cl,
-        "chat \"^7[STATS] ^5%s ^7| ^3Lv %d ^7| %s ^7| ^2FR: ^7%d | ^3W/L: "
-        "^7%d/%d ^5(%.2f) ^7| ^2K/D: ^7%d/%d ^5(Console)\n\"",
-        displayName, level, title, elo, teamWins, teamLosses, wlRatio, kills, deaths);
-  } else {
-    SV_SendServerCommand(
-        cl,
-        "chat \"^7[STATS] ^5%s ^7| ^3Lv %d ^7| %s ^7| ^2FR: ^7%d | ^3W/L: "
-        "^7%d/%d ^5(%.2f) ^7| ^2K/D: ^7%d/%d ^5(Console)\n\"",
-        displayName, level, title, elo, wins, losses, wlRatio, kills, deaths);
-  }
+  int finalWins = !Q_stricmp(currentMode, "open") ? teamWins : wins;
+  int finalLosses = !Q_stricmp(currentMode, "open") ? teamLosses : losses;
+
+  SV_SendServerCommand(
+      cl,
+      va("stats_data \"%s\" %d %d \"%s\" %d %d %d %d %d %d %d \"%s\" %d \"%s\" %d",
+         displayName, level, xp, title, elo, credits,
+         finalWins, finalLosses, kills, deaths, highestStreak,
+         favWeapon, triviaWins, topRivalName, topRivalCount));
+
 
   SV_SendServerCommand(cl, "print \"\n^2--- ^7%s^7's Stats ^2---\n\"",
                        displayName);
@@ -2062,13 +2050,16 @@ void SV_Ranked_ShowTopCredits(client_t *cl) {
     return;
   }
 
+  SV_SendServerCommand(cl, "topcr_clear");
   SV_SendServerCommand(cl, "print \"\n^2--- ^7Top Credits ^2---\n\"");
   const int max = (int)std::min<size_t>(10, list.size());
   for (int i = 0; i < max; ++i) {
     SV_SendServerCommand(cl, "print \"^3%2d^7) %s ^2- ^7%d\n\"", i + 1,
                          list[i].displayName.c_str(), list[i].value);
+    SV_SendServerCommand(cl, va("topcr_entry %d %d \"%s\"", i + 1, list[i].value, list[i].displayName.c_str()));
   }
   SV_SendServerCommand(cl, "print \"\n\"");
+  SV_SendServerCommand(cl, "topcr_open");
 }
 
 void SV_Ranked_ShowTopPotato(client_t *cl) {
@@ -2080,15 +2071,19 @@ void SV_Ranked_ShowTopPotato(client_t *cl) {
     return;
   }
 
+  SV_SendServerCommand(cl, "toppotato_clear");
   SV_SendServerCommand(cl,
                        "print \"\n^2--- ^7Top Hot Potato (ticks) ^2---\n\"");
   const int max = (int)std::min<size_t>(10, list.size());
   for (int i = 0; i < max; ++i) {
     SV_SendServerCommand(cl, "print \"^3%2d^7) %s ^2- ^7%d\n\"", i + 1,
                          list[i].displayName.c_str(), list[i].value);
+    SV_SendServerCommand(cl, va("toppotato_entry %d %d \"%s\"", i + 1, list[i].value, list[i].displayName.c_str()));
   }
   SV_SendServerCommand(cl, "print \"\n\"");
+  SV_SendServerCommand(cl, "toppotato_open");
 }
+
 
 void SV_Ranked_ShowCredits(client_t *cl) {
   if (!cl)
@@ -2447,6 +2442,8 @@ void SV_Ranked_ShowQuests(client_t *cl) {
   if (!acc)
     return;
 
+  SV_SendServerCommand(cl, "quest_clear");
+
   char qKey[64];
   snprintf(qKey, sizeof(qKey), "daily_quests_%s", SV_Ranked_GetActiveMode());
   cJSON *dq = cJSON_GetObjectItemCaseSensitive(acc, qKey);
@@ -2497,6 +2494,8 @@ void SV_Ranked_ShowQuests(client_t *cl) {
                            "^7+^5%d fr  ^6[%s]\n\"",
                            qnum, desc, prog, goal, cr, fr, mode);
     }
+    SV_SendServerCommand(cl, va("quest_entry %d %d %d %d %d %d \"%s\" \"%s\"",
+                         qnum, prog, goal, cr, fr, done ? 1 : 0, mode, desc));
     qnum++;
   }
 
@@ -2512,7 +2511,9 @@ void SV_Ranked_ShowQuests(client_t *cl) {
   }
 
   SV_SendServerCommand(cl, "print \"^5=================================\n\n\"");
+  SV_SendServerCommand(cl, "quest_open");
 }
+
 
 // ===========================================================================
 //  ACHIEVEMENT SYSTEM
@@ -2760,29 +2761,37 @@ void SV_Ranked_ShowAchievements(client_t *cl) {
   if (!acc) return;
 
   cJSON *achArr = cJSON_GetObjectItemCaseSensitive(acc, "achievements");
+  SV_SendServerCommand(cl, "ach_clear");
   SV_SendServerCommand(cl, "print \"\n^5=== YOUR ACHIEVEMENTS ===\n\"");
 
-  if (!achArr || !cJSON_IsArray(achArr) || cJSON_GetArraySize(achArr) == 0) {
-    SV_SendServerCommand(cl, "print \"^7  (none yet - keep playing!)\n\"");
-    SV_SendServerCommand(cl, "print \"^5=========================\n\n\"");
-    return;
+  for (int i = 0; sv_achPool[i].id != NULL; i++) {
+    const char *id = sv_achPool[i].id;
+    const char *name = sv_achPool[i].name;
+    int reward = sv_achPool[i].reward_cr;
+    qboolean unlocked = qfalse;
+
+    if (achArr && cJSON_IsArray(achArr)) {
+      cJSON *item;
+      cJSON_ArrayForEach(item, achArr) {
+        if (cJSON_IsString(item) && !Q_stricmp(item->valuestring, id)) {
+          unlocked = qtrue;
+          break;
+        }
+      }
+    }
+
+    if (unlocked) {
+      SV_SendServerCommand(cl, va("print \"^3 * ^2[UNLOCKED] ^7%s\n\"", name));
+    } else {
+      SV_SendServerCommand(cl, va("print \"^3 * ^7%s ^5(+%d CR)\n\"", name, reward));
+    }
+    SV_SendServerCommand(cl, va("ach_entry %d %d \"%s\"", reward, unlocked ? 1 : 0, name));
   }
 
-  int total = 0;
-  cJSON *item;
-  cJSON_ArrayForEach(item, achArr) {
-    if (!cJSON_IsString(item)) continue;
-    const char *id = item->valuestring;
-    const sv_achDef_t *def = SV_Ach_Find(id);
-    const char *name = def ? def->name : id;
-    
-    SV_SendServerCommand(cl, va("print \"^3 * ^7%s\n\"", name));
-    total++;
-  }
-
-  SV_SendServerCommand(cl, va("print \"^5Total: ^2%d ^5achievements\n\"", total));
   SV_SendServerCommand(cl, "print \"^5=========================\n\n\"");
+  SV_SendServerCommand(cl, "ach_open");
 }
+
 
 /*
 ==================
@@ -2798,12 +2807,12 @@ void SV_Ranked_ShowShop(client_t *cl) {
       acc ? cJSON_GetObjectItemCaseSensitive(acc, "credits") : NULL;
   int credits = credPtr ? credPtr->valueint : 0;
 
+  SV_SendServerCommand(cl, "shop_clear");
   SV_SendServerCommand(cl, "print \"\n^5========= RANKED SHOP =========\n\"");
   if (r->loggedIn) {
     SV_SendServerCommand(cl, "print \"^7Your Credits: ^5%d\n\"", credits);
   }
-  SV_SendServerCommand(cl, "print \"^5Item Key          Description      "
-                           "                 Price  Sell\n\"");
+  SV_SendServerCommand(cl, "print \"^5Item Key          Description                       Price  Sell\n\"");
   SV_SendServerCommand(
       cl, "print "
           "\"^5-------------------------------------------------------\n\"");
@@ -2814,11 +2823,15 @@ void SV_Ranked_ShowShop(client_t *cl) {
                          "print \"^3%-17s ^7%s ^5%d cr^7 (sell: ^3%d^7)\n\"",
                          sv_shopItems[i].key, sv_shopItems[i].display,
                          price, sellBack);
+    SV_SendServerCommand(cl, va("shop_entry %d %d \"%s\" \"%s\"",
+                         price, sellBack, sv_shopItems[i].key, sv_shopItems[i].display));
   }
   SV_SendServerCommand(cl, "print \"\n^5Commands: ^7!buy <key>  !sell "
                            "<key>  !use <key>  !inventory\n\"");
   SV_SendServerCommand(cl, "print \"^5===============================\n\n\"");
+  SV_SendServerCommand(cl, va("shop_open %d", credits));
 }
+
 
 // ============================================================
 //  SHOP - BUY / SELL / USE
@@ -3225,3 +3238,54 @@ void SV_RankedClearAccounts_f(void) {
   SV_Ranked_SaveAccounts();
   Com_Printf("[RANKED] Accounts database wiped.\n");
 }
+
+void SV_Ranked_DB_RecordDuelAnalysis(const char *winnerName, const char *loserName, int winHealth, int winBP, int winEloDelta, int loseEloDelta, int durationSec) {
+  if (!accountsDB || !winnerName || !loserName) return;
+
+  cJSON *wAcc = SV_Ranked_GetAccount(winnerName);
+  if (wAcc) {
+    cJSON *history = cJSON_GetObjectItemCaseSensitive(wAcc, "duel_analysis");
+    if (!history) {
+      history = cJSON_CreateArray();
+      cJSON_AddItemToObject(wAcc, "duel_analysis", history);
+    }
+    cJSON *entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(entry, "opponent", loserName);
+    cJSON_AddStringToObject(entry, "result", "WIN");
+    cJSON_AddNumberToObject(entry, "rem_hp", winHealth);
+    cJSON_AddNumberToObject(entry, "rem_bp", winBP);
+    cJSON_AddNumberToObject(entry, "elo_delta", winEloDelta);
+    cJSON_AddNumberToObject(entry, "duration_s", durationSec);
+    cJSON_AddNumberToObject(entry, "time", (double)time(NULL));
+    cJSON_AddItemToArray(history, entry);
+
+    while (cJSON_GetArraySize(history) > 50) {
+      cJSON_DeleteItemFromArray(history, 0);
+    }
+  }
+
+  cJSON *lAcc = SV_Ranked_GetAccount(loserName);
+  if (lAcc) {
+    cJSON *history = cJSON_GetObjectItemCaseSensitive(lAcc, "duel_analysis");
+    if (!history) {
+      history = cJSON_CreateArray();
+      cJSON_AddItemToObject(lAcc, "duel_analysis", history);
+    }
+    cJSON *entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(entry, "opponent", winnerName);
+    cJSON_AddStringToObject(entry, "result", "LOSS");
+    cJSON_AddNumberToObject(entry, "rem_hp", 0);
+    cJSON_AddNumberToObject(entry, "rem_bp", 0);
+    cJSON_AddNumberToObject(entry, "elo_delta", loseEloDelta);
+    cJSON_AddNumberToObject(entry, "duration_s", durationSec);
+    cJSON_AddNumberToObject(entry, "time", (double)time(NULL));
+    cJSON_AddItemToArray(history, entry);
+
+    while (cJSON_GetArraySize(history) > 50) {
+      cJSON_DeleteItemFromArray(history, 0);
+    }
+  }
+
+  SV_Ranked_SaveAccounts();
+}
+

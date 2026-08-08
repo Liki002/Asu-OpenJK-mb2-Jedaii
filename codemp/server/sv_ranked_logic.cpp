@@ -11,6 +11,84 @@
 
 extern cJSON *accountsDB;
 
+rankedParty_t sv_rankedParties[64];
+
+void SV_Ranked_UpdateParty(int leaderId) {
+    if (leaderId < 0 || leaderId >= sv_maxclients->integer) return;
+    rankedParty_t *p = &sv_rankedParties[leaderId];
+    if (!p->active) {
+        for (int i = 0; i < p->memberCount; i++) {
+            int cid = p->clientNums[i];
+            if (cid >= 0 && cid < sv_maxclients->integer && svs.clients[cid].state >= CS_ACTIVE) {
+                SV_SendServerCommand(svs.clients + cid, "party_clear");
+            }
+        }
+        return;
+    }
+
+    char infoBuf[MAX_STRING_CHARS];
+    Com_sprintf(infoBuf, sizeof(infoBuf), "party_info \"%s\" %d %d %d", p->teamName, p->teamColorIdx, p->score, p->memberCount);
+
+    for (int i = 0; i < p->memberCount; i++) {
+        int cid = p->clientNums[i];
+        if (cid >= 0 && cid < sv_maxclients->integer && svs.clients[cid].state >= CS_ACTIVE) {
+            rankedMatchState_t *r = &sv_rankedPlayers[cid];
+
+            int level = 1;
+            if (r->loggedIn && r->username[0]) {
+                cJSON *acc = SV_Ranked_GetAccount(r->username);
+                cJSON *xpItem = acc ? cJSON_GetObjectItemCaseSensitive(acc, "xp") : NULL;
+                if (xpItem && cJSON_IsNumber(xpItem)) {
+                    level = SV_Ranked_CalculateLevel(xpItem->valueint);
+                }
+            }
+
+            int hp = 100;
+            int bp = (r->lastBP > 0) ? r->lastBP : 0;
+            playerState_t *ps = SV_GameClientNum(cid);
+            if (ps) {
+                hp = ps->stats[STAT_HEALTH];
+            }
+
+            char cleanName[64];
+            Q_strncpyz(cleanName, svs.clients[cid].name, sizeof(cleanName));
+            for (char *q = cleanName; *q; q++) {
+                if (*q == '"') *q = '\'';
+            }
+
+            char memStr[128];
+            Com_sprintf(memStr, sizeof(memStr), " %d \"%s\" %d %d 100 %d 100",
+                        cid, cleanName, level, hp, bp);
+            Q_strcat(infoBuf, sizeof(infoBuf), memStr);
+        }
+    }
+
+
+
+
+    for (int i = 0; i < p->memberCount; i++) {
+        int cid = p->clientNums[i];
+        if (cid >= 0 && cid < sv_maxclients->integer && svs.clients[cid].state >= CS_ACTIVE) {
+            SV_SendServerCommand(svs.clients + cid, infoBuf);
+        }
+    }
+}
+
+void SV_Ranked_Party_Heartbeat(void) {
+    static int lastCheck = 0;
+    if (svs.time - lastCheck < 500) return; // Sync every 500ms
+    lastCheck = svs.time;
+
+    for (int i = 0; i < sv_maxclients->integer; i++) {
+        rankedParty_t *p = &sv_rankedParties[i];
+        if (p->active && p->memberCount > 0) {
+            SV_Ranked_UpdateParty(i);
+        }
+    }
+}
+
+
+
 /*
 ==================
 SV_Ranked_GetLogUsername
@@ -842,15 +920,21 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
           cJSON_AddNumberToObject(modeData, "highest_streak",
                                   kState->killStreak);
         } else if (kState->killStreak > hs->valueint) {
-          cJSON_SetNumberValue(hs, (double)kState->killStreak);
         }
       }
     }
   }
 
+  // Check Hot Potato transfer on open mode kill
+  extern void SV_Ranked_HotPotato_CheckKill(int victimId, int killerId);
+  SV_Ranked_HotPotato_CheckKill(victimId, killerId);
+
+
   if (!kState->loggedIn) {
     return;
   }
+
+
 
   // Base kill reward
   cJSON *xpKillPtr = SV_Ranked_GetSetting("xp_per_kill");
@@ -1503,13 +1587,20 @@ void SV_Ranked_DuelStart(int p1, int p2) {
   }
   // -----------------------------------------------------------------------
 
+  playerState_t *ps1 = SV_GameClientNum(p1);
+  playerState_t *ps2 = SV_GameClientNum(p2);
+
   r1->inDuel = qtrue;
   r1->duelOpponent = p2;
   r1->duelStartTime = svs.time;
+  r1->lastBP = ps1 ? ps1->stats[STAT_ARMOR] : -1;
 
   r2->inDuel = qtrue;
   r2->duelOpponent = p1;
   r2->duelStartTime = svs.time;
+  r2->lastBP = ps2 ? ps2->stats[STAT_ARMOR] : -1;
+
+
 
   // Announce start with nice broadcast showing both players ELO
   cJSON *a1 = SV_Ranked_GetAccount(r1->username);
@@ -1748,8 +1839,11 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   playerState_t *psLose = SV_GameClientNum(loserId);
   if (psWin) {
     winHealth = psWin->stats[STAT_HEALTH];
-    winArmor = psWin->stats[STAT_ARMOR];
+    winArmor = (psWin->stats[STAT_ARMOR] > 0) ? psWin->stats[STAT_ARMOR] : (rWin->lastBP > 0 ? rWin->lastBP : 0);
+
     winWeapon = psWin->weapon;
+
+
     winStyle = psWin->fd.saberAnimLevel;
     winForce = psWin->fd.forcePower;
   }
@@ -2016,20 +2110,43 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
     UpdateAccountCredits(rLose->username, lCr);
   }
 
-  // Toast notifications — winner sees green card, loser sees red card
+  // Toast notifications — winner sees green card with remaining HP and BP (armor), loser sees red card
   SV_SendServerCommand(svs.clients + winnerId,
-                       va("toast_win %d %d %d \"%s\"",
+                       va("toast_win %d %d %d \"%s\" %d %d",
                           winEloChange,
                           wCr,
                           xpPerDuelWin,
-                          svs.clients[loserId].name));
+                          svs.clients[loserId].name,
+                          winHealth,
+                          winArmor));
 
   SV_SendServerCommand(svs.clients + loserId,
-                       va("toast_lose %d %d %d \"%s\"",
+                       va("toast_lose %d %d %d \"%s\" 0 0",
                           loseEloChange,
                           lCr,
                           0,
                           svs.clients[winnerId].name));
+
+  int duelDurationSec = (rWin->duelStartTime > 0) ? (svs.time - rWin->duelStartTime) / 1000 : 0;
+
+  // Record Full Server Duel Analysis
+
+  SV_Ranked_Log("DUEL_ANALYSIS: Winner '%s' [HP:%d, BP:%d, Wep:%s, Style:%s, ELO:+%d] defeated Loser '%s' [Wep:%s, Style:%s, ELO:%d, Duration:%ds]",
+                svs.clients[winnerId].name, winHealth, winArmor, winWeaponStr, winStyleStr, winEloChange,
+                svs.clients[loserId].name, loseWeaponStr, loseStyleStr, loseEloChange, duelDurationSec);
+
+  extern void SV_Ranked_DB_RecordDuelAnalysis(const char *winnerName, const char *loserName, int winHealth, int winBP, int winEloDelta, int loseEloDelta, int durationSec);
+  if (rWin->loggedIn && rWin->username[0]) {
+    SV_Ranked_DB_RecordDuelAnalysis(rWin->username, (rLose->loggedIn && rLose->username[0]) ? rLose->username : svs.clients[loserId].name, winHealth, winArmor, winEloChange, loseEloChange, duelDurationSec);
+  }
+
+
+
+
+  // Check Hot Potato transfer on duel kill
+  extern void SV_Ranked_HotPotato_CheckKill(int victimId, int killerId);
+  SV_Ranked_HotPotato_CheckKill(loserId, winnerId);
+
 
   // ---- CLAIM BOUNTY ON LOSER ----
   if (rLose->bountyValue > 0) {
@@ -2279,7 +2396,7 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
 
   Com_Printf("[RANKED] DuelEnd complete: %s defeated %s\n", uWin, uLose);
 
-  Com_Printf("[RANKED] DuelHistory: guid_winner=%s guid_loser=%s winner_name='%s' loser_name='%s' winner_elo_change=%d loser_elo_change=%d winner_new_elo=%d loser_new_elo=%d duration_seconds=%d winner_health=%d winner_armor=%d winner_force=%d winner_weapon='%s' winner_style='%s' loser_weapon='%s' loser_style='%s'\n",
+  Com_Printf("[RANKED] DuelHistory: guid_winner=%s guid_loser=%s winner_name='%s' loser_name='%s' winner_elo_change=%d loser_elo_change=%d winner_new_elo=%d loser_new_elo=%d duration_seconds=%d winner_health=%d winner_bp=%d winner_force=%d winner_weapon='%s' winner_style='%s' loser_weapon='%s' loser_style='%s'\n",
              uWin,
              uLose,
              svs.clients[winnerId].name,
@@ -2296,6 +2413,7 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
              winStyleStr,
              loseWeaponStr,
              loseStyleStr);
+
 }
 
 void SV_Ranked_DuelDisconnectCheck(int clientNum) {
@@ -2487,8 +2605,10 @@ static void HP_PickRandom(void) {
       SV_Ranked_Log("POTATO: Mode paused - no eligible players");
     }
     sv_hotPotatoHolder = -1;
+    SV_SendServerCommand(NULL, "potato_holder -1");
     return;
   }
+
 
   if (sv_hotPotatoHolder >= 0) {
     HP_UpdateTopPotato(sv_hotPotatoHolder);
@@ -2499,6 +2619,8 @@ static void HP_PickRandom(void) {
   sv_hotPotatoHolder = newHolder;
   sv_hotPotatoDuration = 0;
   sv_hotPotatoNextTick = svs.time + HP_TICK_MS;
+
+  SV_SendServerCommand(NULL, va("potato_holder %d", sv_hotPotatoHolder));
 
   if (oldHolder >= 0 && svs.clients[oldHolder].state >= CS_CONNECTED) {
     SV_SendServerCommand(
@@ -2518,6 +2640,31 @@ static void HP_PickRandom(void) {
       &svs.clients[newHolder],
       "cp \"^1YOU ARE THE HOT POTATO!\n^7Survive to earn points!\"");
 }
+
+void SV_Ranked_HotPotato_CheckKill(int victimId, int killerId) {
+  if (!sv_hotPotatoActive || sv_hotPotatoHolder < 0)
+    return;
+
+  if (victimId == sv_hotPotatoHolder) {
+    int oldHolder = sv_hotPotatoHolder;
+    HP_UpdateTopPotato(oldHolder);
+
+    if (killerId >= 0 && killerId < sv_maxclients->integer && killerId != victimId && HP_IsValidCandidate(killerId)) {
+      sv_hotPotatoHolder = killerId;
+      sv_hotPotatoDuration = 0;
+      sv_hotPotatoNextTick = svs.time + HP_TICK_MS;
+
+      SV_SendServerCommand(NULL, va("potato_holder %d", sv_hotPotatoHolder));
+      SV_SendServerCommand(NULL, va("chat \"^1%s ^7killed the Potato Holder! ^2%s ^7stole the ^1HOT POTATO^7!\"",
+                           svs.clients[victimId].name, svs.clients[killerId].name));
+      SV_SendServerCommand(&svs.clients[killerId], "cp \"^1YOU STOLE THE HOT POTATO!\n^7Survive to earn points!\"");
+      SV_Ranked_Log("POTATO: %s killed holder %s and stole potato", svs.clients[killerId].name, svs.clients[victimId].name);
+    } else {
+      HP_PickRandom();
+    }
+  }
+}
+
 
 void SV_Ranked_StartHotPotato(void) {
   sv_hotPotatoEnabled = qtrue;
@@ -2574,8 +2721,10 @@ void SV_Ranked_StopHotPotato(qboolean disableCompletely) {
   }
 
   sv_hotPotatoHolder = -1;
+  SV_SendServerCommand(NULL, "potato_holder -1");
 
   // Bulk-save all accounts now so all in-memory credit changes are flushed
+
   SV_Ranked_SaveAccounts();
 
   if (disableCompletely) {
@@ -2775,23 +2924,20 @@ static void Adventure_DisplayNode(client_t *cl, int nodeIdx) {
     if (safeDesc[i] == '"') safeDesc[i] = '\'';
   }
 
+  char c1[256] = "", c2[256] = "", c3[256] = "";
+  if (node->numChoices > 0 && node->choices[0].text) Q_strncpyz(c1, node->choices[0].text, sizeof(c1));
+  if (node->numChoices > 1 && node->choices[1].text) Q_strncpyz(c2, node->choices[1].text, sizeof(c2));
+  if (node->numChoices > 2 && node->choices[2].text) Q_strncpyz(c3, node->choices[2].text, sizeof(c3));
+
+  for (int i = 0; c1[i]; i++) if (c1[i] == '"') c1[i] = '\'';
+  for (int i = 0; c2[i]; i++) if (c2[i] == '"') c2[i] = '\'';
+  for (int i = 0; c3[i]; i++) if (c3[i] == '"') c3[i] = '\'';
+
+  SV_SendServerCommand(cl, va("adv_node \"%s\" \"%s\" \"%s\" \"%s\" \"%s\"",
+    node->id[0] ? node->id : "Quest", safeDesc, c1, c2, c3));
+
   SV_SendServerCommand(cl, "chat \"^6--- Adventure ---\"");
   SV_SendServerCommand(cl, va("chat \"%s\"", safeDesc));
-
-  if (node->numChoices > 0) {
-    SV_SendServerCommand(cl, "chat \"^7Your choices:\"");
-    for (int i = 0; i < node->numChoices && i < ADV_MAX_CHOICES; i++) {
-      if (!node->choices[i].text)
-        break;
-      char safeChoice[256];
-      Q_strncpyz(safeChoice, node->choices[i].text, sizeof(safeChoice));
-      for (int j = 0; safeChoice[j]; j++) {
-        if (safeChoice[j] == '"') safeChoice[j] = '\'';
-      }
-      SV_SendServerCommand(cl, va("chat \"^3[%d] ^7%s\"", i + 1, safeChoice));
-    }
-    SV_SendServerCommand(cl, "chat \"^7Type ^2!choose <number>\"");
-  }
 }
 
 static void Adventure_EndAdventure(client_t *cl, int outcomeNodeIdx) {
@@ -2813,9 +2959,16 @@ static void Adventure_EndAdventure(client_t *cl, int outcomeNodeIdx) {
     if (safeDesc[i] == '"') safeDesc[i] = '\'';
   }
 
+  char endText[1024];
+  Com_sprintf(endText, sizeof(endText), "%s\n^7Reward: ^2+%d XP^7, ^5+%d Credits", safeDesc, xp, cr);
+
+  SV_SendServerCommand(cl, va("adv_node \"%s\" \"%s\" \"\" \"\" \"\"",
+    node->id[0] ? node->id : "Outcome", endText));
+
   SV_SendServerCommand(cl, "chat \"^6--- Adventure End ---\"");
   SV_SendServerCommand(cl, va("chat \"%s\"", safeDesc));
   SV_SendServerCommand(cl, va("chat \"^7Reward: ^2%d XP^7, ^5%d Credits\"", xp, cr));
+
 
   if (r->loggedIn && !r->isTemp && r->username[0]) {
     if (cr != 0)
@@ -3475,12 +3628,26 @@ void SV_Ranked_SyncClientRPG(client_t *cl) {
   int totalXp = (xpPtr && cJSON_IsNumber(xpPtr)) ? xpPtr->valueint : 0;
   if (totalXp < 0) totalXp = 0;
 
-  cJSON *xpSetting = SV_Ranked_GetSetting("xp_per_level");
-  int perLevel = (xpSetting && xpSetting->valueint > 0) ? xpSetting->valueint : 1000;
+  // Dynamic scaling XP threshold curve (Level 1: 100, Level 2: 275, Level 3: 500...)
+  int level = 1;
+  int remainingXP = totalXp;
+  int xpNeededForNext = 100;
 
-  int currentXPInLevel = totalXp % perLevel;
-  int xpNeededForNext = perLevel;
-  int level = (totalXp / perLevel) + 1;
+  while (remainingXP >= 0) {
+    int reqXP = 100 + (level - 1) * 150 + (level - 1) * (level - 1) * 25;
+    if (remainingXP < reqXP) {
+      xpNeededForNext = reqXP;
+      break;
+    }
+    remainingXP -= reqXP;
+    level++;
+    if (level >= 100) {
+      level = 100;
+      xpNeededForNext = reqXP;
+      break;
+    }
+  }
+  int currentXPInLevel = (remainingXP >= 0) ? remainingXP : 0;
 
   cJSON *modes = cJSON_GetObjectItemCaseSensitive(acc, "modes");
   cJSON *duel = modes ? cJSON_GetObjectItemCaseSensitive(modes, "duel") : NULL;

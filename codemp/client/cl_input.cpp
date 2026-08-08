@@ -921,7 +921,17 @@ void CL_KeyMove( usercmd_t *cmd ) {
 CL_MouseEvent
 =================
 */
+int g_rpgMouseX = 320;
+int g_rpgMouseY = 240;
+
 void CL_MouseEvent( int dx, int dy, int time ) {
+	g_rpgMouseX += dx;
+	g_rpgMouseY += dy;
+	if ( g_rpgMouseX < 0 ) g_rpgMouseX = 0;
+	if ( g_rpgMouseX > 640 ) g_rpgMouseX = 640;
+	if ( g_rpgMouseY < 0 ) g_rpgMouseY = 0;
+	if ( g_rpgMouseY > 480 ) g_rpgMouseY = 480;
+
 	if (g_clAutoMapMode && cls.cgameStarted)
 	{ //automap input
 		autoMapInput_t *data = (autoMapInput_t *)cl.mSharedMemory;
@@ -934,7 +944,10 @@ void CL_MouseEvent( int dx, int dy, int time ) {
 		g_clAutoMapInput.yaw = 0.0f;
 		g_clAutoMapInput.pitch = 0.0f;
 	}
-	else if ( Key_GetCatcher( ) & KEYCATCH_UI ) {
+	else if ( g_rpgAdv.active ) {
+		// RPG Modal active: freeze camera view movement, track cursor position only
+		return;
+	} else if ( Key_GetCatcher( ) & KEYCATCH_UI ) {
 		UIVM_MouseEvent( dx, dy );
 	} else if ( Key_GetCatcher( ) & KEYCATCH_CGAME ) {
 		CGVM_MouseEvent( dx, dy );
@@ -943,6 +956,8 @@ void CL_MouseEvent( int dx, int dy, int time ) {
 		cl.mouseDy[cl.mouseIndex] += dy;
 	}
 }
+
+
 
 /*
 =================

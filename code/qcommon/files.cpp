@@ -497,8 +497,20 @@ qboolean FS_CreatePath (char *OSPath) {
 	Q_strncpyz( path, OSPath, sizeof( path ) );
 	FS_ReplaceSeparators( path );
 
-	// Skip creation of the root directory as it will always be there
-	ofs = strchr( path, PATH_SEP );
+	// Skip creation of root / UNC drive prefixes
+	if ( path[0] == PATH_SEP && path[1] == PATH_SEP ) {
+		// UNC path \\server\share\...
+		ofs = strchr( path + 2, PATH_SEP );
+		if ( ofs ) {
+			ofs = strchr( ofs + 1, PATH_SEP );
+		}
+	} else if ( path[0] && path[1] == ':' && path[2] == PATH_SEP ) {
+		// Drive path C:\...
+		ofs = path + 3;
+	} else {
+		ofs = strchr( path, PATH_SEP );
+	}
+
 	if ( ofs ) {
 		ofs++;
 	}
@@ -508,14 +520,16 @@ qboolean FS_CreatePath (char *OSPath) {
 			// create the directory
 			*ofs = 0;
 			if (!Sys_Mkdir (path)) {
-				Com_Error( ERR_FATAL, "FS_CreatePath: failed to create path \"%s\"",
-					path );
+				Com_Printf( "WARNING: FS_CreatePath failed to create path \"%s\"\n", path );
+				*ofs = PATH_SEP;
+				return qtrue;
 			}
 			*ofs = PATH_SEP;
 		}
 	}
 	return qfalse;
 }
+
 
 /*
 =================

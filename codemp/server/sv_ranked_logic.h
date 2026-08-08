@@ -20,8 +20,12 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam);
 void SV_Ranked_UpdateDisplayName(int clientNum, const char* newName);
 qboolean SV_Ranked_IsNameInvalidOrOffensive(const char *name);
 
+// Party live HP heartbeat
+void SV_Ranked_Party_Heartbeat(void);
+
 // Duel hooks
 void SV_Ranked_DuelStart(int p1, int p2);
+
 void SV_Ranked_DuelEnd(int winner, int loser, int isTie, int isDisconnect, int mod);
 
 void SV_Ranked_DuelStop(int p1, int p2);

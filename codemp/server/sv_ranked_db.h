@@ -46,6 +46,8 @@ typedef struct {
   qboolean wasDeadLastFrame; // Helper for death detection
   int duelOpponent;
   int duelStartTime; // ms
+  int lastBP;        // Last reported Block Points (BP) from client/game
+
   
   // Economy / betting state
   int currentBetTarget;
@@ -63,6 +65,8 @@ typedef struct {
   int adventureNodeIdx;     // -1 = not on an adventure, else index into sv_rankedAdventureNodes[]
   int adventureCooldownEnd; // svs.time when player can start another adventure
 
+  int pendingPartyLeader; // Client ID of party leader who invited this player (-1 if none)
+
   int tempElo;                    // In-memory session ELO (starts at 1000 for guests, synced on login for registered)
   char username[MAX_AUTH_STRING]; // Used for saving back to DB
   char displayName[MAX_AUTH_STRING]; // Un-truncated display name from auth/client
@@ -70,6 +74,21 @@ typedef struct {
 
 // Externally accessible match state array (parallel to svs.clients)
 extern rankedMatchState_t sv_rankedPlayers[64];
+
+#define MAX_PARTY_MEMBERS 6
+typedef struct {
+    qboolean active;
+    char teamName[64];
+    int teamColorIdx; // 0=Blue, 1=Red, 2=Green, 3=Yellow, 4=Purple, 5=Orange, 6=Black, 7=White
+    int memberCount;
+    int clientNums[MAX_PARTY_MEMBERS];
+    int score;
+} rankedParty_t;
+
+extern rankedParty_t sv_rankedParties[64];
+void SV_Ranked_UpdateParty(int leaderId);
+
+
 
 // Core Database Methods
 struct cJSON;
@@ -103,6 +122,8 @@ const char* SV_Ranked_GetTitle(int fr, struct cJSON *acc = 0);
 void SV_Ranked_ClientConnect(client_t *cl);
 void SV_Ranked_ClientDisconnect(client_t *cl);
 void SV_Ranked_AutoRegisterByGUID(client_t *cl);
+void SV_Ranked_DB_RecordDuelAnalysis(const char *winnerName, const char *loserName, int winHealth, int winBP, int winEloDelta, int loseEloDelta, int durationSec);
+
 
 // Trivia
 void SV_Ranked_Trivia_HandleAnswer(client_t *cl, const char *message);
