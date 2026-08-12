@@ -815,11 +815,55 @@ void Message_Key( int key ) {
 
 	if ( key == A_ENTER || key == A_KP_ENTER ) {
 		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
+			const char *msg = chatField.buffer;
+			while ( *msg == ' ' ) msg++;
+
+			qboolean isRPGCommand = qfalse;
+			if ( !Q_stricmp( msg, "!stats" ) || !Q_stricmp( msg, "!card" ) || !Q_stricmp( msg, "!profile" ) || !Q_stricmp( msg, "/rpg_card" ) ) {
+				g_xpDrawCard = ( g_xpDrawCard == qtrue ) ? qfalse : qtrue;
+				g_xpDrawRanks = qfalse;
+				g_xpDrawHelp = qfalse;
+				Com_Printf( "^5[RPG MOD] Profile Stats UI Card %s\n", ( g_xpDrawCard == qtrue ) ? "^2ENABLED" : "^1DISABLED" );
+				isRPGCommand = qtrue;
+			} else if ( !Q_stricmp( msg, "!ranks" ) || !Q_stricmp( msg, "/rpg_ranks" ) ) {
+				g_xpDrawRanks = ( g_xpDrawRanks == qtrue ) ? qfalse : qtrue;
+				g_xpDrawCard = qfalse;
+				g_xpDrawHelp = qfalse;
+				Com_Printf( "^5[RPG MOD] Rank Progression Tiers UI %s\n", ( g_xpDrawRanks == qtrue ) ? "^2OPENED" : "^1CLOSED" );
+				isRPGCommand = qtrue;
+			} else if ( !Q_stricmp( msg, "!help" ) || !Q_stricmp( msg, "!info" ) || !Q_stricmp( msg, "!rpg" ) || !Q_stricmp( msg, "/rpg_help" ) ) {
+				g_xpDrawHelp = ( g_xpDrawHelp == qtrue ) ? qfalse : qtrue;
+				g_xpDrawCard = qfalse;
+				g_xpDrawRanks = qfalse;
+				g_xpDrawSettings = qfalse;
+				Com_Printf( "^5[RPG MOD] System Guide & Commands UI %s\n", ( g_xpDrawHelp == qtrue ) ? "^2OPENED" : "^1CLOSED" );
+				isRPGCommand = qtrue;
+			} else if ( !Q_stricmp( msg, "!rpgmenu" ) || !Q_stricmp( msg, "!settings" ) || !Q_stricmp( msg, "!hud" ) || !Q_stricmp( msg, "!menu" ) || !Q_stricmp( msg, "/rpgmenu" ) || !Q_stricmp( msg, "/rpg_settings" ) || !Q_stricmp( msg, "/rpg_hud" ) ) {
+				g_xpDrawSettings = ( g_xpDrawSettings == qtrue ) ? qfalse : qtrue;
+				g_xpDrawCard = qfalse;
+				g_xpDrawRanks = qfalse;
+				g_xpDrawHelp = qfalse;
+				Com_Printf( "^5[RPG MOD] Star Wars RPG Menu UI %s\n", ( g_xpDrawSettings == qtrue ) ? "^2OPENED" : "^1CLOSED" );
+				isRPGCommand = qtrue;
+			} else if ( !Q_stricmp( msg, "!sith" ) || !Q_stricmp( msg, "/rpg_sith" ) ) {
+				g_xpProfile.faction = FACTION_SITH;
+				CL_XP_SaveProfile();
+				Com_Printf( "^1[RPG MOD] Faction changed to SITH! Rank title updated to: ^3%s\n", CL_XP_GetRankTitle( g_xpProfile.level, g_xpProfile.faction ) );
+				isRPGCommand = qtrue;
+			} else if ( !Q_stricmp( msg, "!jedi" ) || !Q_stricmp( msg, "/rpg_jedi" ) ) {
+				g_xpProfile.faction = FACTION_JEDI;
+				CL_XP_SaveProfile();
+				Com_Printf( "^6[RPG MOD] Faction changed to JEDI! Rank title updated to: ^3%s\n", CL_XP_GetRankTitle( g_xpProfile.level, g_xpProfile.faction ) );
+				isRPGCommand = qtrue;
+			}
+
+			if ( !isRPGCommand ) {
 				 if ( chat_playerNum != -1 )	Com_sprintf( buffer, sizeof( buffer ), "tell %i \"%s\"\n", chat_playerNum, chatField.buffer );
 			else if ( chat_team )				Com_sprintf( buffer, sizeof( buffer ), "say_team \"%s\"\n", chatField.buffer );
 			else								Com_sprintf( buffer, sizeof( buffer ), "say \"%s\"\n", chatField.buffer );
 
-			CL_AddReliableCommand( buffer, qfalse );
+				CL_AddReliableCommand( buffer, qfalse );
+			}
 		}
 		Key_SetCatcher( Key_GetCatcher() & ~KEYCATCH_MESSAGE );
 		Field_Clear( &chatField );
@@ -1321,6 +1365,206 @@ void CL_KeyDownEvent( int key, unsigned time )
 		return;
 	}
 
+	if ( g_xpDrawSettings ) {
+		if ( key == A_MOUSE1 || key == A_MOUSE2 || key == A_ENTER || key == A_KP_ENTER ) {
+			float mx = g_rpgMouseX;
+			float my = g_rpgMouseY;
+
+			float cardW = 580.0f;
+			float cardH = 460.0f;
+			float cardX = 320.0f - cardW * 0.5f;
+			float cardY = 240.0f - cardH * 0.5f;
+
+			// Top Tab Buttons (0 to 3)
+			for ( int i = 0; i < 4; i++ ) {
+				float tabX = cardX + 20.0f + i * 136.0f;
+				float tabY = cardY + 46.0f;
+				float tabW = 130.0f;
+				float tabH = 26.0f;
+				if ( mx >= tabX && mx <= tabX + tabW && my >= tabY && my <= tabY + tabH ) {
+					g_rpgMenuTab = i;
+					return;
+				}
+			}
+
+			// TAB 0: HUD & Customizer
+			if ( g_rpgMenuTab == 0 ) {
+				// 1. HUD Style Buttons (0 to 4)
+				for ( int i = 0; i < 5; i++ ) {
+					float btnX = cardX + 20.0f + i * 108.0f;
+					float btnY = cardY + 102.0f;
+					float btnW = 102.0f;
+					float btnH = 24.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						char valBuf[16];
+						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
+						Cvar_Set("cg_rpg_hud_style", valBuf);
+						return;
+					}
+				}
+
+				// 2. Screen Position Buttons (0 to 4)
+				for ( int i = 0; i < 5; i++ ) {
+					float btnX = cardX + 20.0f + i * 108.0f;
+					float btnY = cardY + 156.0f;
+					float btnW = 102.0f;
+					float btnH = 24.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						char valBuf[16];
+						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
+						Cvar_Set("cg_rpg_hud_pos", valBuf);
+						Cvar_Set("cg_rpg_x", "0");
+						Cvar_Set("cg_rpg_y", "0");
+						return;
+					}
+				}
+
+				// 3. Avatar Buttons (0 to 11)
+				for ( int i = 0; i < 12; i++ ) {
+					int col = i % 4;
+					int row = i / 4;
+					float btnX = cardX + 20.0f + col * 136.0f;
+					float btnY = cardY + 210.0f + row * 26.0f;
+					float btnW = 130.0f;
+					float btnH = 22.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						char valBuf[16];
+						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
+						Cvar_Set("cg_rpg_avatar", valBuf);
+						return;
+					}
+				}
+
+				// 4. Faction Switcher Buttons (Jedi / Sith)
+				for ( int i = 0; i < 2; i++ ) {
+					float btnX = cardX + 20.0f + i * 272.0f;
+					float btnY = cardY + 324.0f;
+					float btnW = 262.0f;
+					float btnH = 26.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						g_xpProfile.faction = (i == 1) ? FACTION_SITH : FACTION_JEDI;
+						CL_XP_SaveProfile();
+						return;
+					}
+				}
+
+				// 5. Victory UI Screen Position Buttons (0 to 4)
+				for ( int i = 0; i < 5; i++ ) {
+					float btnX = cardX + 20.0f + i * 108.0f;
+					float btnY = cardY + 378.0f;
+					float btnW = 102.0f;
+					float btnH = 24.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						char valBuf[16];
+						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
+						Cvar_Set("cg_rpg_toast_pos", valBuf);
+						return;
+					}
+				}
+
+				// 6. Notification Position Buttons (0 to 4)
+				for ( int i = 0; i < 5; i++ ) {
+					float btnX = cardX + 20.0f + i * 72.0f;
+					float btnY = cardY + 428.0f;
+					float btnW = 66.0f;
+					float btnH = 22.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						char valBuf[16];
+						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
+						Cvar_Set("cg_rpg_notif_pos", valBuf);
+						return;
+					}
+				}
+
+				// 7. Popups in Duels Toggle Button
+				float toggleX = cardX + 388.0f;
+				float toggleY = cardY + 428.0f;
+				float toggleW = 172.0f;
+				float toggleH = 22.0f;
+				if ( mx >= toggleX && mx <= toggleX + toggleW && my >= toggleY && my <= toggleY + toggleH ) {
+					int curDuelPop = cg_rpg_duel_popups ? cg_rpg_duel_popups->integer : 0;
+					char valBuf[16];
+					Com_sprintf(valBuf, sizeof(valBuf), "%d", !curDuelPop);
+					Cvar_Set("cg_rpg_duel_popups", valBuf);
+					return;
+				}
+			}
+			// TAB 1: Achievements & Quests
+			else if ( g_rpgMenuTab == 1 ) {
+				for ( int i = 0; i < 7; i++ ) {
+					int col = i % 2;
+					int row = i / 2;
+					float itemX = cardX + 20.0f + col * 276.0f;
+					float itemY = cardY + 104.0f + row * 66.0f;
+					float itemW = 265.0f;
+					float btnX = itemX + itemW - 115.0f;
+					float btnY = itemY + 26.0f;
+					float btnW = 105.0f;
+					float btnH = 26.0f;
+
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						CL_XP_ClaimAchievement(i);
+						return;
+					}
+				}
+			}
+			// TAB 2: Audio & SFX Mixer
+			else if ( g_rpgMenuTab == 2 ) {
+				// Master Volume (0 to 4)
+				for ( int i = 0; i < 5; i++ ) {
+					float btnX = cardX + 20.0f + i * 108.0f;
+					float btnY = cardY + 126.0f;
+					float btnW = 102.0f;
+					float btnH = 26.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						g_xpProfile.soundVolume = i;
+						CL_XP_SaveProfile();
+						return;
+					}
+				}
+
+				// Announcer Toggle
+				for ( int i = 0; i < 2; i++ ) {
+					float btnX = cardX + 20.0f + i * 272.0f;
+					float btnY = cardY + 186.0f;
+					float btnW = 262.0f;
+					float btnH = 26.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						g_xpProfile.announcerEnabled = (i == 0) ? 1 : 0;
+						CL_XP_SaveProfile();
+						return;
+					}
+				}
+
+				// Level Up Sounds Toggle
+				for ( int i = 0; i < 2; i++ ) {
+					float btnX = cardX + 20.0f + i * 272.0f;
+					float btnY = cardY + 246.0f;
+					float btnW = 262.0f;
+					float btnH = 26.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						g_xpProfile.levelupSndEnabled = (i == 0) ? 1 : 0;
+						CL_XP_SaveProfile();
+						return;
+					}
+				}
+
+				// Duel Victory Sounds Toggle
+				for ( int i = 0; i < 2; i++ ) {
+					float btnX = cardX + 20.0f + i * 272.0f;
+					float btnY = cardY + 306.0f;
+					float btnW = 262.0f;
+					float btnH = 26.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						g_xpProfile.duelSndEnabled = (i == 0) ? 1 : 0;
+						CL_XP_SaveProfile();
+						return;
+					}
+				}
+			}
+		}
+	}
+
 	// keys can still be used for bound actions
 	if ( cls.state == CA_CINEMATIC && !Key_GetCatcher() ) {
 		if ( !com_cameraMode->integer ) {
@@ -1351,9 +1595,12 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 
 		if ( !(Key_GetCatcher() & KEYCATCH_UI) ) {
-			// Close RPG profile card first if it is open
-			if ( g_xpDrawCard ) {
+			// Close RPG UI overlays first if open
+			if ( g_xpDrawCard || g_xpDrawRanks || g_xpDrawHelp || g_xpDrawSettings ) {
 				g_xpDrawCard = qfalse;
+				g_xpDrawRanks = qfalse;
+				g_xpDrawHelp = qfalse;
+				g_xpDrawSettings = qfalse;
 				return;
 			}
 

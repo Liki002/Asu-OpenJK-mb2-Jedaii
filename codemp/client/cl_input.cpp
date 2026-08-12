@@ -26,6 +26,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "client.h"
 #include "cl_cgameapi.h"
 #include "cl_uiapi.h"
+#include "cl_xp_profile.h"
 #ifndef _WIN32
 #include <cmath>
 #endif
@@ -922,6 +923,16 @@ CL_MouseEvent
 =================
 */
 void CL_MouseEvent( int dx, int dy, int time ) {
+	if ( g_xpDrawSettings || g_xpDrawCard || g_xpDrawRanks || g_xpDrawHelp ) {
+		g_rpgMouseX += (float)dx * 0.75f;
+		g_rpgMouseY += (float)dy * 0.75f;
+		if ( g_rpgMouseX < 0.0f ) g_rpgMouseX = 0.0f;
+		if ( g_rpgMouseX > 640.0f ) g_rpgMouseX = 640.0f;
+		if ( g_rpgMouseY < 0.0f ) g_rpgMouseY = 0.0f;
+		if ( g_rpgMouseY > 480.0f ) g_rpgMouseY = 480.0f;
+		return;
+	}
+
 	if (g_clAutoMapMode && cls.cgameStarted)
 	{ //automap input
 		autoMapInput_t *data = (autoMapInput_t *)cl.mSharedMemory;
@@ -1034,6 +1045,12 @@ CL_MouseMove
 =================
 */
 void CL_MouseMove( usercmd_t *cmd ) {
+	if ( g_xpDrawSettings || g_xpDrawCard || g_xpDrawRanks || g_xpDrawHelp ) {
+		cl.mouseDx[0] = cl.mouseDx[1] = 0;
+		cl.mouseDy[0] = cl.mouseDy[1] = 0;
+		return;
+	}
+
 	float	mx, my;
 	const float	speed = static_cast<float>(frame_msec);
 

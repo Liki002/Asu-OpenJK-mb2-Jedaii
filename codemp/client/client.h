@@ -535,8 +535,12 @@ void	SCR_DrawBigString( int x, int y, const char *s, float alpha, qboolean noCol
 void	SCR_DrawBigStringColor( int x, int y, const char *s, vec4_t color, qboolean noColorEscape );	// ignores embedded color control characters
 void	SCR_DrawSmallStringExt( int x, int y, const char *string, float *setColor, qboolean forceColor, qboolean noColorEscape );
 void	SCR_DrawSmallChar( int x, int y, int ch );
+void	SCR_DrawVirtualString( float x, float y, float charSize, const char *string, const float *setColor );
 void	SCR_DrawRPGHUDOverlay( void );
 void	SCR_DrawProfileCardOverlay( void );
+void	SCR_DrawRanksWindowOverlay( void );
+void	SCR_DrawHelpWindowOverlay( void );
+void	SCR_DrawSettingsWindowOverlay( void );
 
 
 //
@@ -646,6 +650,9 @@ typedef struct {
 	int      xp;
 	char     opponentName[64];
 	int      startTimeMs;   // cls.realtime when toast was triggered
+	int      victimBP;      // parsed from obituary
+	int      killerHP;      // parsed from obituary
+	int      killerBP;      // parsed from obituary
 } rpgToastNotif_t;
 
 extern rpgToastNotif_t g_rpgToast;

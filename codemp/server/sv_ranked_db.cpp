@@ -2530,29 +2530,52 @@ static const sv_achDef_t sv_achPool[] = {
     {"kill_10", "Warlord I", 50},
     {"kill_100", "Warlord II", 100},
     {"kill_1000", "Warlord III", 250},
+    {"kill_5000", "Legendary Slayer", 1000},
     {"streak_5", "On a Roll", 50},
     {"streak_10", "Unstoppable", 100},
+    {"streak_20", "Legendary", 500},
     {"streak_25", "God of War", 250},
     {"melee_50", "Brawler", 100},
     {"bomb_20", "Bomberman", 100},
     {"domination_5", "Tyrant", 100},
+    {"saber_100", "Saber Apprentice", 100},
+    {"saber_500", "Saber Master", 500},
+    {"gunner_100", "Gunner Cadet", 100},
+    {"gunner_500", "Marksman", 500},
+    {"npc_slayer_100", "NPC Exterminator", 200},
+    {"deathless_10", "Untouchable", 500},
     // ---- Duel ----
     {"duel_win_1", "Challenger", 50},
     {"duel_win_10", "Duelist", 100},
     {"duel_win_50", "Master Duelist", 250},
     {"duel_win_100", "Grand Champion", 500},
+    {"duel_flawless_5", "Flawless Victor", 200},
+    {"duel_flawless_25", "Perfectionist", 1000},
     {"rank_up", "Rising Star", 50},
     {"high_elo", "Elite", 250},
     {"bounty_claim", "Bounty Hunter", 100},
+    // ---- Boss / NPC ----
+    {"boss_kyle_1", "Katarn Foe", 250},
+    {"boss_kyle_10", "Katarn Bane", 1000},
+    {"boss_rey_1", "Jedi Slayer", 250},
     // ---- Economy ----
     {"credits_1000", "Coin Collector", 50},
     {"credits_10000", "Moneybags", 150},
+    {"credits_100000", "Tycoon", 500},
     {"quest_10", "Quest Hunter", 150},
+    {"shop_buy_50", "Shopaholic", 150},
+    {"bet_win_10", "High Roller", 300},
     // ---- Milestones ----
     {"level_5", "Initiate", 50},
     {"level_10", "Apprentice", 100},
     {"level_25", "Veteran", 250},
+    {"level_50", "Warrior", 500},
+    {"level_100", "Commander", 1000},
+    {"level_500", "Mythic", 5000},
+    {"round_win_50", "Team Player", 250},
+    {"round_win_200", "Veteran Campaigner", 1000},
     {"win_msg_owner", "Showoff", 50},
+    {"daily_7", "Weekly Warrior", 300},
     {NULL, NULL, 0}};
 
 static const sv_achDef_t *SV_Ach_Find(const char *id) {
@@ -2645,12 +2668,16 @@ void SV_Ranked_CheckKillAchievements(const char *username, int totalKills,
     SV_Ranked_GrantAchievement(username, "kill_100", cl);
   if (totalKills >= 1000)
     SV_Ranked_GrantAchievement(username, "kill_1000", cl);
+  if (totalKills >= 5000)
+    SV_Ranked_GrantAchievement(username, "kill_5000", cl);
 
   // Streak milestones
   if (streak >= 5)
     SV_Ranked_GrantAchievement(username, "streak_5", cl);
   if (streak >= 10)
     SV_Ranked_GrantAchievement(username, "streak_10", cl);
+  if (streak >= 20)
+    SV_Ranked_GrantAchievement(username, "streak_20", cl);
   if (streak >= 25)
     SV_Ranked_GrantAchievement(username, "streak_25", cl);
 
@@ -2700,6 +2727,8 @@ void SV_Ranked_CheckLevelAchievements(const char *username, int newLevel,
                                       client_t *cl) {
   if (!username)
     return;
+  if (newLevel >= 5)
+    SV_Ranked_GrantAchievement(username, "level_5", cl);
   if (newLevel >= 10)
     SV_Ranked_GrantAchievement(username, "level_10", cl);
   if (newLevel >= 25)
@@ -2708,6 +2737,8 @@ void SV_Ranked_CheckLevelAchievements(const char *username, int newLevel,
     SV_Ranked_GrantAchievement(username, "level_50", cl);
   if (newLevel >= 100)
     SV_Ranked_GrantAchievement(username, "level_100", cl);
+  if (newLevel >= 500)
+    SV_Ranked_GrantAchievement(username, "level_500", cl);
 }
 
 /*
@@ -2742,9 +2773,9 @@ void SV_Ranked_CheckEconomyAchievements(const char *username, client_t *cl) {
   int credits = cr ? cr->valueint : 0;
 
   if (credits >= 1000)
-    SV_Ranked_GrantAchievement(username, "rich_1000", cl);
+    SV_Ranked_GrantAchievement(username, "credits_1000", cl);
   if (credits >= 10000)
-    SV_Ranked_GrantAchievement(username, "rich_10000", cl);
+    SV_Ranked_GrantAchievement(username, "credits_10000", cl);
 }
 
 void SV_Ranked_ShowAchievements(client_t *cl) {

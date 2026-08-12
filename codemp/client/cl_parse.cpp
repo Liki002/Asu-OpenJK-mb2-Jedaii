@@ -799,8 +799,6 @@ void CL_ParseCommandString( msg_t *msg ) {
 	*/
 	Q_strncpyz( clc.serverCommands[ index ], s, sizeof( clc.serverCommands[ index ] ) );
 
-	CL_XP_OnPrintMessage( s );
-
 	// RPG Client Data Sync Parser
 	if ( !Q_strncmp( s, "rpg_sync", 8 ) ) {
 		int currentXP = 0, maxXP = 1000, level = 1, fr = 1000;
@@ -883,6 +881,9 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgToast.credits      = cr;
 		g_rpgToast.xp           = xp;
 		g_rpgToast.startTimeMs  = cls.realtime;
+		g_rpgToast.victimBP     = g_lastParsedVictimBP;
+		g_rpgToast.killerHP     = g_lastParsedKillerHP;
+		g_rpgToast.killerBP     = g_lastParsedKillerBP;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
 	} else if ( !Q_strncmp( s, "toast_lose", 10 ) ) {
 		int eloDelta = 0, cr = 0, xp = 0;
@@ -894,6 +895,9 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgToast.credits      = cr;
 		g_rpgToast.xp           = xp;
 		g_rpgToast.startTimeMs  = cls.realtime;
+		g_rpgToast.victimBP     = g_lastParsedVictimBP;
+		g_rpgToast.killerHP     = g_lastParsedKillerHP;
+		g_rpgToast.killerBP     = g_lastParsedKillerBP;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
 	} else if ( !Q_strncmp( s, "inspect_data", 12 ) ) {
 		int tNum = 0, lvl = 1, fr = 1000;

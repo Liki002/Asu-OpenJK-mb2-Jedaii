@@ -40,6 +40,7 @@ cvar_t		*cl_graphshift;
 
 cvar_t		*cg_drawRPGHUD;
 cvar_t		*cg_rpg_style;
+cvar_t		*cg_rpg_hud_style;
 cvar_t		*cg_rpg_pos;
 cvar_t		*cg_rpg_x;
 cvar_t		*cg_rpg_y;
@@ -53,8 +54,11 @@ cvar_t		*cg_rpg_rank;
 cvar_t		*cg_drawLeaderboard;
 cvar_t		*cg_drawStats;
 cvar_t		*cg_drawBounty;
+cvar_t		*cg_rpg_toast_pos;
+cvar_t		*cg_rpg_notif_pos;
+cvar_t		*cg_rpg_duel_popups;
 rpgPlayerStats_t g_rpgStats;
-rpgToastNotif_t  g_rpgToast   = {qfalse, qfalse, 0, 0, 0, "", 0};
+rpgToastNotif_t  g_rpgToast   = {qfalse, qfalse, 0, 0, 0, "", 0, 0, 0, 0};
 rpgInspectCard_t g_rpgInspect = {qfalse, 1, 1000, "Padawan", "", 0};
 rpgBountyOverlay_t g_rpgBounty = {qfalse, qfalse, 0, {}};
 
@@ -484,6 +488,7 @@ void SCR_Init( void ) {
 
 	cg_drawRPGHUD = Cvar_Get ("cg_drawRPGHUD", "1", CVAR_ARCHIVE);
 	cg_rpg_style = Cvar_Get ("cg_rpg_style", "0", CVAR_ARCHIVE);
+	cg_rpg_hud_style = Cvar_Get ("cg_rpg_hud_style", "0", CVAR_ARCHIVE);
 	cg_rpg_pos = Cvar_Get ("cg_rpg_pos", "left", CVAR_ARCHIVE);
 	cg_rpg_x = Cvar_Get ("cg_rpg_x", "14", CVAR_ARCHIVE);
 	cg_rpg_y = Cvar_Get ("cg_rpg_y", "14", CVAR_ARCHIVE);
@@ -497,6 +502,9 @@ void SCR_Init( void ) {
 	cg_drawLeaderboard = Cvar_Get ("cg_drawLeaderboard", "0", 0);
 	cg_drawStats = Cvar_Get ("cg_drawStats", "0", 0);
 	cg_drawBounty = Cvar_Get ("cg_drawBounty", "0", 0);
+	cg_rpg_toast_pos = Cvar_Get ("cg_rpg_toast_pos", "1", CVAR_ARCHIVE);
+	cg_rpg_notif_pos = Cvar_Get ("cg_rpg_notif_pos", "1", CVAR_ARCHIVE);
+	cg_rpg_duel_popups = Cvar_Get ("cg_rpg_duel_popups", "0", CVAR_ARCHIVE);
 
 	Cmd_AddCommand( "rpg_hud_style", SCR_RPGHUDStyle_f, "Select RPG HUD style: classic (0) or bottom (1)" );
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
@@ -566,7 +574,7 @@ SCR_DrawVirtualString
 Draws crisp text at 640x480 virtual coordinates matching SCR_FillRect & SCR_DrawPic
 ==================
 */
-static void SCR_DrawVirtualString( float x, float y, float charSize, const char *string, const float *setColor ) {
+void SCR_DrawVirtualString( float x, float y, float charSize, const char *string, const float *setColor ) {
 	const char *s = string;
 	float xx = x;
 	vec4_t color;
@@ -635,34 +643,69 @@ SCR_DrawJediVectorEmblem
 Renders sharp Jedi Order lightsaber wings emblem inside a circular ring.
 ==================
 */
-static void SCR_DrawJediVectorEmblem( float cx, float cy, float radius ) {
-	vec4_t ringCyan  = { 0.00f, 0.70f, 1.00f, 0.75f };
-	vec4_t innerBg   = { 0.04f, 0.10f, 0.20f, 0.65f };
-	vec4_t saberGold = { 1.00f, 0.85f, 0.20f, 0.95f };
-	vec4_t saberCyan = { 0.20f, 0.90f, 1.00f, 0.95f };
+static void SCR_DrawJediVectorEmblem( float cx, float cy, float radius, int faction ) {
+	if ( faction == FACTION_SITH ) {
+		// --- SITH EMPIRE VECTOR EMBLEM (Crimson/Red) ---
+		vec4_t sithRed   = { 0.95f, 0.15f, 0.15f, 0.85f };
+		vec4_t saberCore = { 1.00f, 0.90f, 0.90f, 0.95f };
 
-	// Inner dark circle fill
-	SCR_FillRect( cx - radius + 2.0f, cy - radius + 2.0f, (radius - 2.0f) * 2.0f, (radius - 2.0f) * 2.0f, innerBg );
+		// Sith Star Destroyer Hex Crest
+		SCR_FillRect( cx - 1.0f, cy - radius + 4.0f, 2.0f, radius * 2.0f - 8.0f, sithRed );
+		SCR_FillRect( cx - radius + 4.0f, cy - 1.0f, radius * 2.0f - 8.0f, 2.0f, sithRed );
+		SCR_FillRect( cx - 1.0f, cy - 6.0f, 2.0f, 12.0f, saberCore );
+		SCR_FillRect( cx - 6.0f, cy - 1.0f, 12.0f, 2.0f, saberCore );
+	} else {
+		// --- JEDI ORDER VECTOR EMBLEM (Cyan/Gold) ---
+		vec4_t saberGold = { 1.00f, 0.85f, 0.20f, 0.95f };
+		vec4_t saberCyan = { 0.20f, 0.90f, 1.00f, 0.95f };
 
-	// Circular ring border
-	SCR_FillRect( cx - radius + 3.0f, cy - radius, radius * 2.0f - 6.0f, 1.0f, ringCyan );
-	SCR_FillRect( cx - radius + 3.0f, cy + radius - 1.0f, radius * 2.0f - 6.0f, 1.0f, ringCyan );
-	SCR_FillRect( cx - radius, cy - radius + 3.0f, 1.0f, radius * 2.0f - 6.0f, ringCyan );
-	SCR_FillRect( cx + radius - 1.0f, cy - radius + 3.0f, 1.0f, radius * 2.0f - 6.0f, ringCyan );
+		// Jedi Lightsaber Wings & Central Blade
+		SCR_FillRect( cx - 1.0f, cy - radius + 4.0f, 2.0f, radius * 2.0f - 8.0f, saberCyan ); // Vertical blade
+		SCR_FillRect( cx - 5.0f, cy, 10.0f, 1.5f, saberGold );                                // Crossguard
+		SCR_FillRect( cx - 7.0f, cy - 3.0f, 3.0f, 1.5f, saberGold );                          // Left wing tip
+		SCR_FillRect( cx + 4.0f, cy - 3.0f, 3.0f, 1.5f, saberGold );                          // Right wing tip
+		SCR_FillRect( cx - 3.0f, cy + 3.0f, 6.0f, 1.5f, saberGold );                          // Hilt base
+	}
+}
 
-	// Jedi Lightsaber Wings & Central Blade
-	SCR_FillRect( cx - 1.0f, cy - radius + 3.0f, 2.0f, radius * 2.0f - 6.0f, saberCyan ); // Vertical blade
-	SCR_FillRect( cx - 5.0f, cy, 10.0f, 1.5f, saberGold );                                // Crossguard
-	SCR_FillRect( cx - 7.0f, cy - 3.0f, 3.0f, 1.5f, saberGold );                          // Left wing tip
-	SCR_FillRect( cx + 4.0f, cy - 3.0f, 3.0f, 1.5f, saberGold );                          // Right wing tip
-	SCR_FillRect( cx - 3.0f, cy + 3.0f, 6.0f, 1.5f, saberGold );                          // Hilt base
+static void SCR_DrawRPGAvatar( float x, float y, float size, int faction ) {
+	int avatarIdx = cg_rpg_avatar ? cg_rpg_avatar->integer : 0;
+	if ( avatarIdx == 0 ) {
+		SCR_DrawJediVectorEmblem( x + size * 0.5f, y + size * 0.5f, size * 0.5f, faction );
+		return;
+	}
+
+	const char *avatarShaderName = "gfx/2d/logos/mb_jediorder";
+	if ( avatarIdx == 1 ) avatarShaderName = "gfx/2d/logos/mb_jediorder";
+	else if ( avatarIdx == 2 ) avatarShaderName = "gfx/2d/logos/mb_sithempire";
+	else if ( avatarIdx == 3 ) avatarShaderName = "gfx/2d/logos/mb_mand";
+	else if ( avatarIdx == 4 ) avatarShaderName = "gfx/2d/logos/mb_rebel";
+	else if ( avatarIdx == 5 ) avatarShaderName = "gfx/2d/logos/mb_empire";
+	else if ( avatarIdx == 6 ) avatarShaderName = "gfx/2d/logos/mb_bountyhunters";
+	else if ( avatarIdx == 7 ) avatarShaderName = "gfx/2d/logos/mb_oldrepublic";
+	else if ( avatarIdx >= 8 && avatarIdx <= 15 ) {
+		static char customPath[64];
+		Com_sprintf( customPath, sizeof(customPath), "gfx/rpg_hud/avatars/avatar_custom%d", avatarIdx - 7 );
+		avatarShaderName = customPath;
+	}
+
+	if ( re && re->RegisterShader ) {
+		qhandle_t hShader = re->RegisterShader( avatarShaderName );
+		if ( hShader > 0 ) {
+			SCR_DrawPic( x, y, size, size, hShader );
+			return;
+		}
+	}
+
+	// Fallback to vector emblem if shader not found
+	SCR_DrawJediVectorEmblem( x + size * 0.5f, y + size * 0.5f, size * 0.5f, faction );
 }
 
 /*
 ==================
 SCR_DrawRPGHUDOverlay
 
-Renders client-side RPG HUD Overlay (Supports Style 0 Classic & Style 1 Bottom Sleek Bar)
+Renders client-side RPG HUD Overlay supporting 5 Star Wars HUD styles (cg_rpg_hud_style 0 to 4)
 ==================
 */
 static float s_visualXP = -1.0f;
@@ -673,7 +716,27 @@ static qhandle_t s_hBarFill = 0;
 static qhandle_t s_hAvatar = 0;
 static qhandle_t s_hAvatarFrame = 0;
 static qhandle_t s_hModalBg = 0;
-static qboolean  s_shadersTried = qfalse;
+static qhandle_t s_hHoloJediFrame       = 0;
+static qhandle_t s_hHoloSithFrame       = 0;
+static qhandle_t s_hFrameStyle1Saber    = 0;
+static qhandle_t s_hFrameStyle2Pill     = 0;
+static qhandle_t s_hFrameStyle3Imperial = 0;
+static qhandle_t s_hFrameStyle4Neon     = 0;
+static qhandle_t s_hWinSettings         = 0;
+static qhandle_t s_hWinRanks            = 0;
+static qhandle_t s_hWinStats            = 0;
+static qhandle_t s_hWinHelp             = 0;
+static qhandle_t s_hBtnNormal           = 0;
+static qhandle_t s_hBtnHover            = 0;
+static qhandle_t s_hBtnActive           = 0;
+static qhandle_t s_hBtnSithNormal       = 0;
+static qhandle_t s_hBtnSithHover        = 0;
+static qhandle_t s_hMousePointer        = 0;
+static qhandle_t s_hSaberJediBar        = 0;
+static qhandle_t s_hSaberSithBar        = 0;
+static qhandle_t s_hFillXPJedi         = 0;
+static qhandle_t s_hFillXPSith         = 0;
+static qboolean  s_shadersTried         = qfalse;
 
 static int SCR_GetCleanStringLength( const char *str ) {
 	if ( !str ) return 0;
@@ -688,7 +751,81 @@ static int SCR_GetCleanStringLength( const char *str ) {
 	return len;
 }
 
+static float SCR_GetTextPixelWidth( const char *str, float charScale ) {
+	int cleanLen = SCR_GetCleanStringLength( str );
+	return (float)cleanLen * charScale * 0.60f;
+}
+
+void SCR_TruncateTextToWidth( const char *inText, float maxWidth, float charScale, char *outBuf, int outBufSize ) {
+	if ( !inText || !outBuf || outBufSize <= 0 ) return;
+	outBuf[0] = '\0';
+	float curWidth = SCR_GetTextPixelWidth( inText, charScale );
+	if ( curWidth <= maxWidth ) {
+		Q_strncpyz( outBuf, inText, outBufSize );
+		return;
+	}
+
+	int inLen = strlen( inText );
+	if ( inLen > outBufSize - 4 ) inLen = outBufSize - 4;
+	for ( int i = inLen; i > 0; i-- ) {
+		char temp[256];
+		Q_strncpyz( temp, inText, i + 1 );
+		Q_strcat( temp, sizeof(temp), ".." );
+		if ( SCR_GetTextPixelWidth( temp, charScale ) <= maxWidth ) {
+			Q_strncpyz( outBuf, temp, outBufSize );
+			return;
+		}
+	}
+	Q_strncpyz( outBuf, "..", outBufSize );
+}
+
+void SCR_DrawCenteredText( float boxX, float boxY, float boxW, float charScale, const char *str, vec4_t color ) {
+	float textWidth = SCR_GetTextPixelWidth( str, charScale );
+	float centeredX = boxX + (boxW - textWidth) * 0.5f;
+	if ( centeredX < boxX + 2.0f ) centeredX = boxX + 2.0f;
+	SCR_DrawVirtualString( centeredX, boxY, charScale, str, color );
+}
+
+void SCR_DrawRightAlignedText( float rightX, float boxY, float charScale, const char *str, vec4_t color ) {
+	float textWidth = SCR_GetTextPixelWidth( str, charScale );
+	float alignedX = rightX - textWidth;
+	SCR_DrawVirtualString( alignedX, boxY, charScale, str, color );
+}
+
+static void SCR_DrawPulsatingXPEnergyBar( float barX, float barY, float barW, float barH, float xpRatio, int faction ) {
+	float fillW = barW * xpRatio;
+	if ( fillW < 2.0f ) fillW = 2.0f;
+
+	float pulse = 0.75f + 0.25f * sinf( (float)cls.realtime * 0.006f );
+
+	if ( faction == FACTION_SITH ) {
+		// --- SITH CRIMSON PULSATING ENERGY BAR ---
+		vec4_t sithFill   = { 0.90f, 0.10f, 0.10f, 0.90f * pulse };
+		vec4_t sithCore   = { 1.00f, 0.85f, 0.30f, 0.95f };
+
+		SCR_FillRect( barX, barY, fillW, barH, sithFill );
+		if ( fillW > 6.0f ) {
+			SCR_FillRect( barX + 1.0f, barY + barH * 0.35f, fillW - 2.0f, 1.2f, sithCore );
+		}
+	} else {
+		// --- JEDI CYAN/BLUE PULSATING ENERGY BAR ---
+		vec4_t jediFill   = { 0.00f, 0.60f, 0.95f, 0.90f * pulse };
+		vec4_t jediCore   = { 0.90f, 0.98f, 1.00f, 0.95f };
+
+		SCR_FillRect( barX, barY, fillW, barH, jediFill );
+		if ( fillW > 6.0f ) {
+			SCR_FillRect( barX + 1.0f, barY + barH * 0.35f, fillW - 2.0f, 1.2f, jediCore );
+		}
+	}
+}
+
 void SCR_DrawRPGHUDOverlay( void ) {
+	static int s_lastState = -1;
+	if ( cls.state != s_lastState ) {
+		s_lastState = cls.state;
+		s_shadersTried = qfalse;
+	}
+
 	if ( cls.state != CA_ACTIVE ) {
 		return;
 	}
@@ -698,246 +835,407 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	if ( g_xpDrawCard ) {
 		SCR_DrawProfileCardOverlay();
 	}
+	if ( g_xpDrawRanks ) {
+		SCR_DrawRanksWindowOverlay();
+	}
+	if ( g_xpDrawHelp ) {
+		SCR_DrawHelpWindowOverlay();
+	}
+	if ( g_xpDrawSettings ) {
+		SCR_DrawSettingsWindowOverlay();
+	}
 
 	if ( !cg_drawRPGHUD || !cg_drawRPGHUD->integer ) {
 		return;
 	}
 
-	// Register HD TGA Shaders dynamically once active
-	if ( !s_shadersTried ) {
+	// Hide RPG HUD when Scoreboard (TAB), UI Menus, CGame Menus, or Console are active
+	if ( Key_GetCatcher() & (KEYCATCH_UI | KEYCATCH_CGAME | KEYCATCH_CONSOLE) ) {
+		return;
+	}
+	if ( cl.snap.ps.pm_flags & PMF_SCOREBOARD ) {
+		return;
+	}
+	if ( cl.snap.ps.pm_type == PM_INTERMISSION ) {
+		return;
+	}
+	if ( Key_IsDown( A_TAB ) || Key_IsDown( Key_StringToKeynum("tab") ) ) {
+		return;
+	}
+
+	// Register HD TGA Shaders dynamically upon map load/reconnect
+	static int s_lastServerTime = -1;
+	if ( !s_shadersTried || cl.snap.serverTime < s_lastServerTime ) {
 		s_shadersTried = qtrue;
+		s_lastServerTime = cl.snap.serverTime;
 		if ( re && re->RegisterShader ) {
-			s_hBox         = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
-			s_hBarBg       = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
-			s_hBarFill     = re->RegisterShader( "gfx/rpg_hud/bar_fill" );
-			s_hAvatar      = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
-			s_hAvatarFrame = re->RegisterShader( "gfx/rpg_hud/avatar_frame" );
-			s_hModalBg     = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
+			s_hHoloJediFrame       = re->RegisterShader( "gfx/rpg_hud/hud_style0_clean" );
+			s_hHoloSithFrame       = re->RegisterShader( "gfx/rpg_hud/hud_style0_sith_clean" );
+			s_hFrameStyle1Saber    = re->RegisterShader( "gfx/rpg_hud/hud_style1_clean" );
+			s_hFrameStyle2Pill     = re->RegisterShader( "gfx/rpg_hud/hud_style2_clean" );
+			s_hFrameStyle3Imperial = re->RegisterShader( "gfx/rpg_hud/hud_style3_clean" );
+			s_hFrameStyle4Neon     = re->RegisterShader( "gfx/rpg_hud/hud_style3_sith_clean" );
+			s_hWinSettings         = re->RegisterShader( "gfx/rpg_hud/window_settings_clean" );
+			s_hWinRanks            = re->RegisterShader( "gfx/rpg_hud/window_ranks_clean" );
+			s_hWinStats            = re->RegisterShader( "gfx/rpg_hud/window_stats_clean" );
+			s_hWinHelp             = re->RegisterShader( "gfx/rpg_hud/window_help_clean" );
+			s_hBtnNormal           = re->RegisterShader( "gfx/rpg_hud/btn_normal" );
+			s_hBtnHover            = re->RegisterShader( "gfx/rpg_hud/btn_hover" );
+			s_hBtnActive           = re->RegisterShader( "gfx/rpg_hud/btn_active" );
+			s_hBtnSithNormal       = re->RegisterShader( "gfx/rpg_hud/btn_sith_normal" );
+			s_hBtnSithHover        = re->RegisterShader( "gfx/rpg_hud/btn_sith_hover" );
+			s_hMousePointer        = re->RegisterShader( "gfx/rpg_hud/mouse_pointer" );
+			s_hFillXPJedi          = re->RegisterShader( "gfx/rpg_hud/bar_fill_xp_jedi" );
+			s_hFillXPSith          = re->RegisterShader( "gfx/rpg_hud/bar_fill_xp_sith" );
 		}
 	}
 
-	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
+	int style = 0;
+	if ( cg_rpg_hud_style ) {
+		style = cg_rpg_hud_style->integer;
+	} else if ( cg_rpg_style ) {
+		style = cg_rpg_style->integer;
+	}
+	if ( style < 0 || style > 4 ) style = 0;
 
 	cvar_t *clName = Cvar_Get( "name", "Padawan", 0 );
-	const char *playerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
-	const char *rankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan";
+	const char *rawPlayerName = (cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : (clName ? clName->string : "Player");
+	const char *rawRankTitle = (cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : CL_XP_GetRankTitle(g_xpProfile.level, g_xpProfile.faction);
 
-	int nameLen = SCR_GetCleanStringLength( playerName );
-	int rankLen = SCR_GetCleanStringLength( rankTitle );
-	int maxTextLen = (nameLen > rankLen + 10) ? nameLen : (rankLen + 10);
+	// Truncate player name & rank title to prevent UI text overflow
+	char playerName[64], rankTitle[64];
+	SCR_TruncateTextToWidth( rawPlayerName, 95.0f, 5.2f, playerName, sizeof(playerName) );
+	SCR_TruncateTextToWidth( rawRankTitle, 45.0f, 3.6f, rankTitle, sizeof(rankTitle) );
 
-	float calculatedW = (style == 1) ? (42.0f + maxTextLen * 5.5f + 35.0f) : (35.0f + maxTextLen * 5.5f + 25.0f);
-	float minW = (style == 1) ? 190.0f : 160.0f;
-	float panelW = (calculatedW > minW) ? calculatedW : minW;
-	if ( panelW > 500.0f ) panelW = 500.0f;
-	float panelH = 46.0f;
+	// Fixed invariant panel size (192x48)
+	float panelW = 192.0f;
+	float panelH = 48.0f;
+	float defaultX = 14.0f;
+	float defaultY = 345.0f;
 
-	// Preset position defaults
-	float defaultX = (style == 1) ? (320.0f - panelW * 0.5f) : 14.0f;
-	float defaultY = (style == 1) ? 428.0f : 14.0f;
-
-	if ( cg_rpg_pos && cg_rpg_pos->string[0] ) {
-		if ( !Q_stricmp( cg_rpg_pos->string, "right" ) || !Q_stricmp( cg_rpg_pos->string, "topright" ) ) {
-			defaultX = 640.0f - panelW - 14.0f; defaultY = 14.0f;
-		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomright" ) ) {
-			defaultX = 640.0f - panelW - 14.0f; defaultY = 345.0f;
-		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomleft" ) ) {
-			defaultX = 14.0f; defaultY = 345.0f;
-		} else if ( !Q_stricmp( cg_rpg_pos->string, "bottomcenter" ) || !Q_stricmp( cg_rpg_pos->string, "center" ) ) {
-			defaultX = 320.0f - panelW * 0.5f; defaultY = 428.0f;
-		}
+	if ( cg_rpg_hud_pos ) {
+		int posVal = cg_rpg_hud_pos->integer;
+		if ( posVal == 0 ) { defaultX = 14.0f; defaultY = 14.0f; }
+		else if ( posVal == 1 ) { defaultX = 640.0f - panelW - 14.0f; defaultY = 14.0f; }
+		else if ( posVal == 2 ) { defaultX = 14.0f; defaultY = 345.0f; } // Above health/armor UI
+		else if ( posVal == 3 ) { defaultX = 640.0f - panelW - 14.0f; defaultY = 345.0f; } // Above force/weapon UI
+		else if ( posVal == 4 ) { defaultX = 320.0f - panelW * 0.5f; defaultY = 425.0f; }
 	}
 
-	float panelX = (cg_rpg_x && cg_rpg_x->value != 0.0f) ? cg_rpg_x->value : defaultX;
-	float panelY = (cg_rpg_y && cg_rpg_y->value != 0.0f) ? cg_rpg_y->value : defaultY;
+	float customX = cg_rpg_x ? cg_rpg_x->value : 0.0f;
+	float customY = cg_rpg_y ? cg_rpg_y->value : 0.0f;
+	float panelX = (customX != 0.0f) ? customX : defaultX;
+	float panelY = (customY != 0.0f) ? customY : defaultY;
 
-	int level = cg_rpg_level ? cg_rpg_level->integer : 1;
-	int fr = cg_rpg_fr ? cg_rpg_fr->integer : 1000;
-	int xp = cg_rpg_xp ? cg_rpg_xp->integer : 0;
-	int xpMax = (cg_rpg_xp_max && cg_rpg_xp_max->integer > 0) ? cg_rpg_xp_max->integer : 1000;
+	int level = CL_XP_GetLevel();
+	int curXP = 0, xpMax = 0;
+	float levelProgressPercent = 0.0f;
+	CL_XP_GetLevelProgress( &curXP, &xpMax, &levelProgressPercent );
 
-	if ( xp < 0 ) xp = 0;
-	if ( xp > xpMax ) xp = xpMax;
-
+	static float s_visualXP = -1.0f;
 	if ( s_visualXP < 0.0f ) {
-		s_visualXP = (float)xp;
+		s_visualXP = (float)curXP;
 	} else {
-		float diff = (float)xp - s_visualXP;
-		if ( fabsf( diff ) > 0.1f ) {
-			s_visualXP += diff * 0.08f;
+		float diff = (float)curXP - s_visualXP;
+		if ( fabsf(diff) > 0.5f ) {
+			s_visualXP += diff * 0.10f;
 		} else {
-			s_visualXP = (float)xp;
+			s_visualXP = (float)curXP;
 		}
 	}
 
-	float xpRatio = s_visualXP / (float)xpMax;
+	float xpRatio = s_visualXP / (float)(xpMax > 0 ? xpMax : 1000);
 	if ( xpRatio < 0.0f ) xpRatio = 0.0f;
 	if ( xpRatio > 1.0f ) xpRatio = 1.0f;
 
 	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
 	re->SetColor( whiteColor );
 
-	// ========================================================
-	// STYLE 1: BOTTOM SLEEK BAR (Expanded Floating Elements)
-	// ========================================================
-	if ( style == 1 ) {
-		// Avatar silhouette (Fitted inside frame)
-		float avatarX = panelX + 4.0f;
-		float avatarY = panelY - 1.0f;
-		float avatarSize = 26.0f;
+	// Faction colors & pulse animations (smooth sine wave glow)
+	float glowPulse = sinf( (float)cls.realtime * 0.0035f );
+	float pulseAlpha = 0.70f + 0.25f * glowPulse;
 
-		if ( s_hAvatar && s_hAvatarFrame ) {
-			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatarFrame );
-			SCR_DrawPic( avatarX + 2.0f, avatarY + 2.0f, avatarSize - 4.0f, avatarSize - 4.0f, s_hAvatar );
-		} else if ( s_hAvatar ) {
-			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
-		} else {
-			float cx = avatarX + avatarSize * 0.5f;
-			float cy = avatarY + avatarSize * 0.5f;
-			SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
-		}
-
-		// Player Info Column next to Circular Avatar
-		float textX = avatarX + avatarSize + 8.0f;
-
-		// Line 1: Player Name + Level Badge
-		char nameLvlStr[96];
-		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%s ^3Lv %d", playerName, level );
-		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, nameLvlStr, whiteColor );
-
-		// Line 2: Rank Title & Private Duel Record (Wins - Losses)
-		char rankStr[96];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
-		SCR_DrawVirtualString( textX, panelY + 13.0f, 4.3f, rankStr, whiteColor );
-
-		// Line 3: Sleek Horizontal XP Bar (TGA Background)
-		float barX = textX;
-		float barY = panelY + 25.0f;
-		float barW = panelX + panelW - barX - 4.0f;
-		float barH = 8.0f;
-
-		if ( s_hBarBg ) {
-			SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
-		} else {
-			vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
-			vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
-			SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
-		}
-
-		float fillX = barX;
-		float fillY = barY;
-		float maxFillW = barW;
-		float fillW = maxFillW * xpRatio;
-		float fillH = barH;
-
-		if ( fillW > 0.0f ) {
-			if ( s_hBarFill ) {
-				SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
-			} else {
-				vec4_t factionFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-				if ( g_xpProfile.faction == FACTION_SITH ) {
-					factionFill[0] = 0.95f; factionFill[1] = 0.15f; factionFill[2] = 0.15f;
-				}
-				SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, factionFill, NULL );
-			}
-		}
-
-		// XP Numeric Readout Overlay
-		char xpText[64];
-		Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", (int)s_visualXP, xpMax );
-		float textWidthPixels = (strlen(xpText) * 3.8f * 0.60f);
-		float xpTextX = barX + barW - textWidthPixels - 3.0f;
-		if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
-		SCR_DrawVirtualString( xpTextX, barY - 10.0f, 3.8f, xpText, whiteColor );
-		return;
+	vec4_t factionPrimary = { 0.00f, 0.75f, 1.00f, pulseAlpha }; // Cyan/Blue for Jedi
+	if ( g_xpProfile.faction == FACTION_SITH ) {
+		factionPrimary[0] = 0.95f; factionPrimary[1] = 0.15f; factionPrimary[2] = 0.15f; // Crimson Red
 	}
 
 	// ========================================================
-	// STYLE 0: CLASSIC GLASS PANEL CARD (HD TGA Card)
+	// STYLE 0: MODERN STAR WARS HOLOGRAPHIC DATAPAD (Default)
 	// ========================================================
-	if ( s_hBox ) {
-		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hBox );
+if ( style == 0 ) {
+	qhandle_t hFrame = (g_xpProfile.faction == FACTION_SITH) ? s_hHoloSithFrame : s_hHoloJediFrame;
+	if ( hFrame > 0 ) {
+		SCR_DrawPic( panelX, panelY, panelW, panelH, hFrame );
 	} else {
-		vec4_t bgColor     = { 0.02f, 0.05f, 0.10f, 0.20f };
-		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.40f };
-		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, bgColor, borderColor );
+		vec4_t glassBg     = { 0.02f, 0.06f, 0.14f, 0.75f };
+		vec4_t glassBorder = { factionPrimary[0], factionPrimary[1], factionPrimary[2], pulseAlpha };
+		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, glassBg, glassBorder );
 	}
 
-	// Avatar (Fitted inside circular frame)
-	float avatarX = panelX + 5.0f;
-	float avatarY = panelY + 5.0f;
-	float avatarSize = 22.0f;
+	// Centered inside circle avatar ring frame
+	float avatarX = panelX + 12.0f;
+	float avatarY = panelY + 6.0f;
+	float avatarSize = 24.0f;
+	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
 
-	if ( s_hAvatar && s_hAvatarFrame ) {
-		SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatarFrame );
-		SCR_DrawPic( avatarX + 2.0f, avatarY + 2.0f, avatarSize - 4.0f, avatarSize - 4.0f, s_hAvatar );
-	} else if ( s_hAvatar ) {
-		SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatar );
-	} else {
-		float cx = avatarX + avatarSize * 0.5f;
-		float cy = avatarY + avatarSize * 0.5f;
-		SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
-	}
-
-	// Level Badge
+	// Level Badge inside mini ring at bottom of circle
 	char levelStr[32];
-	Com_sprintf( levelStr, sizeof(levelStr), "^3Lv %d", level );
-	float levelX = avatarX;
-	float levelY = avatarY + avatarSize + 2.0f;
-	SCR_DrawVirtualString( levelX, levelY, 4.2f, levelStr, whiteColor );
+	Com_sprintf( levelStr, sizeof(levelStr), "^3Lv%d", level );
+	SCR_DrawCenteredText( panelX + 8.0f, panelY + 36.0f, 32.0f, 3.8f, levelStr, whiteColor );
 
-	// Right Content Column
-	float textX = avatarX + avatarSize + 6.0f;
+	// Player Info Column
+	float textX = panelX + 46.0f;
+	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s", playerName), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
-	// Line 1: Player Name
-	char nameStr[96];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%s", playerName );
-	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, nameStr, whiteColor );
+	// Hardcoded Pulsating Energy XP Progress Bar Track
+	float barX = textX + 2.0f;
+	float barY = panelY + 31.5f;
+	float barW = panelX + panelW - barX - 10.0f;
+	float barH = 7.0f;
 
-	// Line 2: Rank Title & Private Duel Record (Wins - Losses)
-	char rankStr[96];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %dW-%dL", rankTitle, g_xpProfile.duelWins, g_xpProfile.duelLosses );
-	SCR_DrawVirtualString( textX, panelY + 16.0f, 4.3f, rankStr, whiteColor );
-
-	// Line 3: Dynamic XP Progress Bar (TGA Background)
-	float barX = textX;
-	float barY = panelY + 28.5f;
-	float barW = panelX + panelW - barX - 5.0f;
-	float barH = 8.0f;
-
-	if ( s_hBarBg ) {
-		SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
-	} else {
-		vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
-		vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
-		SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
-	}
-
-	float fillX = barX;
-	float fillY = barY;
-	float maxFillW = barW;
-	float fillW = maxFillW * xpRatio;
-	float fillH = barH;
-
-	if ( fillW > 0.0f ) {
-		if ( s_hBarFill ) {
-			SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
-		} else {
-			vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-			SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
-		}
-	}
+	SCR_DrawPulsatingXPEnergyBar( barX, barY, barW, barH, xpRatio, g_xpProfile.faction );
 
 	char xpText[64];
-	Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", (int)s_visualXP, xpMax );
-	float textWidthPixels = (strlen(xpText) * 3.8f * 0.60f);
-	float xpTextX = barX + barW - textWidthPixels - 3.0f;
-	if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
-	SCR_DrawVirtualString( xpTextX, barY + 1.5f, 3.8f, xpText, whiteColor );
+	Com_sprintf( xpText, sizeof(xpText), "^7%d / %d XP", (int)s_visualXP, xpMax );
+	SCR_DrawCenteredText( barX, barY - 0.5f, barW, 3.5f, xpText, whiteColor );
+}
+// ========================================================
+// STYLE 1: SLANTED PARALLELOGRAM & DIAMOND AVATAR
+// ========================================================
+else if ( style == 1 ) {
+	if ( s_hFrameStyle1Saber > 0 ) {
+		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hFrameStyle1Saber );
+	} else {
+		vec4_t hiltBg     = { 0.03f, 0.05f, 0.10f, 0.85f };
+		vec4_t hiltBorder = { factionPrimary[0], factionPrimary[1], factionPrimary[2], pulseAlpha };
+		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, hiltBg, hiltBorder );
+	}
+
+	float avatarX = panelX + 12.0f;
+	float avatarY = panelY + 12.0f;
+	float avatarSize = 24.0f;
+	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
+
+	float textX = panelX + 48.0f;
+	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+
+	// Hardcoded Pulsating Energy XP Progress Bar Track
+	float barX = textX + 2.0f;
+	float barY = panelY + 31.5f;
+	float barW = panelX + panelW - barX - 14.0f;
+	float barH = 7.0f;
+
+	SCR_DrawPulsatingXPEnergyBar( barX, barY, barW, barH, xpRatio, g_xpProfile.faction );
+
+	char xpText[64];
+	Com_sprintf( xpText, sizeof(xpText), "^7%d / %d XP", (int)s_visualXP, xpMax );
+	SCR_DrawCenteredText( barX, barY - 0.5f, barW, 3.5f, xpText, whiteColor );
+}
+// ========================================================
+// STYLE 2: CURVED PILOT ARC & OVAL AVATAR
+// ========================================================
+else if ( style == 2 ) {
+	if ( s_hFrameStyle2Pill > 0 ) {
+		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hFrameStyle2Pill );
+	} else {
+		vec4_t pillBg = { 0.03f, 0.07f, 0.14f, 0.80f };
+		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, pillBg, factionPrimary );
+	}
+
+	float avatarX = panelX + 12.0f;
+	float avatarY = panelY + 12.0f;
+	float avatarSize = 24.0f;
+	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
+
+	float textX = panelX + 46.0f;
+	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+
+	float barX = textX + 2.0f;
+	float barY = panelY + 31.5f;
+	float barW = panelX + panelW - barX - 12.0f;
+	float barH = 7.0f;
+
+	SCR_DrawPulsatingXPEnergyBar( barX, barY, barW, barH, xpRatio, g_xpProfile.faction );
+
+	char xpText[64];
+	Com_sprintf( xpText, sizeof(xpText), "^7%d / %d XP", (int)s_visualXP, xpMax );
+	SCR_DrawCenteredText( barX, barY - 0.5f, barW, 3.5f, xpText, whiteColor );
+}
+// ========================================================
+// STYLE 3 / 4: CHAMFERED DATAPAD & HEXAGON AVATAR
+// ========================================================
+else if ( style == 3 || style == 4 ) {
+	qhandle_t hImpFrame = (g_xpProfile.faction == FACTION_SITH && s_hFrameStyle4Neon > 0) ? s_hFrameStyle4Neon : s_hFrameStyle3Imperial;
+	if ( hImpFrame > 0 ) {
+		SCR_DrawPic( panelX, panelY, panelW, panelH, hImpFrame );
+	} else {
+		vec4_t impBg     = { 0.07f, 0.08f, 0.10f, 0.90f };
+		vec4_t impBorder = { factionPrimary[0], factionPrimary[1], factionPrimary[2], 0.85f };
+		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, impBg, impBorder );
+	}
+
+	float avatarX = panelX + 12.0f;
+	float avatarY = panelY + 12.0f;
+	float avatarSize = 24.0f;
+	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
+
+	float textX = panelX + 46.0f;
+	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+
+	float barX = textX + 2.0f;
+	float barY = panelY + 31.5f;
+	float barW = panelX + panelW - barX - 12.0f;
+	float barH = 7.0f;
+
+	SCR_DrawPulsatingXPEnergyBar( barX, barY, barW, barH, xpRatio, g_xpProfile.faction );
+
+	char xpText[64];
+	Com_sprintf( xpText, sizeof(xpText), "^7%d / %d XP", (int)s_visualXP, xpMax );
+	SCR_DrawCenteredText( barX, barY - 0.5f, barW, 3.5f, xpText, whiteColor );
+}
+
+	// Render HUD popup notifications at top-center (animated cards)
+	CL_XP_DrawNotifications();
 
 	if ( g_xpDrawCard ) {
 		SCR_DrawProfileCardOverlay();
 	}
+}
+
+/*
+==================
+SCR_DrawRPGNotificationCard
+
+Renders single animated HUD popup notification at top-center of screen.
+Slide-in from top during first 200ms, then last 500ms fade-out.
+Card width scales with text length; tint color matches notification type.
+==================
+*/
+void SCR_DrawRPGNotificationCard( const rpgNotif_t *notif, int posIndex, int visibleCount ) {
+	if ( !notif ) return;
+
+	int now = cls.realtime;
+	int age = now - notif->startMs;
+	if ( age < 0 ) age = 0;
+
+	// Compute alpha with fade-in (0-200ms) and fade-out (last 500ms) ramp
+	float totalLife = (float)( notif->lifetimeMs > 0 ? notif->lifetimeMs : NOTIF_LIFETIME_MS );
+	float fadeInEnd = 200.0f;
+	float fadeOutStart = totalLife - 500.0f;
+	float alpha = 1.0f;
+	if ( age < fadeInEnd ) {
+		alpha = (float)age / fadeInEnd;
+	} else if ( (float)age > fadeOutStart && totalLife > 600.0f ) {
+		float tail = totalLife - (float)age;
+		if ( tail < 0.0f ) tail = 0.0f;
+		alpha = tail / 500.0f;
+	}
+	if ( alpha < 0.0f ) alpha = 0.0f;
+	if ( alpha > 1.0f ) alpha = 1.0f;
+
+	// Slide-in offset: first 200ms slide down from -24px offset above target
+	float slidePx = 0.0f;
+	if ( age < 200 ) {
+		slidePx = -24.0f * ( 1.0f - ( (float)age / 200.0f ) );
+	}
+
+	// Text length based sizing
+	int titleClean = SCR_GetCleanStringLength( notif->text );
+	int subClean   = SCR_GetCleanStringLength( notif->subtext );
+	int maxChars   = ( titleClean > subClean + 8 ) ? titleClean : ( subClean + 8 );
+	if ( notif->xpDelta != 0 ) maxChars += 10;
+
+	float minW  = 160.0f;
+	float cardW = 16.0f + (float)maxChars * 6.0f;
+	if ( cardW < minW ) cardW = minW;
+	if ( cardW > 400.0f ) cardW = 400.0f;
+	float cardH = ( notif->subtext[0] ) ? 46.0f : 32.0f;
+	float pad   = 6.0f;
+
+	int curPos = cg_rpg_notif_pos ? cg_rpg_notif_pos->integer : 1;
+	float centerX = 320.0f;
+	float cardX = 320.0f - cardW * 0.5f;
+	float cardY = 28.0f + ( (float)posIndex * ( cardH + pad ) ) + slidePx;
+
+	if ( curPos == 0 ) { // Top-Left
+		centerX = 14.0f + cardW * 0.5f;
+		cardX = 14.0f;
+		cardY = 80.0f + ( (float)posIndex * ( cardH + pad ) ) + slidePx;
+	} else if ( curPos == 1 ) { // Top-Center
+		centerX = 320.0f;
+		cardX = centerX - cardW * 0.5f;
+		cardY = 28.0f + ( (float)posIndex * ( cardH + pad ) ) + slidePx;
+	} else if ( curPos == 2 ) { // Top-Right
+		centerX = 640.0f - 14.0f - cardW * 0.5f;
+		cardX = 640.0f - 14.0f - cardW;
+		cardY = 80.0f + ( (float)posIndex * ( cardH + pad ) ) + slidePx;
+	} else if ( curPos == 3 ) { // Bot-Left
+		centerX = 14.0f + cardW * 0.5f;
+		cardX = 14.0f;
+		cardY = 320.0f - ( (float)posIndex * ( cardH + pad ) ) - slidePx;
+	} else if ( curPos == 4 ) { // Bot-Right
+		centerX = 640.0f - 14.0f - cardW * 0.5f;
+		cardX = 640.0f - 14.0f - cardW;
+		cardY = 320.0f - ( (float)posIndex * ( cardH + pad ) ) - slidePx;
+	}
+
+	// Tint border + darker tinted body copy the r, g, b from notif tint
+	vec4_t borderColor;
+	VectorCopy4( notif->tint, borderColor );
+	borderColor[3] = alpha * notif->tint[3];
+
+	vec4_t bgColor;
+	bgColor[0] = notif->tint[0] * 0.10f + 0.02f;
+	bgColor[1] = notif->tint[1] * 0.10f + 0.04f;
+	bgColor[2] = notif->tint[2] * 0.12f + 0.06f;
+	bgColor[3] = 0.90f * alpha;
+
+	SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
+
+	// Main title text (uses tint color, but brighten it a bit)
+	vec4_t titleCol;
+	titleCol[0] = ( notif->tint[0] * 0.55f ) + 0.45f;
+	titleCol[1] = ( notif->tint[1] * 0.55f ) + 0.45f;
+	titleCol[2] = ( notif->tint[2] * 0.55f ) + 0.45f;
+	titleCol[3] = alpha;
+
+	char titleBuf[160];
+	if ( notif->xpDelta > 0 ) {
+		Com_sprintf( titleBuf, sizeof( titleBuf ), "^7%s   ^2+%d XP", notif->text, notif->xpDelta );
+	} else {
+		Q_strncpyz( titleBuf, notif->text, sizeof( titleBuf ) );
+	}
+	int titlePx = SCR_GetCleanStringLength( titleBuf );
+	float titleX = centerX - ( (float)titlePx * 6.2f * 0.60f ) * 0.5f;
+	SCR_DrawVirtualString( titleX, cardY + 5.0f, 6.2f, titleBuf, titleCol );
+
+	// Sub-text row
+	if ( notif->subtext[0] ) {
+		vec4_t subCol = { 0.90f, 0.90f, 0.95f, alpha };
+		int subPx = SCR_GetCleanStringLength( notif->subtext );
+		float subX = centerX - ( (float)subPx * 4.8f * 0.60f ) * 0.5f;
+		SCR_DrawVirtualString( subX, cardY + 23.0f, 4.8f, notif->subtext, subCol );
+	}
+}
+
+/*
+==================
+CL_XP_DrawNotifications
+
+Iterates all active notification slots and delegates to the card renderer.
+==================
+*/
+void CL_XP_DrawNotifications( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_rpg_notify_popups || !cg_rpg_notify_popups->integer ) return;
+	if ( g_rpgNotifCount <= 0 ) return;
+
+	SCR_DrawRPGNotificationCard( &g_rpgNotifs[0], 0, 1 );
 }
 
 void SCR_DrawProfileCardOverlay( void ) {
@@ -946,42 +1244,40 @@ void SCR_DrawProfileCardOverlay( void ) {
 	const char *profName = CL_XP_GetProfileName();
 	const char *rankTitle = CL_XP_GetRankTitle( g_xpProfile.level, g_xpProfile.faction );
 
-	int nameCleanLen = SCR_GetCleanStringLength( profName );
-	int rankCleanLen = SCR_GetCleanStringLength( rankTitle );
-	int headerMaxLen = (nameCleanLen + 20 > rankCleanLen + 15) ? (nameCleanLen + 20) : (rankCleanLen + 15);
-
-	float calculatedCardW = 32.0f + headerMaxLen * 5.8f + 25.0f;
-	float minCardW = 380.0f;
-	float cardW = (calculatedCardW > minCardW) ? calculatedCardW : minCardW;
-	if ( cardW > 600.0f ) cardW = 600.0f;
-
-	// Expanded height to fit mode stats section
-	float cardH = 310.0f;
+	float cardW = 560.0f;
+	float cardH = 380.0f;
 	float cardX = 320.0f - cardW * 0.5f;
 	float cardY = 240.0f - cardH * 0.5f;
 
 	vec4_t whiteColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
-	vec4_t bgColor     = { 0.02f, 0.04f, 0.08f, 0.92f };
+	vec4_t bgColor     = { 0.02f, 0.04f, 0.08f, 0.94f };
 	vec4_t borderColor = { 0.00f, 0.70f, 0.95f, 0.95f };
 
 	if ( g_xpProfile.faction == FACTION_SITH ) {
 		borderColor[0] = 0.95f; borderColor[1] = 0.15f; borderColor[2] = 0.15f;
 	}
 
-	SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
+	if ( s_hWinStats > 0 ) {
+		SCR_DrawPic( cardX, cardY, cardW, cardH, s_hWinStats );
+	} else {
+		SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
+	}
 
-	// --- Header: Name & Level ---
+	// Large Avatar Picture at top-left
+	float avX = cardX + 24.0f;
+	float avY = cardY + 18.0f;
+	float avSize = 44.0f;
+	SCR_DrawRPGAvatar( avX, avY, avSize, g_xpProfile.faction );
+
+	// Header: Name & Level Badge next to avatar emblem
 	char headerStr[128];
 	Com_sprintf( headerStr, sizeof(headerStr), "^7%s ^3[Lvl %d %s^3]",
-		profName, g_xpProfile.level, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH" : "^6JEDI" );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 14.0f, 5.8f, headerStr, whiteColor );
+		profName, g_xpProfile.level, (g_xpProfile.faction == FACTION_SITH) ? "^1SITH EMPIRE" : "^6JEDI ORDER" );
+	SCR_DrawVirtualString( cardX + 78.0f, cardY + 20.0f, 6.8f, headerStr, whiteColor );
 
 	char rankSub[96];
 	Com_sprintf( rankSub, sizeof(rankSub), "^3Rank Title: ^7%s", rankTitle );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 34.0f, 4.8f, rankSub, whiteColor );
-
-	vec4_t lineCol = { 1.0f, 1.0f, 1.0f, 0.25f };
-	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 50.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
+	SCR_DrawVirtualString( cardX + 78.0f, cardY + 42.0f, 5.5f, rankSub, whiteColor );
 
 	// --- XP Progress ---
 	int curXP = 0, reqXP = 0;
@@ -989,65 +1285,613 @@ void SCR_DrawProfileCardOverlay( void ) {
 	CL_XP_GetLevelProgress( &curXP, &reqXP, &percent );
 
 	char xpStr[96];
-	Com_sprintf( xpStr, sizeof(xpStr), "^7XP Progress: ^2%d ^7/ ^2%d ^7(^3%.1f%%^7)", curXP, reqXP, percent * 100.0f );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 58.0f, 4.2f, xpStr, whiteColor );
+	Com_sprintf( xpStr, sizeof(xpStr), "^7XP Progress: ^3%d ^7/ ^3%d XP ^7(^2%.1f%%^7)", curXP, reqXP, percent * 100.0f );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 75.0f, 5.5f, xpStr, whiteColor );
 
 	// --- Combat Stats ---
 	float kdRatio = (g_xpProfile.deaths > 0) ? ((float)g_xpProfile.kills / (float)g_xpProfile.deaths) : (float)g_xpProfile.kills;
 	char kdStr[128];
 	Com_sprintf( kdStr, sizeof(kdStr), "^7Kills: ^3%d  ^7Deaths: ^1%d  ^7K/D: ^2%.2f  ^7NPC: ^3%d",
 		g_xpProfile.kills, g_xpProfile.deaths, kdRatio, g_xpProfile.npcKills );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 80.0f, 4.5f, kdStr, whiteColor );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 110.0f, 5.5f, kdStr, whiteColor );
 
 	char weaponStr[128];
-	Com_sprintf( weaponStr, sizeof(weaponStr), "^3Saber Kills: ^7%d   ^3Gunner Kills: ^7%d   ^7Total Lifetime XP: ^3%d",
+	Com_sprintf( weaponStr, sizeof(weaponStr), "^7Saber Kills: ^3%d   ^7Gunner Kills: ^3%d   ^7Lifetime XP: ^3%d",
 		g_xpProfile.saberKills, g_xpProfile.gunnerKills, g_xpProfile.xp );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 98.0f, 4.2f, weaponStr, whiteColor );
-
-	// --- Divider ---
-	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 114.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 140.0f, 5.5f, weaponStr, whiteColor );
 
 	// --- MB2 Game Mode Stats ---
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 120.0f, 4.2f, "^5MB2 Game Mode Breakdown", whiteColor );
-
-	int totalOpen = g_xpProfile.openWins + g_xpProfile.openLosses;
-	float openWinRate = (totalOpen > 0) ? (((float)g_xpProfile.openWins / (float)totalOpen) * 100.0f) : 0.0f;
-	char openStr[128];
-	Com_sprintf( openStr, sizeof(openStr), "^7Open Mode:    ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)",
-		g_xpProfile.openWins, g_xpProfile.openLosses, openWinRate );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 136.0f, 4.3f, openStr, whiteColor );
-
-	int totalLegends = g_xpProfile.legendsWins + g_xpProfile.legendsLosses;
-	float legendsWinRate = (totalLegends > 0) ? (((float)g_xpProfile.legendsWins / (float)totalLegends) * 100.0f) : 0.0f;
-	char legendsStr[128];
-	Com_sprintf( legendsStr, sizeof(legendsStr), "^7Legends Mode: ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)",
-		g_xpProfile.legendsWins, g_xpProfile.legendsLosses, legendsWinRate );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 154.0f, 4.3f, legendsStr, whiteColor );
-
-	int totalFA = g_xpProfile.faWins + g_xpProfile.faLosses;
-	float faWinRate = (totalFA > 0) ? (((float)g_xpProfile.faWins / (float)totalFA) * 100.0f) : 0.0f;
-	char faStr[128];
-	Com_sprintf( faStr, sizeof(faStr), "^7Full Auth:    ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)",
-		g_xpProfile.faWins, g_xpProfile.faLosses, faWinRate );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 172.0f, 4.3f, faStr, whiteColor );
-
+	int totalRounds = g_xpProfile.roundWins + g_xpProfile.roundLosses;
+	float roundWinRate = (totalRounds > 0) ? (((float)g_xpProfile.roundWins / (float)totalRounds) * 100.0f) : 0.0f;
 	int totalDuels = g_xpProfile.duelWins + g_xpProfile.duelLosses;
 	float duelWinRate = (totalDuels > 0) ? (((float)g_xpProfile.duelWins / (float)totalDuels) * 100.0f) : 0.0f;
-	char duelStr[128];
-	Com_sprintf( duelStr, sizeof(duelStr), "^7Private Duel: ^2%dW ^7- ^1%dL  ^7(^3%.0f%%^7)  ^5%d Flawless",
-		g_xpProfile.duelWins, g_xpProfile.duelLosses, duelWinRate, g_xpProfile.flawlessWins );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 190.0f, 4.3f, duelStr, whiteColor );
 
-	// --- Divider ---
-	SCR_DrawMBIICapsule( cardX + 16.0f, cardY + 208.0f, cardW - 32.0f, 1.5f, lineCol, NULL );
+	char recordStr[192];
+	Com_sprintf( recordStr, sizeof(recordStr), "^7Team: ^2%dW^7-^1%dL^7 (^3%.0f%%^7)  ^7Duels: ^2%dW^7-^1%dL^7 (^3%.0f%%^7)",
+		g_xpProfile.roundWins, g_xpProfile.roundLosses, roundWinRate,
+		g_xpProfile.duelWins, g_xpProfile.duelLosses, duelWinRate );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 175.0f, 5.5f, recordStr, whiteColor );
+
+	// --- Duel Achievements & Streaks ---
+	char duelAch[192];
+	Com_sprintf( duelAch, sizeof(duelAch),
+		"^7Perfect: ^3%d   ^7QuickDraw: ^3%d   ^7Endurance: ^3%d   ^7Streak: ^3%d",
+		g_xpProfile.perfectWins, g_xpProfile.quickDrawWins, g_xpProfile.enduranceWins, g_xpProfile.currentDuelStreak );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 210.0f, 5.2f, duelAch, whiteColor );
+
+	// --- Playtime + Multi-kills ---
+	float hrs = (float)g_xpProfile.totalPlaytimeMs / (1000.0f * 3600.0f);
+	char timeStr[192];
+	Com_sprintf( timeStr, sizeof(timeStr), "^7Playtime: ^3%.1f hrs   ^7Multi-Kills: ^32x=%d 3x=%d 4x=%d 5x=%d 6+=%d",
+		hrs, g_xpProfile.multiDouble, g_xpProfile.multiTriple, g_xpProfile.multiOverkill,
+		g_xpProfile.multiMonster, g_xpProfile.multiUltra );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 245.0f, 5.2f, timeStr, whiteColor );
 
 	// XP grants legend
 	char xpLegend[128];
-	Com_sprintf( xpLegend, sizeof(xpLegend), "^3XP Grants: ^7Player Kill +%d  Duel Win +%d  Round Win +%d  NPC +%d",
+	Com_sprintf( xpLegend, sizeof(xpLegend), "^7XP Grants: ^3Kill +%d  Duel +%d  Round +%d  NPC +%d",
 		XP_GRANT_PLAYER_KILL, XP_GRANT_DUEL_WIN, XP_GRANT_ROUND_WIN, XP_GRANT_NPC_KILL );
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + 215.0f, 3.8f, xpLegend, whiteColor );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 280.0f, 4.8f, xpLegend, whiteColor );
 
-	SCR_DrawVirtualString( cardX + 16.0f, cardY + cardH - 16.0f, 3.8f, "^5Press ESC or type /rpg_card to close", whiteColor );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + cardH - 22.0f, 5.0f, "^5Press ESC or type !stats to close", whiteColor );
+}
+
+void SCR_DrawRanksWindowOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+
+	float cardW = 540.0f;
+	float cardH = 340.0f;
+	float cardX = 320.0f - cardW * 0.5f;
+	float cardY = 240.0f - cardH * 0.5f;
+
+	vec4_t whiteColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t bgColor     = { 0.02f, 0.04f, 0.09f, 0.94f };
+	vec4_t borderColor = { 0.00f, 0.75f, 1.00f, 0.95f };
+
+	vec4_t factionPrimary = { 0.00f, 0.75f, 1.00f, 0.85f };
+	if ( g_xpProfile.faction == FACTION_SITH ) {
+		borderColor[0] = 0.95f; borderColor[1] = 0.15f; borderColor[2] = 0.15f;
+		factionPrimary[0] = 0.95f; factionPrimary[1] = 0.15f; factionPrimary[2] = 0.15f;
+	}
+
+	if ( s_hWinRanks > 0 ) {
+		SCR_DrawPic( cardX, cardY, cardW, cardH, s_hWinRanks );
+	} else {
+		SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
+	}
+
+	// Header
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 14.0f, 6.2f, "^3STAR WARS RANK PROGRESSION TIERS", whiteColor );
+
+	char factionStr[128];
+	Com_sprintf( factionStr, sizeof(factionStr), "^7Faction Path: %s  ^7| Current Level: ^3Lvl %d",
+		(g_xpProfile.faction == FACTION_SITH) ? "^1SITH EMPIRE" : "^6JEDI ORDER", g_xpProfile.level );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 36.0f, 4.8f, factionStr, whiteColor );
+
+	// Tier List
+	struct TierDef { int minLvl; int maxLvl; const char *jedi; const char *sith; };
+	static TierDef tiers[8] = {
+		{ 1, 24, "Youngling", "Sith Acolyte" },
+		{ 25, 49, "Initiate", "Sith Hopeful" },
+		{ 50, 99, "Apprentice", "Sith Apprentice" },
+		{ 100, 199, "Jedi Guardian", "Sith Assassin" },
+		{ 200, 349, "Jedi Knight", "Sith Warrior" },
+		{ 350, 499, "Jedi Master", "Sith Lord" },
+		{ 500, 749, "High Council Master", "Dark Council Master" },
+		{ 750, 1000, "Grandmaster", "Sith Emperor" }
+	};
+
+	float startY = cardY + 62.0f;
+	int curLvl = g_xpProfile.level;
+
+	for ( int i = 0; i < 8; i++ ) {
+		qboolean isCurrent = (curLvl >= tiers[i].minLvl && curLvl <= tiers[i].maxLvl) ? qtrue : qfalse;
+		float y = startY + i * 27.0f;
+		float rowX = cardX + 24.0f;
+		float rowW = cardW - 48.0f;
+
+		if ( isCurrent ) {
+			vec4_t activeBg = { factionPrimary[0], factionPrimary[1], factionPrimary[2], 0.35f };
+			SCR_DrawMBIICapsule( rowX, y - 2.0f, rowW, 22.0f, activeBg, borderColor );
+		}
+
+		const char *rankTitle = (g_xpProfile.faction == FACTION_SITH) ? tiers[i].sith : tiers[i].jedi;
+		int reqXP = CL_XP_GetRequiredXP( tiers[i].minLvl );
+
+		char lvlStr[32], xpStr[32];
+		Com_sprintf( lvlStr, sizeof(lvlStr), "%sLvl %d-%d", isCurrent ? "^3" : "^7", tiers[i].minLvl, tiers[i].maxLvl );
+		Com_sprintf( xpStr, sizeof(xpStr), "%s%d XP", isCurrent ? "^2" : "^7", reqXP );
+
+		SCR_DrawVirtualString( rowX + 8.0f, y + 2.0f, 5.0f, lvlStr, whiteColor );
+		SCR_DrawVirtualString( rowX + 130.0f, y + 2.0f, 5.0f, va("%s%s", isCurrent ? "^3" : "^7", rankTitle), whiteColor );
+		SCR_DrawVirtualString( rowX + 320.0f, y + 2.0f, 5.0f, xpStr, whiteColor );
+
+		if ( isCurrent ) {
+			SCR_DrawVirtualString( rowX + 410.0f, y + 2.0f, 4.8f, "^5<-- YOU ARE HERE", whiteColor );
+		}
+	}
+
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + cardH - 20.0f, 4.8f, "^5Press ESC or type !ranks to close", whiteColor );
+}
+
+void SCR_DrawHelpWindowOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+
+	float cardW = 560.0f;
+	float cardH = 380.0f;
+	float cardX = 320.0f - cardW * 0.5f;
+	float cardY = 240.0f - cardH * 0.5f;
+
+	vec4_t whiteColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t bgColor     = { 0.02f, 0.04f, 0.09f, 0.94f };
+	vec4_t borderColor = { 0.00f, 0.75f, 1.00f, 0.95f };
+
+	if ( g_xpProfile.faction == FACTION_SITH ) {
+		borderColor[0] = 0.95f; borderColor[1] = 0.15f; borderColor[2] = 0.15f;
+	}
+
+	if ( s_hWinHelp > 0 ) {
+		SCR_DrawPic( cardX, cardY, cardW, cardH, s_hWinHelp );
+	} else {
+		SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
+	}
+
+	// Header
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 18.0f, 6.8f, "^3RPG MOD SYSTEM GUIDE & IN-CHAT COMMANDS", whiteColor );
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 40.0f, 4.8f, "^7Standalone Engine Client XP & Leveling System", whiteColor );
+
+	// Section 1: XP Grants & Bonuses
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 65.0f, 6.0f, "^51. XP & Combat Bonuses", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 90.0f, 5.4f, "^3Player Kill: ^7+50 XP   ^3Duel Win: ^7+100 XP   ^3Round Win: ^7+150 XP   ^3NPC: ^7+20 XP", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 112.0f, 5.4f, "^3Perfect Duel: ^7+50 XP (0 HP loss)   ^3QuickDraw: ^7+25 XP (<3s duel win)", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 134.0f, 5.4f, "^3Multi-Kills: ^72x (+10)  3x (+20)  4x (+40)  5x (+60)  6+ (+80 XP)", whiteColor );
+
+	// Section 2: In-Chat Commands (Works on ANY Server)
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 170.0f, 6.0f, "^52. In-Chat Commands (Works on ANY Server!)", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 195.0f, 5.4f, "^3!rpgmenu       ^7-> Open Interactive Customization Window (Mouse Support)", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 217.0f, 5.4f, "^3!stats ^7or ^3!card  ^7-> Open Profile Stats & Achievements UI Window", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 239.0f, 5.4f, "^3!ranks         ^7-> Open Rank Progression Tiers UI Window", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 261.0f, 5.4f, "^3!jedi ^7or ^3!sith  ^7-> Switch Faction Rank Title Progression Path", whiteColor );
+
+	// Section 3: Customization CVars
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + 295.0f, 5.8f, "^53. HUD Customization CVars", whiteColor );
+	SCR_DrawVirtualString( cardX + 32.0f, cardY + 318.0f, 5.2f, "^3/cg_rpg_hud_style 0-4 ^7(0=Holo Datapad, 1=Lightsaber, 2=Pill, 3=Imperial, 4=Neon)", whiteColor );
+
+	SCR_DrawVirtualString( cardX + 24.0f, cardY + cardH - 22.0f, 5.0f, "^5Press ESC or type !help to close", whiteColor );
+}
+
+void SCR_DrawSettingsWindowOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	float cardW = 580.0f;
+	float cardH = 460.0f;
+	float cardX = 320.0f - cardW * 0.5f;
+	float cardY = 240.0f - cardH * 0.5f;
+
+	vec4_t whiteColor  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t bgColor     = { 0.02f, 0.04f, 0.09f, 0.96f };
+	vec4_t borderColor = { 0.00f, 0.75f, 1.00f, 0.95f };
+
+	if ( g_xpProfile.faction == FACTION_SITH ) {
+		borderColor[0] = 0.95f; borderColor[1] = 0.15f; borderColor[2] = 0.15f;
+	}
+
+	SCR_DrawMBIICapsule( cardX, cardY, cardW, cardH, bgColor, borderColor );
+
+	// Header
+	SCR_DrawVirtualString( cardX + 20.0f, cardY + 12.0f, 11.5f, "^3STAR WARS RPG MENU (!rpgmenu)", whiteColor );
+	SCR_DrawVirtualString( cardX + 20.0f, cardY + 30.0f, 8.5f, "^7Mouse-Interactive Customizer, Achievements & Audio Mixer", whiteColor );
+
+	// -----------------------------------------------------------------------
+	// TOP TABS BAR (Tab 0: HUD, Tab 1: Achievements, Tab 2: Audio, Tab 3: Guide)
+	// -----------------------------------------------------------------------
+	const char *tabNames[4] = { "1. HUD Style", "2. Achievements", "3. Audio SFX", "4. Guide" };
+	for ( int i = 0; i < 4; i++ ) {
+		float tabX = cardX + 20.0f + i * 136.0f;
+		float tabY = cardY + 46.0f;
+		float tabW = 130.0f;
+		float tabH = 26.0f;
+
+		qboolean isSel = (g_rpgMenuTab == i) ? qtrue : qfalse;
+		qboolean isHover = (g_rpgMouseX >= tabX && g_rpgMouseX <= tabX + tabW && g_rpgMouseY >= tabY && g_rpgMouseY <= tabY + tabH) ? qtrue : qfalse;
+
+		vec4_t tabBg = { 0.04f, 0.10f, 0.20f, 0.85f };
+		vec4_t tabBorder = { 0.00f, 0.60f, 0.85f, 0.70f };
+		if ( isSel ) {
+			tabBg[0] = 0.10f; tabBg[1] = 0.35f; tabBg[2] = 0.65f; tabBg[3] = 0.95f;
+			tabBorder[0] = 1.00f; tabBorder[1] = 0.80f; tabBorder[2] = 0.20f; tabBorder[3] = 1.00f;
+		} else if ( isHover ) {
+			tabBg[0] = 0.08f; tabBg[1] = 0.20f; tabBg[2] = 0.40f; tabBg[3] = 0.90f;
+		}
+
+		SCR_DrawMBIICapsule( tabX, tabY, tabW, tabH, tabBg, tabBorder );
+		SCR_DrawCenteredText( tabX, tabY + 5.0f, tabW, 9.5f, tabNames[i], whiteColor );
+	}
+
+	vec4_t lineCol = { 1.0f, 1.0f, 1.0f, 0.25f };
+	SCR_DrawMBIICapsule( cardX + 20.0f, cardY + 76.0f, cardW - 40.0f, 1.5f, lineCol, NULL );
+
+	qhandle_t hBtnNormal = (g_xpProfile.faction == FACTION_SITH && s_hBtnSithNormal > 0) ? s_hBtnSithNormal : s_hBtnNormal;
+	qhandle_t hBtnHover  = (g_xpProfile.faction == FACTION_SITH && s_hBtnSithHover > 0) ? s_hBtnSithHover : s_hBtnHover;
+
+	// =======================================================================
+	// TAB 0: HUD STYLE & CUSTOMIZER
+	// =======================================================================
+	if ( g_rpgMenuTab == 0 ) {
+		int curStyle = cg_rpg_hud_style ? cg_rpg_hud_style->integer : 0;
+		int curPos   = cg_rpg_hud_pos   ? cg_rpg_hud_pos->integer   : 0;
+		int curAvat  = cg_rpg_avatar    ? cg_rpg_avatar->integer    : 0;
+
+		// 1. HUD Style Selector Buttons
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 10.5f, "^51. Select HUD Style", whiteColor );
+		const char *styleNames[5] = { "0: Holo", "1: Saber", "2: Pill", "3: Imperial", "4: Neon" };
+		for ( int i = 0; i < 5; i++ ) {
+			float btnX = cardX + 20.0f + i * 108.0f;
+			float btnY = cardY + 102.0f;
+			float btnW = 102.0f;
+			float btnH = 24.0f;
+
+			qboolean isSelected = (curStyle == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, styleNames[i], isSelected ? whiteColor : (isHover ? whiteColor : whiteColor) );
+		}
+
+		// 2. HUD Screen Position Buttons
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 138.0f, 10.5f, "^52. Select Screen Position", whiteColor );
+		const char *posNames[5] = { "Top-Left", "Top-Right", "Bot-Left", "Bot-Right", "Bot-Center" };
+		for ( int i = 0; i < 5; i++ ) {
+			float btnX = cardX + 20.0f + i * 108.0f;
+			float btnY = cardY + 156.0f;
+			float btnW = 102.0f;
+			float btnH = 24.0f;
+
+			qboolean isSelected = (curPos == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, posNames[i], whiteColor );
+		}
+
+		// 3. Avatar Selector
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 192.0f, 10.5f, "^53. Select Avatar Icon", whiteColor );
+		const char *avatarNames[12] = {
+			"Emblem", "Jedi Order", "Sith Empire", "Mandalorian",
+			"Rebels", "Empire", "BountyHunter", "OldRepublic",
+			"Custom 1", "Custom 2", "Custom 3", "Custom 4"
+		};
+		for ( int i = 0; i < 12; i++ ) {
+			int col = i % 4;
+			int row = i / 4;
+			float btnX = cardX + 20.0f + col * 136.0f;
+			float btnY = cardY + 210.0f + row * 26.0f;
+			float btnW = 130.0f;
+			float btnH = 22.0f;
+
+			qboolean isSelected = (curAvat == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, avatarNames[i], whiteColor );
+		}
+
+		// 4. Faction Path (Jedi vs Sith)
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 304.0f, 10.5f, "^54. Select Faction Progression Path", whiteColor );
+		const char *factionNames[2] = { "JEDI LIGHT SIDE", "SITH DARK SIDE" };
+		for ( int i = 0; i < 2; i++ ) {
+			float btnX = cardX + 20.0f + i * 272.0f;
+			float btnY = cardY + 324.0f;
+			float btnW = 262.0f;
+			float btnH = 26.0f;
+
+			qboolean isSelected = ((i == 1 && g_xpProfile.faction == FACTION_SITH) || (i == 0 && g_xpProfile.faction == FACTION_JEDI)) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				if ( i == 1 ) {
+					btnBg[0] = 0.50f; btnBg[1] = 0.08f; btnBg[2] = 0.08f; btnBg[3] = 0.95f;
+					btnBorder[0] = 1.00f; btnBorder[1] = 0.20f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+				} else {
+					btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+					btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+				}
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 10.5f, factionNames[i], whiteColor );
+		}
+
+		// 5. Victory UI Screen Position Buttons
+		int curToastPos = cg_rpg_toast_pos ? cg_rpg_toast_pos->integer : 1;
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 360.0f, 10.5f, "^55. Select Victory UI Position", whiteColor );
+		const char *toastPosNames[5] = { "Top-Left", "Top-Right", "Bot-Left", "Bot-Right", "Center" };
+		for ( int i = 0; i < 5; i++ ) {
+			float btnX = cardX + 20.0f + i * 108.0f;
+			float btnY = cardY + 378.0f;
+			float btnW = 102.0f;
+			float btnH = 24.0f;
+
+			qboolean isSelected = (curToastPos == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, toastPosNames[i], whiteColor );
+		}
+
+		// 6. Notification Position Buttons
+		int curNotifPos = cg_rpg_notif_pos ? cg_rpg_notif_pos->integer : 1;
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 410.0f, 10.5f, "^56. Select Notification Position", whiteColor );
+		const char *notifPosNames[5] = { "T-Left", "T-Center", "T-Right", "B-Left", "B-Right" };
+		for ( int i = 0; i < 5; i++ ) {
+			float btnX = cardX + 20.0f + i * 72.0f;
+			float btnY = cardY + 428.0f;
+			float btnW = 66.0f;
+			float btnH = 22.0f;
+
+			qboolean isSelected = (curNotifPos == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, notifPosNames[i], whiteColor );
+		}
+
+		// 7. Popups in Duels Toggle Button
+		int curDuelPopups = cg_rpg_duel_popups ? cg_rpg_duel_popups->integer : 0;
+		SCR_DrawVirtualString( cardX + 388.0f, cardY + 410.0f, 10.5f, "^57. Popups in Duels", whiteColor );
+		float toggleX = cardX + 388.0f;
+		float toggleY = cardY + 428.0f;
+		float toggleW = 172.0f;
+		float toggleH = 22.0f;
+
+		qboolean isHoverToggle = (g_rpgMouseX >= toggleX && g_rpgMouseX <= toggleX + toggleW && g_rpgMouseY >= toggleY && g_rpgMouseY <= toggleY + toggleH) ? qtrue : qfalse;
+		vec4_t tBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+		vec4_t tBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+		if ( curDuelPopups ) {
+			tBg[0] = 0.05f; tBg[1] = 0.35f; tBg[2] = 0.10f; tBg[3] = 0.95f;
+			tBorder[0] = 0.20f; tBorder[1] = 0.90f; tBorder[2] = 0.30f; tBorder[3] = 1.00f;
+		} else if ( isHoverToggle ) {
+			tBg[0] = 0.08f; tBg[1] = 0.25f; tBg[2] = 0.50f; tBg[3] = 0.90f;
+			tBorder[0] = 0.00f; tBorder[1] = 0.90f; tBorder[2] = 1.00f; tBorder[3] = 1.00f;
+		}
+		SCR_DrawMBIICapsule( toggleX, toggleY, toggleW, toggleH, tBg, tBorder );
+		SCR_DrawCenteredText( toggleX, toggleY + 3.0f, toggleW, 9.5f, curDuelPopups ? "^2[ POPUPS ENABLED ]" : "^1[ POPUPS DISABLED ]", whiteColor );
+	}
+	// =======================================================================
+	// TAB 1: ACHIEVEMENTS & QUESTS
+	// =======================================================================
+	else if ( g_rpgMenuTab == 1 ) {
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 11.0f, "^5Clickable Achievement Milestones & XP Rewards", whiteColor );
+
+		typedef struct {
+			const char *title;
+			const char *desc;
+			int curVal;
+			int maxVal;
+			int claimed;
+			int rewardXP;
+		} achItem_t;
+
+		achItem_t list[7] = {
+			{ "Saber Master",     "Get 50 Saber Kills",    g_xpProfile.saberKills,     50, g_xpProfile.achSaberMasterClaimed,     250 },
+			{ "Gunner Elite",     "Get 50 Gun Kills",      g_xpProfile.gunnerKills,    50, g_xpProfile.achGunnerEliteClaimed,     250 },
+			{ "Duel Specialist",  "Win 10 Private Duels",  g_xpProfile.duelWins,       10, g_xpProfile.achDuelSpecialistClaimed,  300 },
+			{ "Quick Draw Pro",   "Win 3 QuickDraw Duels", g_xpProfile.quickDrawWins,   3, g_xpProfile.achQuickDrawClaimed,       200 },
+			{ "Flawless Victory", "Win 3 Perfect Duels",   g_xpProfile.perfectWins,     3, g_xpProfile.achPerfectClaimed,         250 },
+			{ "Unstoppable",      "Reach 10-Kill Streak",  g_xpProfile.bestKillStreak, 10, g_xpProfile.achStreakClaimed,          400 },
+			{ "Century Club",     "Reach Level 100",       g_xpProfile.level,         100, g_xpProfile.achCenturyClaimed,        1000 }
+		};
+
+		for ( int i = 0; i < 7; i++ ) {
+			int col = i % 2;
+			int row = i / 2;
+			float itemX = cardX + 20.0f + col * 276.0f;
+			float itemY = cardY + 104.0f + row * 66.0f;
+			float itemW = 265.0f;
+			float itemH = 58.0f;
+
+			vec4_t achBg     = { 0.03f, 0.06f, 0.14f, 0.90f };
+			vec4_t achBorder = { 0.15f, 0.35f, 0.60f, 0.80f };
+
+			if ( list[i].claimed ) {
+				achBorder[0] = 0.20f; achBorder[1] = 0.90f; achBorder[2] = 0.30f; achBorder[3] = 0.95f;
+			} else if ( list[i].curVal >= list[i].maxVal ) {
+				achBorder[0] = 1.00f; achBorder[1] = 0.80f; achBorder[2] = 0.20f; achBorder[3] = 1.00f;
+			}
+
+			SCR_DrawMBIICapsule( itemX, itemY, itemW, itemH, achBg, achBorder );
+
+			// Title & Desc
+			SCR_DrawVirtualString( itemX + 10.0f, itemY + 6.0f, 10.5f, va("^3%s", list[i].title), whiteColor );
+			SCR_DrawVirtualString( itemX + 10.0f, itemY + 24.0f, 8.5f, va("^7%s", list[i].desc), whiteColor );
+
+			// Claim Button / Status
+			float btnX = itemX + itemW - 115.0f;
+			float btnY = itemY + 26.0f;
+			float btnW = 105.0f;
+			float btnH = 26.0f;
+
+			if ( list[i].claimed ) {
+				SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, "^2[CLAIMED]", whiteColor );
+			} else if ( list[i].curVal >= list[i].maxVal ) {
+				qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+				vec4_t claimBg     = { 0.10f, 0.50f, 0.15f, 0.95f };
+				vec4_t claimBorder = { 0.30f, 1.00f, 0.40f, 1.00f };
+				if ( isHover ) { claimBg[0] = 0.20f; claimBg[1] = 0.70f; claimBg[2] = 0.25f; }
+				SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, claimBg, claimBorder );
+				SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 9.0f, va("^7CLAIM +%d", list[i].rewardXP), whiteColor );
+			} else {
+				char progText[32];
+				Com_sprintf( progText, sizeof(progText), "^7%d/%d", list[i].curVal, list[i].maxVal );
+				SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, progText, whiteColor );
+			}
+		}
+	}
+	// =======================================================================
+	// TAB 2: AUDIO & SFX MIXER
+	// =======================================================================
+	else if ( g_rpgMenuTab == 2 ) {
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 11.0f, "^5In-Game Audio SFX Mixer & Announcer Volume", whiteColor );
+
+		// 1. Sound Volume
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 108.0f, 10.5f, "^51. Master Sound FX Volume", whiteColor );
+		const char *volNames[5] = { "Mute", "25%", "50%", "75%", "100%" };
+		for ( int i = 0; i < 5; i++ ) {
+			float btnX = cardX + 20.0f + i * 108.0f;
+			float btnY = cardY + 126.0f;
+			float btnW = 102.0f;
+			float btnH = 26.0f;
+
+			qboolean isSel = (g_xpProfile.soundVolume == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.10f, 0.20f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.60f, 0.85f, 0.70f };
+			if ( isSel ) { btnBg[0] = 0.10f; btnBg[1] = 0.45f; btnBg[2] = 0.75f; btnBorder[0] = 1.0f; btnBorder[1] = 0.8f; btnBorder[2] = 0.2f; }
+			else if ( isHover ) btnBg[0] = 0.08f;
+
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 9.5f, volNames[i], whiteColor );
+		}
+
+		// 2. Announcer Sounds Toggle
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 168.0f, 10.5f, "^52. Multi-Kill Announcer Voices (Double, Triple, Overkill)", whiteColor );
+		for ( int i = 0; i < 2; i++ ) {
+			float btnX = cardX + 20.0f + i * 272.0f;
+			float btnY = cardY + 186.0f;
+			float btnW = 262.0f;
+			float btnH = 26.0f;
+
+			qboolean isSel = ((i == 0 && g_xpProfile.announcerEnabled == 1) || (i == 1 && g_xpProfile.announcerEnabled == 0)) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.10f, 0.20f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.60f, 0.85f, 0.70f };
+			if ( isSel ) { btnBg[0] = 0.10f; btnBg[1] = 0.45f; btnBg[2] = 0.75f; btnBorder[0] = 1.0f; btnBorder[1] = 0.8f; btnBorder[2] = 0.2f; }
+			else if ( isHover ) btnBg[0] = 0.08f;
+
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 10.0f, (i == 0) ? "ANNOUNCER: ENABLED" : "ANNOUNCER: DISABLED", whiteColor );
+		}
+
+		// 3. Level Up Sounds Toggle
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 228.0f, 10.5f, "^53. Level Up & Achievement Fanfare Sounds", whiteColor );
+		for ( int i = 0; i < 2; i++ ) {
+			float btnX = cardX + 20.0f + i * 272.0f;
+			float btnY = cardY + 246.0f;
+			float btnW = 262.0f;
+			float btnH = 26.0f;
+
+			qboolean isSel = ((i == 0 && g_xpProfile.levelupSndEnabled == 1) || (i == 1 && g_xpProfile.levelupSndEnabled == 0)) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.10f, 0.20f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.60f, 0.85f, 0.70f };
+			if ( isSel ) { btnBg[0] = 0.10f; btnBg[1] = 0.45f; btnBg[2] = 0.75f; btnBorder[0] = 1.0f; btnBorder[1] = 0.8f; btnBorder[2] = 0.2f; }
+			else if ( isHover ) btnBg[0] = 0.08f;
+
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 10.0f, (i == 0) ? "LEVEL UP SOUNDS: ENABLED" : "LEVEL UP SOUNDS: DISABLED", whiteColor );
+		}
+
+		// 4. Duel Victory Sounds Toggle
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 288.0f, 10.5f, "^54. Duel Victory & QuickDraw Sounds", whiteColor );
+		for ( int i = 0; i < 2; i++ ) {
+			float btnX = cardX + 20.0f + i * 272.0f;
+			float btnY = cardY + 306.0f;
+			float btnW = 262.0f;
+			float btnH = 26.0f;
+
+			qboolean isSel = ((i == 0 && g_xpProfile.duelSndEnabled == 1) || (i == 1 && g_xpProfile.duelSndEnabled == 0)) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.10f, 0.20f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.60f, 0.85f, 0.70f };
+			if ( isSel ) { btnBg[0] = 0.10f; btnBg[1] = 0.45f; btnBg[2] = 0.75f; btnBorder[0] = 1.0f; btnBorder[1] = 0.8f; btnBorder[2] = 0.2f; }
+			else if ( isHover ) btnBg[0] = 0.08f;
+
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 10.0f, (i == 0) ? "DUEL SOUNDS: ENABLED" : "DUEL SOUNDS: DISABLED", whiteColor );
+		}
+	}
+	// =======================================================================
+	// TAB 3: COMMANDS & SYSTEM GUIDE
+	// =======================================================================
+	else if ( g_rpgMenuTab == 3 ) {
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 11.5f, "^5In-Chat Commands (Works on ANY Server)", whiteColor );
+		SCR_DrawVirtualString( cardX + 28.0f, cardY + 110.0f, 10.0f, "^3!rpgmenu       ^7-> Open Interactive Customization Window (Mouse Support)", whiteColor );
+		SCR_DrawVirtualString( cardX + 28.0f, cardY + 134.0f, 10.0f, "^3!stats ^7or ^3!card  ^7-> Open Profile Stats & Achievements UI Window", whiteColor );
+		SCR_DrawVirtualString( cardX + 28.0f, cardY + 158.0f, 10.0f, "^3!ranks         ^7-> Open Rank Progression Tiers UI Window", whiteColor );
+		SCR_DrawVirtualString( cardX + 28.0f, cardY + 182.0f, 10.0f, "^3!jedi ^7or ^3!sith  ^7-> Switch Faction Rank Title Progression Path", whiteColor );
+
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 220.0f, 11.5f, "^5Console CVars (For Autoexec Scripting)", whiteColor );
+		SCR_DrawVirtualString( cardX + 28.0f, cardY + 246.0f, 9.5f, "^3/cg_rpg_hud_style 0-4 ^7(0=Holo, 1=Saber, 2=Pill, 3=Imperial, 4=Neon)", whiteColor );
+		SCR_DrawVirtualString( cardX + 28.0f, cardY + 270.0f, 9.5f, "^3/cg_rpg_hud_pos 0-4   ^7(0=Top-Left, 1=Top-Right, 2=Bot-Left, 3=Bot-Right, 4=Center)", whiteColor );
+	}
+
+	SCR_DrawMBIICapsule( cardX + 20.0f, cardY + cardH - 28.0f, cardW - 40.0f, 1.5f, lineCol, NULL );
+	SCR_DrawVirtualString( cardX + 20.0f, cardY + cardH - 18.0f, 9.0f, "^5Click buttons with mouse cursor or press ESC to close", whiteColor );
+
+	// Render Holographic Mouse Cursor Pointer
+	float curX = g_rpgMouseX;
+	float curY = g_rpgMouseY;
+	if ( s_hMousePointer > 0 ) {
+		SCR_DrawPic( curX - 12.0f, curY - 12.0f, 24.0f, 24.0f, s_hMousePointer );
+	} else {
+		vec4_t curColor = { 1.00f, 0.85f, 0.20f, 0.95f };
+		SCR_FillRect( curX - 4.0f, curY - 1.0f, 9.0f, 2.0f, curColor );
+		SCR_FillRect( curX - 1.0f, curY - 4.0f, 2.0f, 9.0f, curColor );
+		vec4_t curDot = { 1.00f, 1.00f, 1.00f, 1.00f };
+		SCR_FillRect( curX - 1.0f, curY - 1.0f, 2.0f, 2.0f, curDot );
+	}
 }
 
 
@@ -1321,9 +2165,21 @@ void SCR_DrawToastOverlay( void ) {
 	if ( alpha > 1.0f ) alpha = 1.0f;
 
 	const float panelW = 150.0f;
-	const float panelH = 46.0f;
-	const float panelX = 640.0f - panelW - 14.0f;  // Top-Right corner
-	const float panelY = 125.0f;                   // Under the map
+	const float panelH = 58.0f;
+	float defaultX = 640.0f - panelW - 14.0f;
+	float defaultY = 125.0f;
+
+	if ( cg_rpg_toast_pos ) {
+		int posVal = cg_rpg_toast_pos->integer;
+		if ( posVal == 0 ) { defaultX = 14.0f; defaultY = 125.0f; }
+		else if ( posVal == 1 ) { defaultX = 640.0f - panelW - 14.0f; defaultY = 125.0f; }
+		else if ( posVal == 2 ) { defaultX = 14.0f; defaultY = 280.0f; }
+		else if ( posVal == 3 ) { defaultX = 640.0f - panelW - 14.0f; defaultY = 280.0f; }
+		else if ( posVal == 4 ) { defaultX = 320.0f - panelW * 0.5f; defaultY = 100.0f; }
+	}
+
+	const float panelX = defaultX;
+	const float panelY = defaultY;
 
 	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
 
@@ -1386,6 +2242,23 @@ void SCR_DrawToastOverlay( void ) {
 		Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^1%d ^7| ^6+%d CR", g_rpgToast.eloDelta, g_rpgToast.credits );
 	}
 	SCR_DrawVirtualString( textX, panelY + 26.0f, 4.0f, statsStr, whiteA );
+
+	// Row 4: Captured HP/BP remaining values
+	char bpStr[96];
+	if ( g_rpgToast.isWin ) {
+		if ( g_rpgToast.killerHP > 0 || g_rpgToast.killerBP > 0 ) {
+			Com_sprintf( bpStr, sizeof( bpStr ), "^7My Left: ^2%d HP ^7/ ^5%d BP", g_rpgToast.killerHP, g_rpgToast.killerBP );
+		} else {
+			Com_sprintf( bpStr, sizeof( bpStr ), "^7My Left: ^5Unknown BP" );
+		}
+	} else {
+		if ( g_rpgToast.killerHP > 0 || g_rpgToast.killerBP > 0 ) {
+			Com_sprintf( bpStr, sizeof( bpStr ), "^7Opp Left: ^1%d HP ^7/ ^5%d BP", g_rpgToast.killerHP, g_rpgToast.killerBP );
+		} else {
+			Com_sprintf( bpStr, sizeof( bpStr ), "^7Opp Left: ^5Unknown BP" );
+		}
+	}
+	SCR_DrawVirtualString( textX, panelY + 37.0f, 3.8f, bpStr, whiteA );
 
 	// Progress bar (shrinks left to right as duration elapses)
 	float barW    = panelW - 4.0f;

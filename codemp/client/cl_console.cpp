@@ -441,6 +441,8 @@ If no console is visible, the text will appear at the top of the game window
 ================
 */
 void CL_ConsolePrint( const char *txt) {
+	CL_XP_OnPrintMessage( txt );
+
 	int		y;
 	int		c, l;
 	int		color;
@@ -584,9 +586,7 @@ void Con_DrawNotify (void)
 	short	*text;
 	int		i;
 	int		time;
-	int		skip;
 	int		currentColor;
-	const char* chattext;
 
 	currentColor = 7;
 	re->SetColor( g_color_table[currentColor] );
@@ -669,24 +669,38 @@ void Con_DrawNotify (void)
 		return;
 	}
 
-	// draw the chat line
+	// draw the chat line using HD virtual font renderer (Fixed at Top-Left above chat log)
 	if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE )
 	{
-		if (chat_team)
+		const char *prompt = "Say : ";
+		if ( chat_playerNum != -1 )
 		{
-			chattext = SE_GetString("MP_SVGAME", "SAY_TEAM");
-			SCR_DrawBigString (8, v, chattext, 1.0f, qfalse );
-			skip = strlen(chattext)+1;
+			char targetName[64] = "";
+			if ( chat_playerNum >= 0 && chat_playerNum < MAX_CLIENTS && cl.gameState.stringOffsets[CS_PLAYERS + chat_playerNum] )
+			{
+				const char *playerInfo = cl.gameState.stringData + cl.gameState.stringOffsets[CS_PLAYERS + chat_playerNum];
+				if ( playerInfo && playerInfo[0] ) {
+					Q_strncpyz( targetName, Info_ValueForKey( playerInfo, "n" ), sizeof( targetName ) );
+					Q_CleanStr( targetName );
+				}
+			}
+			if ( targetName[0] ) {
+				prompt = va("Tell (%s): ", targetName);
+			} else {
+				prompt = va("Tell (%d): ", chat_playerNum);
+			}
 		}
-		else
+		else if ( chat_team )
 		{
-			chattext = SE_GetString("MP_SVGAME", "SAY");
-			SCR_DrawBigString (8, v, chattext, 1.0f, qfalse );
-			skip = strlen(chattext)+1;
+			prompt = "Say (Team): ";
 		}
 
-		Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,
-			SCREEN_WIDTH - ( skip + 1 ) * BIGCHAR_WIDTH, qtrue, qtrue );
+		char fullBuf[MAX_STRING_CHARS];
+		qboolean cursorBlink = ((cls.realtime >> 8) & 1) ? qtrue : qfalse;
+		Com_sprintf( fullBuf, sizeof(fullBuf), "^3%s^7%s%s", prompt, chatField.buffer, cursorBlink ? "^5_" : " " );
+
+		// Anchored at top-left (y = 56.0f) above chat log with large 11.0f char size
+		SCR_DrawVirtualString( 14.0f, 56.0f, 11.0f, fullBuf, NULL );
 
 		v += BIGCHAR_HEIGHT;
 	}

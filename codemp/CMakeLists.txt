@@ -628,6 +628,8 @@ if(BuildMPEngine)
 
 	set_target_properties(${MPEngine} PROPERTIES INCLUDE_DIRECTORIES "${MPEngineIncludeDirectories}")
 	set_target_properties(${MPEngine} PROPERTIES PROJECT_LABEL "MP Client")
+	# Rename engine EXE for MB2 (openjk.x86.exe → mbii.x86.exe)
+	set_target_properties(${MPEngine} PROPERTIES OUTPUT_NAME "mbii.x86")
 	target_link_libraries(${MPEngine} ${MPEngineLibraries})
 endif(BuildMPEngine)
 

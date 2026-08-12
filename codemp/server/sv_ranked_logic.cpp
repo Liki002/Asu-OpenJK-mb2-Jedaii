@@ -318,9 +318,8 @@ static void UpdateAccountStats(const char *username, const char *displayName,
 
   if (killsPtr && isKill) {
     cJSON_SetNumberValue(killsPtr, killsPtr->valueint + 1);
-    // Quest 7: Century – reach 100 total kills
-    if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open") &&
-        killsPtr->valueint == 100) {
+    // Quest 7: Century – reach 100 total kills (works in ALL modes now)
+    if (killsPtr->valueint == 100) {
       int centClId = -1;
       for (int ci = 0; ci < sv_maxclients->integer; ci++) {
         if (sv_rankedPlayers[ci].loggedIn &&
@@ -363,9 +362,8 @@ static void UpdateAccountStats(const char *username, const char *displayName,
     } else {
       cJSON_SetNumberValue(wepCount, wepCount->valueint + 1);
 
-      // Quest 2: 50 Lightsaber Kills
-      if (Q_stricmp(readableS, "Lightsaber") == 0 &&
-          !Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
+      // Quest 2: 50 Lightsaber Kills (works in ALL modes now)
+      if (Q_stricmp(readableS, "Lightsaber") == 0) {
         int count = wepCount->valueint;
         if (count == 50) {
           int clId = -1;
@@ -460,24 +458,32 @@ static void IncrementWinLoss(const char *username, qboolean won, client_t *cl) {
     Com_Printf("[RANKED] %s %s: 1 (created)\n", username, field);
   }
 
-  // Open Quests logic: Team Wins
-  if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-    if (won) {
+  // Team Wins quest (works in ALL modes now)
+  if (won) {
       cJSON *tw = cJSON_GetObjectItemCaseSensitive(modeData, "team_wins");
+      int teamWinCount = 1;
       if (tw) {
-        cJSON_SetNumberValue(tw, tw->valueint + 1);
-        if (tw->valueint == 10 && cl) {
-          SV_SendServerCommand(cl, "cp \"^7%s\n^3QUEST DONE!\"", username);
-          SV_SendServerCommand(cl, "print \"^2QUEST COMPLETE! ^7Win 10 Team "
-                                   "Rounds (^5+100 XP / +100 Credits^7)\n\"");
-          cJSON *xpPtr = cJSON_GetObjectItemCaseSensitive(acc, "xp");
-          if (xpPtr)
-            cJSON_SetNumberValue(xpPtr, xpPtr->valueint + 100);
-          UpdateAccountCredits(username, 100);
-        }
+        teamWinCount = tw->valueint + 1;
+        cJSON_SetNumberValue(tw, teamWinCount);
       } else {
         cJSON_AddNumberToObject(modeData, "team_wins", 1);
+        teamWinCount = 1;
       }
+      if (teamWinCount == 10 && cl) {
+        SV_SendServerCommand(cl, "cp \"^7%s\n^3QUEST DONE!\"", username);
+        SV_SendServerCommand(cl, "print \"^2QUEST COMPLETE! ^7Win 10 Team "
+                                 "Rounds (^5+100 XP / +100 Credits^7)\n\"");
+        cJSON *xpPtr = cJSON_GetObjectItemCaseSensitive(acc, "xp");
+        if (xpPtr)
+          cJSON_SetNumberValue(xpPtr, xpPtr->valueint + 100);
+        UpdateAccountCredits(username, 100);
+      }
+      // ---- Round Win Milestone Achievements ----
+      if (teamWinCount >= 50)
+        SV_Ranked_GrantAchievement(username, "round_win_50", cl);
+      if (teamWinCount >= 200)
+        SV_Ranked_GrantAchievement(username, "round_win_200", cl);
+      SV_Ranked_CheckEconomyAchievements(username, cl);
     } else {
       cJSON *tl = cJSON_GetObjectItemCaseSensitive(modeData, "team_losses");
       if (tl) {
@@ -486,7 +492,6 @@ static void IncrementWinLoss(const char *username, qboolean won, client_t *cl) {
         cJSON_AddNumberToObject(modeData, "team_losses", 1);
       }
     }
-  }
 
   SV_Ranked_SaveAccounts();
 }
@@ -540,10 +545,17 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
              weaponStr ? weaponStr : "Unknown", mod);
 
   // ---- ISOLATE DUEL KILLS ----
+  // Private 1v1 duel kills between matched opponents: we still call DuelEnd for
+  // W/L/ELO tracking but now let the kill flow through ProcessKill below so
+  // duels also give normal kill XP, weapon stats, streak shutdown, bounties,
+  // quests and achievements (just like any other kill in any other mode).
   if ((kState && kState->inDuel) || (vState && vState->inDuel)) {
     if (kState && vState && kState->inDuel && kState->duelOpponent == victimId && vState->inDuel &&
         vState->duelOpponent == killerId) {
+      // Matched duel kill between real opponents → record duel result, then
+      // FALL THROUGH so ProcessKill also awards normal kill rewards
       SV_Ranked_DuelEnd(killerId, victimId, 0, 0, mod);
+      // NOTE: no return here — duel kills now count like normal kills too
     } else if (vState && vState->inDuel && (killerId == victimId ||
                                    killerId == (sv_maxclients->integer + 1))) {
       int oppId = vState->duelOpponent;
@@ -560,9 +572,11 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
       SV_SendServerCommand(
           NULL, "print \"^3Duel cancelled due to suicide/world death.\n\"");
       SV_Ranked_DuelStop(oppId, victimId);
+      return; // Cancelled duel — do not leak into open mode stats
+    } else {
+      // Player involved in a duel but not a matched kill (third-party interference)
+      return;
     }
-    return; // Prevents Duel deaths/suicides/kills from mixing with Open Mode
-            // stats
   }
 
   // ---- NPC BOSS KILLS (Kyle / Rey) ----
@@ -576,11 +590,13 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
         int cr;
         const char *counterField; // NULL = no dedicated counter
         const char *displayName;
+        const char *ach1;   // Achievement for first kill (or NULL)
+        const char *ach10;  // Achievement for 10 kills (or NULL)
       } rankedBoss_t;
       static const rankedBoss_t bosses[] = {
-          {"Kyle Katarn",         250, 100, "kyle_boss_kills", "Kyle Katarn"},
-          {"kyle_boss_trainer",   250, 100, "kyle_boss_kills", "Kyle Boss"},
-          {"Rey Skywalker",       250, 100, NULL,              "Rey Skywalker"},
+          {"Kyle Katarn",         250, 100, "kyle_boss_kills", "Kyle Katarn", "boss_kyle_1", "boss_kyle_10"},
+          {"kyle_boss_trainer",   250, 100, "kyle_boss_kills", "Kyle Boss",   "boss_kyle_1", "boss_kyle_10"},
+          {"Rey Skywalker",       250, 100, "rey_boss_kills",  "Rey Skywalker","boss_rey_1",  NULL},
       };
       static const int bossCount = (int)(sizeof(bosses) / sizeof(bosses[0]));
 
@@ -597,19 +613,30 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
         cJSON *acc = SV_Ranked_GetAccount(kState->username);
         if (!acc)
           break;
+        int bossKillCount = 1;
         if (bosses[b].counterField) {
           cJSON *cnt =
               cJSON_GetObjectItemCaseSensitive(acc, bosses[b].counterField);
           int current = cnt ? cnt->valueint : 0;
+          bossKillCount = current + 1;
           if (cnt)
-            cJSON_SetNumberValue(cnt, current + 1);
+            cJSON_SetNumberValue(cnt, bossKillCount);
           else
-            cJSON_AddNumberToObject(acc, bosses[b].counterField, current + 1);
+            cJSON_AddNumberToObject(acc, bosses[b].counterField, bossKillCount);
         }
         // Use UpdateAccountStats so level-up check fires automatically
         UpdateAccountStats(kState->username, killerName, 0, bosses[b].xp, 0, 0,
                            NULL);
         UpdateAccountCredits(kState->username, bosses[b].cr);
+
+        // ---- Boss Kill Achievements ----
+        if (bossKillCount >= 1 && bosses[b].ach1) {
+          SV_Ranked_GrantAchievement(kState->username, bosses[b].ach1, killerCl);
+        }
+        if (bossKillCount >= 10 && bosses[b].ach10) {
+          SV_Ranked_GrantAchievement(kState->username, bosses[b].ach10, killerCl);
+        }
+        SV_Ranked_CheckEconomyAchievements(kState->username, killerCl);
 
         SV_SendServerCommand(svs.clients + killerId,
                              "cp \"^2BOSS DEFEATED!\n^2+%d XP ^3+%d CR\"",
@@ -819,19 +846,13 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
   kState->roundKills++;
   kState->killsOnPlayers[victimId]++;
 
-  // Kill streaks only count in OPEN mode. In other modes (FA, legends, duel)
-  // we keep streak at 0 so non-duel kills don't accidentally fire WANTED
-  // announcements or grant streak bounties.
-  const qboolean streakModeActive =
-      (Q_stricmp(SV_Ranked_GetActiveMode(), "open") == 0) ? qtrue : qfalse;
-  if (streakModeActive) {
-    kState->killStreak++;
-  } else {
-    kState->killStreak = 0;
-  }
+  // Kill streaks now count in ALL modes (Open, FA, Legends, Duel) — XP for kills
+  // works generically across the entire game.
+  const qboolean streakModeActive = qtrue;
+  kState->killStreak++;
 
-  // Update highest streak in JSON (open mode only)
-  if (streakModeActive && kState->loggedIn) {
+  // Update highest streak in JSON (all modes)
+  if (kState->loggedIn) {
     cJSON *acc = SV_Ranked_GetAccount(kState->username);
     if (acc) {
       cJSON *modeData = GetModeDataForAccount(acc);
@@ -930,35 +951,25 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
 
   if (kState->multiKillCount == 2) {
     Com_Printf("[RANKED] DOUBLE KILL by %s\n", killerName);
-    if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^5%s\n^1DOUBLE KILL! ^7(+2 FR)\"",
-                           killerName);
-    }
+    SV_SendServerCommand(NULL, "cp \"^5%s\n^1DOUBLE KILL! ^7(+2 FR)\"", killerName);
     UpdateAccountStats(kState->username, killerName, 2, 0, 0, 0, NULL);
     SV_Ranked_ProgressQuest(kState->username, "double_kills", 1, killerCl);
   } else if (kState->multiKillCount == 3) {
     Com_Printf("[RANKED] TRIPLE KILL by %s\n", killerName);
-    if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^5%s\n^1TRIPLE KILL! ^7(+5 FR)\"",
-                           killerName);
-    }
+    SV_SendServerCommand(NULL, "cp \"^5%s\n^1TRIPLE KILL! ^7(+5 FR)\"", killerName);
     UpdateAccountStats(kState->username, killerName, 5, 0, 0, 0, NULL);
     SV_Ranked_ProgressQuest(kState->username, "triple_kills", 1, killerCl);
   } else if (kState->multiKillCount == 4) {
     Com_Printf("[RANKED] OVERKILL by %s\n", killerName);
-    if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1OVERKILL!\"", killerName);
-    }
+    SV_SendServerCommand(NULL, "cp \"^7%s\n^1OVERKILL!\"", killerName);
     UpdateAccountStats(kState->username, killerName, 10, 0, 0, 0, NULL);
   } else if (kState->multiKillCount >= 5) {
     Com_Printf("[RANKED] MONSTER KILL by %s\n", killerName);
-    if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1MONSTER KILL!\"", killerName);
-    }
+    SV_SendServerCommand(NULL, "cp \"^7%s\n^1MONSTER KILL!\"", killerName);
     UpdateAccountStats(kState->username, killerName, 15, 0, 0, 0, NULL);
   }
 
-  // ---- KILL STREAKS (OPEN MODE ONLY) ----
+  // ---- KILL STREAKS (ALL MODES NOW) ----
   if (streakModeActive) {
     int streak = kState->killStreak;
     Com_Printf("[RANKED] %s kill streak = %d\n", kState->username, streak);
@@ -1299,7 +1310,7 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
     }
 
     if (onWinningTeam) {
-      // K/D-based FR for winners (Open mode)
+      // K/D-based FR for winners (all modes)
       int frGain;
       if (mState->roundDeaths > mState->roundKills) {
         frGain = 5; // carried by team
@@ -1319,16 +1330,18 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
       int crTeamWin = crTeamWinPtr ? crTeamWinPtr->valueint : 20;
       UpdateAccountCredits(mState->username, crTeamWin); // Credits for Team Win
 
-      // Quest 8: Deathless – win a round with 0 deaths 3 times
-      if (mState->roundDeaths == 0 && !Q_stricmp(modeStr, "open")) {
+      // Quest 8: Deathless – win a round with 0 deaths 3 times (ALL modes now)
+      if (mState->roundDeaths == 0) {
         cJSON *dlacc = SV_Ranked_GetAccount(mState->username);
         if (dlacc) {
           cJSON *dlmodeData = GetModeDataForAccount(dlacc);
           cJSON *dlqPtr =
               cJSON_GetObjectItemCaseSensitive(dlmodeData, "quest_deathless");
+          int dlCount = 1;
           if (dlqPtr) {
-            cJSON_SetNumberValue(dlqPtr, dlqPtr->valueint + 1);
-            if (dlqPtr->valueint == 3) {
+            dlCount = dlqPtr->valueint + 1;
+            cJSON_SetNumberValue(dlqPtr, dlCount);
+            if (dlCount == 3) {
               cJSON *crDeathlessPtr = SV_Ranked_GetSetting("quest_deathless_credits");
               int crDeathless = crDeathlessPtr ? crDeathlessPtr->valueint : 100;
               SV_SendServerCommand(cl, "cp \"^7%s\n^3QUEST DONE!\"", mState->username);
@@ -1339,7 +1352,11 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
             }
           } else {
             cJSON_AddNumberToObject(dlmodeData, "quest_deathless", 1);
+            dlCount = 1;
           }
+          // ---- Deathless Achievement Milestone ----
+          if (dlCount >= 10)
+            SV_Ranked_GrantAchievement(mState->username, "deathless_10", cl);
         }
       }
 
@@ -2119,6 +2136,29 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
                                       &svs.clients[winnerId]);
       SV_Ranked_CheckEconomyAchievements(rWin->username,
                                          &svs.clients[winnerId]);
+
+      // ---- FLAWLESS DUEL DETECTION & ACHIEVEMENTS ----
+      // A "flawless" duel = winner finished with >=90 HP (took minimal damage).
+      qboolean flawlessDuel = (winHealth >= 90) ? qtrue : qfalse;
+      if (flawlessDuel && !isDisconnect) {
+        cJSON *flPtr = cJSON_GetObjectItemCaseSensitive(wMd, "flawless_wins");
+        int flawlessCount = flPtr ? flPtr->valueint : 0;
+        flawlessCount++;
+        if (flPtr)
+          cJSON_SetNumberValue(flPtr, flawlessCount);
+        else
+          cJSON_AddNumberToObject(wMd, "flawless_wins", flawlessCount);
+
+        SV_SendServerCommand(svs.clients + winnerId,
+            "chat \"^3*** FLAWLESS DUEL! No significant damage taken! ***\"");
+
+        if (flawlessCount >= 5)
+          SV_Ranked_GrantAchievement(rWin->username, "duel_flawless_5",
+                                     &svs.clients[winnerId]);
+        if (flawlessCount >= 25)
+          SV_Ranked_GrantAchievement(rWin->username, "duel_flawless_25",
+                                     &svs.clients[winnerId]);
+      }
     }
   }
 
