@@ -70,7 +70,23 @@ int g_lastParsedKillerHP = 0;
 int g_lastParsedKillerBP = 0;
 char g_lastParsedVictimName[64] = "";
 char g_lastParsedKillerName[64] = "";
+char g_duelOpponentName[64] = "";
 int g_lastDuelOutcome = 0;
+
+qboolean CL_XP_IsNPCName(const char *name) {
+	if (!name || !name[0]) return qfalse;
+	if (Q_stristr(name, "Training Dummy") || Q_stristr(name, "cultist") || Q_stristr(name, "reborn") ||
+		Q_stristr(name, "stormtrooper") || Q_stristr(name, "shadowtrooper") || Q_stristr(name, "alora") ||
+		Q_stristr(name, "tavion") || Q_stristr(name, "desann") || Q_stristr(name, "gran") ||
+		Q_stristr(name, "rodian") || Q_stristr(name, "trandoshan") || Q_stristr(name, "weequay") ||
+		Q_stristr(name, "tusken") || Q_stristr(name, "boba_fett") || Q_stristr(name, "jawa") ||
+		Q_stristr(name, "swamptrooper") || Q_stristr(name, "seeker") || Q_stristr(name, "sentry") ||
+		Q_stristr(name, "remote") || Q_stristr(name, "dummy") || Q_stristr(name, "bot") ||
+		Q_stristr(name, "npc")) {
+		return qtrue;
+	}
+	return qfalse;
+}
 
 // Secret salt for anti-cheat hash signature
 static const char XP_SECRET_SALT[] = "JEDAII_XP_STANDALONE_SECURE_SALT_2026_x89!";
@@ -896,10 +912,11 @@ void CL_XP_CheckGameEvents(void) {
 	} else if (g_lastDuelInProgress && !currentDuel) {
 		// Duel just ended — check outcome
 		int durationMs = (g_duelStartMs > 0) ? (cls.realtime - g_duelStartMs) : 0;
-		if (g_lastDuelOutcome == -2 || durationMs < 500) {
-			// Duel ended manually or prematurely — do NOT grant win or loss!
+		if (g_lastDuelOutcome == -2 || durationMs < 500 || CL_XP_IsNPCName(g_duelOpponentName) || CL_XP_IsNPCName(g_lastParsedVictimName)) {
+			// Duel ended manually, prematurely, or against an NPC — do NOT grant duel win/loss or show Toast!
 			g_duelStartMs = 0;
 			g_lastDuelOutcome = 0;
+			g_duelOpponentName[0] = '\0';
 		} else {
 			qboolean isWin = qfalse;
 			if (g_lastDuelOutcome == 1) {
@@ -926,6 +943,7 @@ void CL_XP_CheckGameEvents(void) {
 			}
 			g_duelStartMs = 0;
 			g_lastDuelOutcome = 0;
+			g_duelOpponentName[0] = '\0';
 		}
 	}
 	g_lastDuelInProgress = currentDuel;
@@ -1067,24 +1085,41 @@ void CL_XP_OnPrintMessage(const char *msg) {
 		g_lastParsedKillerBP = 0;
 	}
 
+	// Parse duel start opponent name
+	const char *duelStartPos = Q_stristr(cleanMsg, "has become engaged in a duel with ");
+	if (duelStartPos) {
+		const char *oppStart = duelStartPos + strlen("has become engaged in a duel with ");
+		char oppBuf[64];
+		Q_strncpyz(oppBuf, oppStart, sizeof(oppBuf));
+		int oppLen = strlen(oppBuf);
+		while (oppLen > 0 && (oppBuf[oppLen - 1] == ' ' || oppBuf[oppLen - 1] == '!' || oppBuf[oppLen - 1] == '.' || oppBuf[oppLen - 1] == '\r' || oppBuf[oppLen - 1] == '\n')) {
+			oppBuf[oppLen - 1] = '\0';
+			oppLen--;
+		}
+		Q_strncpyz(g_duelOpponentName, oppBuf, sizeof(g_duelOpponentName));
+	}
+
 	if (iAmVictim) {
-		g_lastDuelOutcome = -1;
+		if (!CL_XP_IsNPCName(extractedKiller)) {
+			g_lastDuelOutcome = -1;
+		} else {
+			g_lastDuelOutcome = 0;
+		}
 		if (extractedKiller[0]) Q_strncpyz(g_lastParsedKillerName, extractedKiller, sizeof(g_lastParsedKillerName));
 		if (extractedVictim[0]) Q_strncpyz(g_lastParsedVictimName, extractedVictim, sizeof(g_lastParsedVictimName));
-		if (cls.realtime - s_lastDeathPrintMs > 1000) {
-			s_lastDeathPrintMs = cls.realtime;
-			CL_XP_OnPlayerDeath();
-		}
+		CL_XP_OnPlayerDeath();
 		return;
 	}
 
 	if (iAmKiller) {
-		g_lastDuelOutcome = 1;
 		if (extractedVictim[0]) Q_strncpyz(g_lastParsedVictimName, extractedVictim, sizeof(g_lastParsedVictimName));
 		if (extractedKiller[0]) Q_strncpyz(g_lastParsedKillerName, extractedKiller, sizeof(g_lastParsedKillerName));
-		if (cls.realtime - s_lastKillPrintMs > 100) {
-			s_lastKillPrintMs = cls.realtime;
-			Com_DPrintf("[RPG MOD] Killer Match: '%s' | MyName: '%s'\n", cleanMsg, cleanMyName);
+		
+		if (CL_XP_IsNPCName(extractedVictim)) {
+			g_lastDuelOutcome = 0;
+			CL_XP_OnNPCKill();
+		} else {
+			g_lastDuelOutcome = 1;
 			CL_XP_OnPlayerKill(cl.snap.ps.weapon);
 		}
 	} else {
@@ -1190,8 +1225,16 @@ void CL_XP_OnPlayerDeath(void) {
 }
 
 void CL_XP_OnNPCKill(void) {
+	static int s_lastNpcKillMs = 0;
+	if (cls.realtime - s_lastNpcKillMs < 600) {
+		return;
+	}
+	s_lastNpcKillMs = cls.realtime;
+
 	g_xpProfile.npcKills++;
-	CL_XP_AddXP(XP_GRANT_NPC_KILL, "NPC Kill");
+	g_xpProfile.kills++;
+	CL_XP_AddXP(XP_GRANT_NPC_KILL, "NPC Slayed");
+	CL_XP_PushNotification(RPG_NOTIF_XP, "NPC SLAYED", "Defeated NPC in combat", XP_GRANT_NPC_KILL, NULL, 2500);
 }
 
 void CL_XP_OnDuelWin(qboolean perfect, qboolean quickDraw, int duelDurationMs) {
