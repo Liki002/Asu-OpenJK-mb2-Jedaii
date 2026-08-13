@@ -505,11 +505,12 @@ void SCR_Init( void ) {
 	cg_drawBounty = Cvar_Get ("cg_drawBounty", "0", 0);
 	cg_rpg_toast_pos = Cvar_Get ("cg_rpg_toast_pos", "1", CVAR_ARCHIVE);
 	cg_rpg_notif_pos = Cvar_Get ("cg_rpg_notif_pos", "1", CVAR_ARCHIVE);
-	cg_rpg_duel_popups = Cvar_Get ("cg_rpg_duel_popups", "0", CVAR_ARCHIVE);
+	cg_rpg_duel_popups = Cvar_Get ("cg_rpg_duel_popups", "1", CVAR_ARCHIVE);
 
 	Cmd_AddCommand( "rpg_hud_style", SCR_RPGHUDStyle_f, "Select RPG HUD style: classic (0) or bottom (1)" );
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
 
+	SCR_ClearRPGShaders();
 	CL_XP_Init();
 
 	scr_initialized = qtrue;
@@ -739,6 +740,24 @@ static qhandle_t s_hFillXPJedi         = 0;
 static qhandle_t s_hFillXPSith         = 0;
 static qboolean  s_shadersTried         = qfalse;
 
+void SCR_ClearRPGShaders( void ) {
+	s_shadersTried         = qfalse;
+	s_hHoloJediFrame       = 0;
+	s_hHoloSithFrame       = 0;
+	s_hFrameStyle1Saber    = 0;
+	s_hFrameStyle2Pill     = 0;
+	s_hFrameStyle3Imperial = 0;
+	s_hFrameStyle4Neon     = 0;
+	s_hBtnNormal           = 0;
+	s_hBtnHover            = 0;
+	s_hBtnActive           = 0;
+	s_hBtnSithNormal       = 0;
+	s_hBtnSithHover        = 0;
+	s_hMousePointer        = 0;
+	s_hFillXPJedi          = 0;
+	s_hFillXPSith          = 0;
+}
+
 static int SCR_GetCleanStringLength( const char *str ) {
 	if ( !str ) return 0;
 	int len = 0;
@@ -866,10 +885,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	// Register HD TGA Shaders dynamically upon map load/reconnect
 	static int s_lastServerTime = -1;
-	static int s_lastClState = -1;
-	if ( !s_shadersTried || cls.state != s_lastClState || cl.snap.serverTime < s_lastServerTime ) {
+	if ( !s_shadersTried || s_hHoloJediFrame <= 0 || s_hHoloJediFrame >= 1024 || cl.snap.serverTime < s_lastServerTime ) {
 		s_shadersTried = qtrue;
-		s_lastClState = cls.state;
 		s_lastServerTime = cl.snap.serverTime;
 		if ( re && re->RegisterShaderNoMip ) {
 			s_hHoloJediFrame       = re->RegisterShaderNoMip( "gfx/rpg_hud/hud_style0_clean" );
@@ -964,7 +981,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// ========================================================
 if ( style == 0 ) {
 	qhandle_t hFrame = (g_xpProfile.faction == FACTION_SITH) ? s_hHoloSithFrame : s_hHoloJediFrame;
-	if ( hFrame > 0 ) {
+	if ( hFrame > 0 && hFrame < 1024 && hFrame != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, hFrame );
 	} else {
 		vec4_t glassBg     = { 0.02f, 0.06f, 0.14f, 0.75f };
@@ -1004,7 +1021,7 @@ if ( style == 0 ) {
 // STYLE 1: SLANTED PARALLELOGRAM & DIAMOND AVATAR
 // ========================================================
 else if ( style == 1 ) {
-	if ( s_hFrameStyle1Saber > 0 ) {
+	if ( s_hFrameStyle1Saber > 0 && s_hFrameStyle1Saber < 1024 && s_hFrameStyle1Saber != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hFrameStyle1Saber );
 	} else {
 		vec4_t hiltBg     = { 0.03f, 0.05f, 0.10f, 0.85f };
@@ -1037,7 +1054,7 @@ else if ( style == 1 ) {
 // STYLE 2: CURVED PILOT ARC & OVAL AVATAR
 // ========================================================
 else if ( style == 2 ) {
-	if ( s_hFrameStyle2Pill > 0 ) {
+	if ( s_hFrameStyle2Pill > 0 && s_hFrameStyle2Pill < 1024 && s_hFrameStyle2Pill != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hFrameStyle2Pill );
 	} else {
 		vec4_t pillBg = { 0.03f, 0.07f, 0.14f, 0.80f };
@@ -1069,7 +1086,7 @@ else if ( style == 2 ) {
 // ========================================================
 else if ( style == 3 || style == 4 ) {
 	qhandle_t hImpFrame = (g_xpProfile.faction == FACTION_SITH && s_hFrameStyle4Neon > 0) ? s_hFrameStyle4Neon : s_hFrameStyle3Imperial;
-	if ( hImpFrame > 0 ) {
+	if ( hImpFrame > 0 && hImpFrame < 1024 && hImpFrame != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, hImpFrame );
 	} else {
 		vec4_t impBg     = { 0.07f, 0.08f, 0.10f, 0.90f };

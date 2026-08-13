@@ -718,6 +718,7 @@ Called before parsing a gamestate
 void CL_ClearState (void) {
 
 //	S_StopAllSounds();
+	SCR_ClearRPGShaders();
 	Com_Memset( &cl, 0, sizeof( cl ) );
 }
 
