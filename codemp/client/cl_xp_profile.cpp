@@ -1172,7 +1172,14 @@ void CL_XP_OnPlayerKill(int weapon) {
 	}
 }
 
+static int s_lastDeathProcessedMs = 0;
+
 void CL_XP_OnPlayerDeath(void) {
+	if (cls.realtime - s_lastDeathProcessedMs < 1000) {
+		return; // Ignore duplicate death signals within 1000ms window!
+	}
+	s_lastDeathProcessedMs = cls.realtime;
+
 	g_xpProfile.deaths++;
 	// Death = reset all client-only in-session kill streaks and multi-kill chains
 	g_currentKillStreak = 0;
@@ -1288,7 +1295,7 @@ void CL_XP_OnDuelWin(qboolean perfect, qboolean quickDraw, int duelDurationMs) {
 
 void CL_XP_OnDuelLoss(void) {
 	g_xpProfile.duelLosses++;
-	g_xpProfile.deaths++;
+	// Note: g_xpProfile.deaths is already counted by CL_XP_OnPlayerDeath!
 	g_xpProfile.currentDuelStreak = 0;
 
 	// Optional PLAYER DIED popup notification during duels

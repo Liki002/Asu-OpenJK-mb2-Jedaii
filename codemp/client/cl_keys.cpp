@@ -1501,6 +1501,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 					char valBuf[16];
 					Com_sprintf(valBuf, sizeof(valBuf), "%d", !curDuelPop);
 					Cvar_Set("cg_rpg_duel_popups", valBuf);
+					Cvar_Set("cg_rpg_notify_popups", valBuf);
 					return;
 				}
 

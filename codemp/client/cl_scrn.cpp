@@ -985,8 +985,8 @@ if ( style == 0 ) {
 
 	// Player Info Column
 	float textX = panelX + 46.0f;
-	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s", playerName), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s", playerName), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	// Hardcoded Pulsating Energy XP Progress Bar Track
 	float barX = textX + 2.0f;
@@ -1018,8 +1018,8 @@ else if ( style == 1 ) {
 	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
 
 	float textX = panelX + 48.0f;
-	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	// Hardcoded Pulsating Energy XP Progress Bar Track
 	float barX = textX + 2.0f;
@@ -1050,8 +1050,8 @@ else if ( style == 2 ) {
 	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
 
 	float textX = panelX + 46.0f;
-	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	float barX = textX + 2.0f;
 	float barY = panelY + 31.5f;
@@ -1083,8 +1083,8 @@ else if ( style == 3 || style == 4 ) {
 	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
 
 	float textX = panelX + 46.0f;
-	SCR_DrawVirtualString( textX, panelY + 5.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 3.6f, va("^3%s ^7|^3%dK/%dD ^7|^2%dW/%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	float barX = textX + 2.0f;
 	float barY = panelY + 31.5f;
@@ -1708,6 +1708,18 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
 			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, avatarNames[i], whiteColor );
 		}
+
+		// 6. Reset Profile Stats Button
+		float rX = cardX + 20.0f;
+		float rY = cardY + 346.0f;
+		float rW = 540.0f;
+		float rH = 26.0f;
+		qboolean rHover = (g_rpgMouseX >= rX && g_rpgMouseX <= rX + rW && g_rpgMouseY >= rY && g_rpgMouseY <= rY + rH) ? qtrue : qfalse;
+		vec4_t rBg = { 0.40f, 0.05f, 0.05f, 0.85f };
+		vec4_t rBorder = { 0.95f, 0.15f, 0.15f, 0.85f };
+		if ( rHover ) { rBg[0] = 0.60f; rBg[1] = 0.08f; rBorder[0] = 1.00f; rBorder[1] = 0.30f; rBorder[2] = 0.30f; }
+		SCR_DrawMBIICapsule( rX, rY, rW, rH, rBg, rBorder );
+		SCR_DrawCenteredText( rX, rY + 5.0f, rW, 10.0f, "^1[ RESET ALL RPG STATS & LEVEL PROGRESS ]", whiteColor );
 	}
 	// =======================================================================
 	// TAB 2: ACHIEVEMENTS & QUESTS
@@ -2194,6 +2206,8 @@ Auto-dismisses after TOAST_DURATION_MS with fade-in / fade-out animation.
 void SCR_DrawToastOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) return;
 	if ( !g_rpgToast.active ) return;
+	if ( cg_rpg_duel_popups && cg_rpg_duel_popups->integer == 0 ) return;
+	if ( cg_rpg_notify_popups && cg_rpg_notify_popups->integer == 0 ) return;
 
 	int elapsed = cls.realtime - g_rpgToast.startTimeMs;
 	if ( elapsed >= TOAST_DURATION_MS ) {
