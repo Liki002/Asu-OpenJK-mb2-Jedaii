@@ -885,7 +885,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	// Register HD TGA Shaders dynamically upon map load/reconnect
 	static int s_lastServerTime = -1;
-	if ( !s_shadersTried || s_hHoloJediFrame <= 0 || s_hHoloJediFrame >= 1024 || cl.snap.serverTime < s_lastServerTime ) {
+	if ( !s_shadersTried || s_hHoloJediFrame <= 0 || cl.snap.serverTime < s_lastServerTime ) {
 		s_shadersTried = qtrue;
 		s_lastServerTime = cl.snap.serverTime;
 		if ( re && re->RegisterShaderNoMip ) {
@@ -981,7 +981,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// ========================================================
 if ( style == 0 ) {
 	qhandle_t hFrame = (g_xpProfile.faction == FACTION_SITH) ? s_hHoloSithFrame : s_hHoloJediFrame;
-	if ( hFrame > 0 && hFrame < 1024 && hFrame != cls.whiteShader ) {
+	if ( hFrame > 0 && hFrame != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, hFrame );
 	} else {
 		vec4_t glassBg     = { 0.02f, 0.06f, 0.14f, 0.75f };
@@ -1021,7 +1021,7 @@ if ( style == 0 ) {
 // STYLE 1: SLANTED PARALLELOGRAM & DIAMOND AVATAR
 // ========================================================
 else if ( style == 1 ) {
-	if ( s_hFrameStyle1Saber > 0 && s_hFrameStyle1Saber < 1024 && s_hFrameStyle1Saber != cls.whiteShader ) {
+	if ( s_hFrameStyle1Saber > 0 && s_hFrameStyle1Saber != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hFrameStyle1Saber );
 	} else {
 		vec4_t hiltBg     = { 0.03f, 0.05f, 0.10f, 0.85f };
@@ -1054,7 +1054,7 @@ else if ( style == 1 ) {
 // STYLE 2: CURVED PILOT ARC & OVAL AVATAR
 // ========================================================
 else if ( style == 2 ) {
-	if ( s_hFrameStyle2Pill > 0 && s_hFrameStyle2Pill < 1024 && s_hFrameStyle2Pill != cls.whiteShader ) {
+	if ( s_hFrameStyle2Pill > 0 && s_hFrameStyle2Pill != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, s_hFrameStyle2Pill );
 	} else {
 		vec4_t pillBg = { 0.03f, 0.07f, 0.14f, 0.80f };
@@ -1086,7 +1086,7 @@ else if ( style == 2 ) {
 // ========================================================
 else if ( style == 3 || style == 4 ) {
 	qhandle_t hImpFrame = (g_xpProfile.faction == FACTION_SITH && s_hFrameStyle4Neon > 0) ? s_hFrameStyle4Neon : s_hFrameStyle3Imperial;
-	if ( hImpFrame > 0 && hImpFrame < 1024 && hImpFrame != cls.whiteShader ) {
+	if ( hImpFrame > 0 && hImpFrame != cls.whiteShader ) {
 		SCR_DrawPic( panelX, panelY, panelW, panelH, hImpFrame );
 	} else {
 		vec4_t impBg     = { 0.07f, 0.08f, 0.10f, 0.90f };
