@@ -1482,13 +1482,14 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 	SCR_DrawVirtualString( cardX + 20.0f, cardY + 30.0f, 8.5f, "^7Mouse-Interactive Customizer, Achievements & Audio Mixer", whiteColor );
 
 	// -----------------------------------------------------------------------
-	// TOP TABS BAR (Tab 0: HUD, Tab 1: Achievements, Tab 2: Audio, Tab 3: Guide)
 	// -----------------------------------------------------------------------
-	const char *tabNames[4] = { "1. HUD Style", "2. Achievements", "3. Audio SFX", "4. Guide" };
-	for ( int i = 0; i < 4; i++ ) {
-		float tabX = cardX + 20.0f + i * 136.0f;
+	// TOP TABS BAR (Tab 0: HUD, Tab 1: Overlay, Tab 2: Achievements, Tab 3: Audio, Tab 4: Guide)
+	// -----------------------------------------------------------------------
+	const char *tabNames[5] = { "1. HUD Style", "2. Overlay UI", "3. Achievements", "4. Audio SFX", "5. Guide" };
+	for ( int i = 0; i < 5; i++ ) {
+		float tabX = cardX + 20.0f + i * 110.0f;
 		float tabY = cardY + 46.0f;
-		float tabW = 130.0f;
+		float tabW = 104.0f;
 		float tabH = 26.0f;
 
 		qboolean isSel = (g_rpgMenuTab == i) ? qtrue : qfalse;
@@ -1504,7 +1505,7 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 		}
 
 		SCR_DrawMBIICapsule( tabX, tabY, tabW, tabH, tabBg, tabBorder );
-		SCR_DrawCenteredText( tabX, tabY + 5.0f, tabW, 9.5f, tabNames[i], whiteColor );
+		SCR_DrawCenteredText( tabX, tabY + 5.0f, tabW, 9.0f, tabNames[i], whiteColor );
 	}
 
 	vec4_t lineCol = { 1.0f, 1.0f, 1.0f, 0.25f };
@@ -1514,21 +1515,19 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 	qhandle_t hBtnHover  = (g_xpProfile.faction == FACTION_SITH && s_hBtnSithHover > 0) ? s_hBtnSithHover : s_hBtnHover;
 
 	// =======================================================================
-	// TAB 0: HUD STYLE & CUSTOMIZER
+	// TAB 0: HUD STYLE & FACTION
 	// =======================================================================
 	if ( g_rpgMenuTab == 0 ) {
 		int curStyle = cg_rpg_hud_style ? cg_rpg_hud_style->integer : 0;
-		int curPos   = cg_rpg_hud_pos   ? cg_rpg_hud_pos->integer   : 0;
-		int curAvat  = cg_rpg_avatar    ? cg_rpg_avatar->integer    : 0;
 
 		// 1. HUD Style Selector Buttons
-		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 10.5f, "^51. Select HUD Style", whiteColor );
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 90.0f, 11.0f, "^51. Select HUD Style", whiteColor );
 		const char *styleNames[5] = { "0: Holo", "1: Saber", "2: Pill", "3: Imperial", "4: Neon" };
 		for ( int i = 0; i < 5; i++ ) {
 			float btnX = cardX + 20.0f + i * 108.0f;
-			float btnY = cardY + 102.0f;
+			float btnY = cardY + 112.0f;
 			float btnW = 102.0f;
-			float btnH = 24.0f;
+			float btnH = 26.0f;
 
 			qboolean isSelected = (curStyle == i) ? qtrue : qfalse;
 			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
@@ -1543,73 +1542,17 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
 			}
 			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
-			SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, styleNames[i], isSelected ? whiteColor : (isHover ? whiteColor : whiteColor) );
+			SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 10.0f, styleNames[i], whiteColor );
 		}
 
-		// 2. HUD Screen Position Buttons
-		SCR_DrawVirtualString( cardX + 20.0f, cardY + 138.0f, 10.5f, "^52. Select Screen Position", whiteColor );
-		const char *posNames[5] = { "Top-Left", "Top-Right", "Bot-Left", "Bot-Right", "Bot-Center" };
-		for ( int i = 0; i < 5; i++ ) {
-			float btnX = cardX + 20.0f + i * 108.0f;
-			float btnY = cardY + 156.0f;
-			float btnW = 102.0f;
-			float btnH = 24.0f;
-
-			qboolean isSelected = (curPos == i) ? qtrue : qfalse;
-			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
-
-			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
-			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
-			if ( isSelected ) {
-				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
-				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
-			} else if ( isHover ) {
-				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
-				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
-			}
-			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
-			SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, posNames[i], whiteColor );
-		}
-
-		// 3. Avatar Selector
-		SCR_DrawVirtualString( cardX + 20.0f, cardY + 192.0f, 10.5f, "^53. Select Avatar Icon", whiteColor );
-		const char *avatarNames[12] = {
-			"Emblem", "Jedi Order", "Sith Empire", "Mandalorian",
-			"Rebels", "Empire", "BountyHunter", "OldRepublic",
-			"Custom 1", "Custom 2", "Custom 3", "Custom 4"
-		};
-		for ( int i = 0; i < 12; i++ ) {
-			int col = i % 4;
-			int row = i / 4;
-			float btnX = cardX + 20.0f + col * 136.0f;
-			float btnY = cardY + 210.0f + row * 26.0f;
-			float btnW = 130.0f;
-			float btnH = 22.0f;
-
-			qboolean isSelected = (curAvat == i) ? qtrue : qfalse;
-			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
-
-			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
-			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
-			if ( isSelected ) {
-				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
-				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
-			} else if ( isHover ) {
-				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
-				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
-			}
-			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
-			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, avatarNames[i], whiteColor );
-		}
-
-		// 4. Faction Path (Jedi vs Sith)
-		SCR_DrawVirtualString( cardX + 20.0f, cardY + 304.0f, 10.5f, "^54. Select Faction Progression Path", whiteColor );
+		// 2. Faction Path (Jedi vs Sith)
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 170.0f, 11.0f, "^52. Select Faction Progression Path", whiteColor );
 		const char *factionNames[2] = { "JEDI LIGHT SIDE", "SITH DARK SIDE" };
 		for ( int i = 0; i < 2; i++ ) {
 			float btnX = cardX + 20.0f + i * 272.0f;
-			float btnY = cardY + 324.0f;
+			float btnY = cardY + 192.0f;
 			float btnW = 262.0f;
-			float btnH = 26.0f;
+			float btnH = 32.0f;
 
 			qboolean isSelected = ((i == 1 && g_xpProfile.faction == FACTION_SITH) || (i == 0 && g_xpProfile.faction == FACTION_JEDI)) ? qtrue : qfalse;
 			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
@@ -1629,18 +1572,51 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
 			}
 			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
-			SCR_DrawCenteredText( btnX, btnY + 5.0f, btnW, 10.5f, factionNames[i], whiteColor );
+			SCR_DrawCenteredText( btnX, btnY + 7.0f, btnW, 11.0f, factionNames[i], whiteColor );
+		}
+	}
+	// =======================================================================
+	// TAB 1: OVERLAY UI CUSTOMIZER
+	// =======================================================================
+	else if ( g_rpgMenuTab == 1 ) {
+		int curPos      = cg_rpg_hud_pos   ? cg_rpg_hud_pos->integer   : 0;
+		int curToastPos = cg_rpg_toast_pos ? cg_rpg_toast_pos->integer : 1;
+		int curNotifPos = cg_rpg_notif_pos ? cg_rpg_notif_pos->integer : 1;
+		int curAvat     = cg_rpg_avatar    ? cg_rpg_avatar->integer    : 0;
+
+		// 1. HUD Screen Position Buttons
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 86.0f, 10.5f, "^51. Select Screen Position", whiteColor );
+		const char *posNames[5] = { "Top-Left", "Top-Right", "Bot-Left", "Bot-Right", "Bot-Center" };
+		for ( int i = 0; i < 5; i++ ) {
+			float btnX = cardX + 20.0f + i * 108.0f;
+			float btnY = cardY + 104.0f;
+			float btnW = 102.0f;
+			float btnH = 22.0f;
+
+			qboolean isSelected = (curPos == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, posNames[i], whiteColor );
 		}
 
-		// 5. Victory UI Screen Position Buttons
-		int curToastPos = cg_rpg_toast_pos ? cg_rpg_toast_pos->integer : 1;
-		SCR_DrawVirtualString( cardX + 20.0f, cardY + 360.0f, 10.5f, "^55. Select Victory UI Position", whiteColor );
+		// 2. Victory UI Screen Position Buttons
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 134.0f, 10.5f, "^52. Select Victory UI Position", whiteColor );
 		const char *toastPosNames[5] = { "Top-Left", "Top-Right", "Bot-Left", "Bot-Right", "Center" };
 		for ( int i = 0; i < 5; i++ ) {
 			float btnX = cardX + 20.0f + i * 108.0f;
-			float btnY = cardY + 378.0f;
+			float btnY = cardY + 152.0f;
 			float btnW = 102.0f;
-			float btnH = 24.0f;
+			float btnH = 22.0f;
 
 			qboolean isSelected = (curToastPos == i) ? qtrue : qfalse;
 			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
@@ -1655,16 +1631,15 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
 			}
 			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
-			SCR_DrawCenteredText( btnX, btnY + 4.0f, btnW, 9.5f, toastPosNames[i], whiteColor );
+			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, toastPosNames[i], whiteColor );
 		}
 
-		// 6. Notification Position Buttons
-		int curNotifPos = cg_rpg_notif_pos ? cg_rpg_notif_pos->integer : 1;
-		SCR_DrawVirtualString( cardX + 20.0f, cardY + 410.0f, 10.5f, "^56. Select Notification Position", whiteColor );
+		// 3. Notification Position Buttons & 4. Popups in Duels Toggle
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 182.0f, 10.5f, "^53. Select Notification Position", whiteColor );
 		const char *notifPosNames[5] = { "T-Left", "T-Center", "T-Right", "B-Left", "B-Right" };
 		for ( int i = 0; i < 5; i++ ) {
 			float btnX = cardX + 20.0f + i * 72.0f;
-			float btnY = cardY + 428.0f;
+			float btnY = cardY + 200.0f;
 			float btnW = 66.0f;
 			float btnH = 22.0f;
 
@@ -1684,11 +1659,10 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, notifPosNames[i], whiteColor );
 		}
 
-		// 7. Popups in Duels Toggle Button
 		int curDuelPopups = cg_rpg_duel_popups ? cg_rpg_duel_popups->integer : 0;
-		SCR_DrawVirtualString( cardX + 388.0f, cardY + 410.0f, 10.5f, "^57. Popups in Duels", whiteColor );
+		SCR_DrawVirtualString( cardX + 388.0f, cardY + 182.0f, 10.5f, "^54. Popups in Duels", whiteColor );
 		float toggleX = cardX + 388.0f;
-		float toggleY = cardY + 428.0f;
+		float toggleY = cardY + 200.0f;
 		float toggleW = 172.0f;
 		float toggleH = 22.0f;
 
@@ -1704,11 +1678,42 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 		}
 		SCR_DrawMBIICapsule( toggleX, toggleY, toggleW, toggleH, tBg, tBorder );
 		SCR_DrawCenteredText( toggleX, toggleY + 3.0f, toggleW, 9.5f, curDuelPopups ? "^2[ POPUPS ENABLED ]" : "^1[ POPUPS DISABLED ]", whiteColor );
+
+		// 5. Avatar Selector
+		SCR_DrawVirtualString( cardX + 20.0f, cardY + 234.0f, 10.5f, "^55. Select Avatar Icon", whiteColor );
+		const char *avatarNames[12] = {
+			"Emblem", "Jedi Order", "Sith Empire", "Mandalorian",
+			"Rebels", "Empire", "BountyHunter", "OldRepublic",
+			"Custom 1", "Custom 2", "Custom 3", "Custom 4"
+		};
+		for ( int i = 0; i < 12; i++ ) {
+			int col = i % 4;
+			int row = i / 4;
+			float btnX = cardX + 20.0f + col * 136.0f;
+			float btnY = cardY + 252.0f + row * 26.0f;
+			float btnW = 130.0f;
+			float btnH = 22.0f;
+
+			qboolean isSelected = (curAvat == i) ? qtrue : qfalse;
+			qboolean isHover = (g_rpgMouseX >= btnX && g_rpgMouseX <= btnX + btnW && g_rpgMouseY >= btnY && g_rpgMouseY <= btnY + btnH) ? qtrue : qfalse;
+
+			vec4_t btnBg = { 0.04f, 0.12f, 0.25f, 0.85f };
+			vec4_t btnBorder = { 0.00f, 0.65f, 0.90f, 0.75f };
+			if ( isSelected ) {
+				btnBg[0] = 0.10f; btnBg[1] = 0.40f; btnBg[2] = 0.75f; btnBg[3] = 0.95f;
+				btnBorder[0] = 1.00f; btnBorder[1] = 0.82f; btnBorder[2] = 0.20f; btnBorder[3] = 1.00f;
+			} else if ( isHover ) {
+				btnBg[0] = 0.08f; btnBg[1] = 0.25f; btnBg[2] = 0.50f; btnBg[3] = 0.90f;
+				btnBorder[0] = 0.00f; btnBorder[1] = 0.90f; btnBorder[2] = 1.00f; btnBorder[3] = 1.00f;
+			}
+			SCR_DrawMBIICapsule( btnX, btnY, btnW, btnH, btnBg, btnBorder );
+			SCR_DrawCenteredText( btnX, btnY + 3.0f, btnW, 9.0f, avatarNames[i], whiteColor );
+		}
 	}
 	// =======================================================================
-	// TAB 1: ACHIEVEMENTS & QUESTS
+	// TAB 2: ACHIEVEMENTS & QUESTS
 	// =======================================================================
-	else if ( g_rpgMenuTab == 1 ) {
+	else if ( g_rpgMenuTab == 2 ) {
 		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 11.0f, "^5Clickable Achievement Milestones & XP Rewards", whiteColor );
 
 		typedef struct {
@@ -1776,9 +1781,9 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 		}
 	}
 	// =======================================================================
-	// TAB 2: AUDIO & SFX MIXER
+	// TAB 3: AUDIO & SFX MIXER
 	// =======================================================================
-	else if ( g_rpgMenuTab == 2 ) {
+	else if ( g_rpgMenuTab == 3 ) {
 		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 11.0f, "^5In-Game Audio SFX Mixer & Announcer Volume", whiteColor );
 
 		// 1. Sound Volume
@@ -1863,9 +1868,9 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 		}
 	}
 	// =======================================================================
-	// TAB 3: COMMANDS & SYSTEM GUIDE
+	// TAB 4: COMMANDS & SYSTEM GUIDE
 	// =======================================================================
-	else if ( g_rpgMenuTab == 3 ) {
+	else if ( g_rpgMenuTab == 4 ) {
 		SCR_DrawVirtualString( cardX + 20.0f, cardY + 84.0f, 11.5f, "^5In-Chat Commands (Works on ANY Server)", whiteColor );
 		SCR_DrawVirtualString( cardX + 28.0f, cardY + 110.0f, 10.0f, "^3!rpgmenu       ^7-> Open Interactive Customization Window (Mouse Support)", whiteColor );
 		SCR_DrawVirtualString( cardX + 28.0f, cardY + 134.0f, 10.0f, "^3!stats ^7or ^3!card  ^7-> Open Profile Stats & Achievements UI Window", whiteColor );

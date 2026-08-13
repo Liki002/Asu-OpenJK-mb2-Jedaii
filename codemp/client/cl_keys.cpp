@@ -1375,11 +1375,11 @@ void CL_KeyDownEvent( int key, unsigned time )
 			float cardX = 320.0f - cardW * 0.5f;
 			float cardY = 240.0f - cardH * 0.5f;
 
-			// Top Tab Buttons (0 to 3)
-			for ( int i = 0; i < 4; i++ ) {
-				float tabX = cardX + 20.0f + i * 136.0f;
+			// Top Tab Buttons (0 to 4)
+			for ( int i = 0; i < 5; i++ ) {
+				float tabX = cardX + 20.0f + i * 110.0f;
 				float tabY = cardY + 46.0f;
-				float tabW = 130.0f;
+				float tabW = 104.0f;
 				float tabH = 26.0f;
 				if ( mx >= tabX && mx <= tabX + tabW && my >= tabY && my <= tabY + tabH ) {
 					g_rpgMenuTab = i;
@@ -1387,14 +1387,14 @@ void CL_KeyDownEvent( int key, unsigned time )
 				}
 			}
 
-			// TAB 0: HUD & Customizer
+			// TAB 0: HUD Style & Faction
 			if ( g_rpgMenuTab == 0 ) {
 				// 1. HUD Style Buttons (0 to 4)
 				for ( int i = 0; i < 5; i++ ) {
 					float btnX = cardX + 20.0f + i * 108.0f;
-					float btnY = cardY + 102.0f;
+					float btnY = cardY + 112.0f;
 					float btnW = 102.0f;
-					float btnH = 24.0f;
+					float btnH = 26.0f;
 					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
 						char valBuf[16];
 						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
@@ -1403,12 +1403,27 @@ void CL_KeyDownEvent( int key, unsigned time )
 					}
 				}
 
-				// 2. Screen Position Buttons (0 to 4)
+				// 2. Faction Switcher Buttons (Jedi / Sith)
+				for ( int i = 0; i < 2; i++ ) {
+					float btnX = cardX + 20.0f + i * 272.0f;
+					float btnY = cardY + 192.0f;
+					float btnW = 262.0f;
+					float btnH = 32.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						g_xpProfile.faction = (i == 1) ? FACTION_SITH : FACTION_JEDI;
+						CL_XP_SaveProfile();
+						return;
+					}
+				}
+			}
+			// TAB 1: Overlay UI Customizer
+			else if ( g_rpgMenuTab == 1 ) {
+				// 1. Screen Position Buttons (0 to 4)
 				for ( int i = 0; i < 5; i++ ) {
 					float btnX = cardX + 20.0f + i * 108.0f;
-					float btnY = cardY + 156.0f;
+					float btnY = cardY + 104.0f;
 					float btnW = 102.0f;
-					float btnH = 24.0f;
+					float btnH = 22.0f;
 					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
 						char valBuf[16];
 						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
@@ -1419,41 +1434,12 @@ void CL_KeyDownEvent( int key, unsigned time )
 					}
 				}
 
-				// 3. Avatar Buttons (0 to 11)
-				for ( int i = 0; i < 12; i++ ) {
-					int col = i % 4;
-					int row = i / 4;
-					float btnX = cardX + 20.0f + col * 136.0f;
-					float btnY = cardY + 210.0f + row * 26.0f;
-					float btnW = 130.0f;
-					float btnH = 22.0f;
-					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
-						char valBuf[16];
-						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
-						Cvar_Set("cg_rpg_avatar", valBuf);
-						return;
-					}
-				}
-
-				// 4. Faction Switcher Buttons (Jedi / Sith)
-				for ( int i = 0; i < 2; i++ ) {
-					float btnX = cardX + 20.0f + i * 272.0f;
-					float btnY = cardY + 324.0f;
-					float btnW = 262.0f;
-					float btnH = 26.0f;
-					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
-						g_xpProfile.faction = (i == 1) ? FACTION_SITH : FACTION_JEDI;
-						CL_XP_SaveProfile();
-						return;
-					}
-				}
-
-				// 5. Victory UI Screen Position Buttons (0 to 4)
+				// 2. Victory UI Screen Position Buttons (0 to 4)
 				for ( int i = 0; i < 5; i++ ) {
 					float btnX = cardX + 20.0f + i * 108.0f;
-					float btnY = cardY + 378.0f;
+					float btnY = cardY + 152.0f;
 					float btnW = 102.0f;
-					float btnH = 24.0f;
+					float btnH = 22.0f;
 					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
 						char valBuf[16];
 						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
@@ -1462,10 +1448,10 @@ void CL_KeyDownEvent( int key, unsigned time )
 					}
 				}
 
-				// 6. Notification Position Buttons (0 to 4)
+				// 3. Notification Position Buttons (0 to 4)
 				for ( int i = 0; i < 5; i++ ) {
 					float btnX = cardX + 20.0f + i * 72.0f;
-					float btnY = cardY + 428.0f;
+					float btnY = cardY + 200.0f;
 					float btnW = 66.0f;
 					float btnH = 22.0f;
 					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
@@ -1476,9 +1462,9 @@ void CL_KeyDownEvent( int key, unsigned time )
 					}
 				}
 
-				// 7. Popups in Duels Toggle Button
+				// 4. Popups in Duels Toggle Button
 				float toggleX = cardX + 388.0f;
-				float toggleY = cardY + 428.0f;
+				float toggleY = cardY + 200.0f;
 				float toggleW = 172.0f;
 				float toggleH = 22.0f;
 				if ( mx >= toggleX && mx <= toggleX + toggleW && my >= toggleY && my <= toggleY + toggleH ) {
@@ -1488,9 +1474,25 @@ void CL_KeyDownEvent( int key, unsigned time )
 					Cvar_Set("cg_rpg_duel_popups", valBuf);
 					return;
 				}
+
+				// 5. Avatar Buttons (0 to 11)
+				for ( int i = 0; i < 12; i++ ) {
+					int col = i % 4;
+					int row = i / 4;
+					float btnX = cardX + 20.0f + col * 136.0f;
+					float btnY = cardY + 252.0f + row * 26.0f;
+					float btnW = 130.0f;
+					float btnH = 22.0f;
+					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+						char valBuf[16];
+						Com_sprintf(valBuf, sizeof(valBuf), "%d", i);
+						Cvar_Set("cg_rpg_avatar", valBuf);
+						return;
+					}
+				}
 			}
-			// TAB 1: Achievements & Quests
-			else if ( g_rpgMenuTab == 1 ) {
+			// TAB 2: Achievements & Quests
+			else if ( g_rpgMenuTab == 2 ) {
 				for ( int i = 0; i < 7; i++ ) {
 					int col = i % 2;
 					int row = i / 2;
@@ -1508,8 +1510,8 @@ void CL_KeyDownEvent( int key, unsigned time )
 					}
 				}
 			}
-			// TAB 2: Audio & SFX Mixer
-			else if ( g_rpgMenuTab == 2 ) {
+			// TAB 3: Audio & SFX Mixer
+			else if ( g_rpgMenuTab == 3 ) {
 				// Master Volume (0 to 4)
 				for ( int i = 0; i < 5; i++ ) {
 					float btnX = cardX + 20.0f + i * 108.0f;

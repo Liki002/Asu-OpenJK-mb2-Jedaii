@@ -157,29 +157,8 @@ char *Sys_GetCurrentUser( void )
 */
 char *Sys_DefaultHomePath( void )
 {
-#if defined(BUILD_PORTABLE)
-	Com_Printf( "Portable install requested, skipping homepath support\n" );
+	// Force portable GameData directory usage (GameData/MBII instead of My Games)
 	return NULL;
-#else
-	if ( !homePath[0] )
-	{
-		TCHAR homeDirectory[MAX_PATH];
-
-		if( !SUCCEEDED( SHGetFolderPath( NULL, CSIDL_PERSONAL, NULL, 0, homeDirectory ) ) )
-		{
-			Com_Printf( "Unable to determine your home directory.\n" );
-			return NULL;
-		}
-
-		Com_sprintf( homePath, sizeof( homePath ), "%s%cMy Games%c", homeDirectory, PATH_SEP, PATH_SEP );
-		if ( com_homepath && com_homepath->string[0] )
-			Q_strcat( homePath, sizeof( homePath ), com_homepath->string );
-		else
-			Q_strcat( homePath, sizeof( homePath ), HOMEPATH_NAME_WIN );
-	}
-
-	return homePath;
-#endif
 }
 
 static const char *GetErrorString( DWORD error ) {

@@ -68,6 +68,9 @@ static int g_lastFramePlaytime = -1; // last cls.realtime we advanced playtime (
 int g_lastParsedVictimBP = 0;
 int g_lastParsedKillerHP = 0;
 int g_lastParsedKillerBP = 0;
+char g_lastParsedVictimName[64] = "";
+char g_lastParsedKillerName[64] = "";
+int g_lastDuelOutcome = 0;
 
 // Secret salt for anti-cheat hash signature
 static const char XP_SECRET_SALT[] = "JEDAII_XP_STANDALONE_SECURE_SALT_2026_x89!";
@@ -336,6 +339,10 @@ void CL_XP_PlaySound(rpgSoundSlot_t slot) {
 	if (!cg_rpg_notify_sounds || !cg_rpg_notify_sounds->integer) return;
 	if (g_xpProfile.soundVolume == 0) return; // Mute
 	if (slot < 0 || slot >= RPG_SND_COUNT) return;
+
+	if (cls.state == CA_ACTIVE && g_rpgSoundHandles[slot] <= 0) {
+		CL_XP_RegisterSounds();
+	}
 	if (g_rpgSoundHandles[slot] <= 0) return; // file not present in pk3 - silent no-op fallback
 
 	if (slot >= RPG_SND_DOUBLE && slot <= RPG_SND_ULTRA && g_xpProfile.announcerEnabled == 0) return;
@@ -885,13 +892,22 @@ void CL_XP_CheckGameEvents(void) {
 		g_duelStartHealth = currentHealth;
 		g_duelStartHits   = currentHits;
 		g_duelStartMs     = cls.realtime;
+		g_lastDuelOutcome = 0;
 	} else if (g_lastDuelInProgress && !currentDuel) {
 		// Duel just ended — check outcome
 		int durationMs = (g_duelStartMs > 0) ? (cls.realtime - g_duelStartMs) : 0;
-		if (!g_playerIsDead && currentHealth > 0) {
+		qboolean isWin = qfalse;
+		if (g_lastDuelOutcome == 1) {
+			isWin = qtrue;
+		} else if (g_lastDuelOutcome == -1) {
+			isWin = qfalse;
+		} else {
+			isWin = (!g_playerIsDead && currentHealth >= g_duelStartHealth) ? qtrue : qfalse;
+		}
+
+		if (isWin) {
 			qboolean perfectDuel = qfalse;
 			qboolean quickDraw = qfalse;
-			// Perfect = 0 detectable incoming damage: HP unchanged OR (HP == start AND PERS_HITS didn't advance)
 			int hitsDelta = (g_lastHits >= g_duelStartHits) ? (g_lastHits - g_duelStartHits) : 0;
 			if ((currentHealth >= g_duelStartHealth) && hitsDelta == 0) {
 				perfectDuel = qtrue;
@@ -904,6 +920,7 @@ void CL_XP_CheckGameEvents(void) {
 			CL_XP_OnDuelLoss();
 		}
 		g_duelStartMs = 0;
+		g_lastDuelOutcome = 0;
 	}
 	g_lastDuelInProgress = currentDuel;
 }
@@ -975,21 +992,25 @@ void CL_XP_OnPrintMessage(const char *msg) {
 		}
 	}
 
-	if (iAmVictim) {
-		if (cls.realtime - s_lastDeathPrintMs > 1000) {
-			s_lastDeathPrintMs = cls.realtime;
-			CL_XP_OnPlayerDeath();
-		}
-		return;
-	}
-
 	// 2. Check if local player is the KILLER (Kill)
 	qboolean iAmKiller = qfalse;
 	const char *wasPos = Q_stristr(cleanMsg, " was ");
+	char extractedKiller[64] = "";
+	char extractedVictim[64] = "";
+
 	if (wasPos) {
+		// Extract victim name (before ' (' or ' was ')
+		int vLen = wasPos - cleanMsg;
+		const char *pParen = strchr(cleanMsg, '(');
+		if (pParen && pParen < wasPos) {
+			vLen = pParen - cleanMsg;
+		}
+		while (vLen > 0 && (cleanMsg[vLen - 1] == ' ' || cleanMsg[vLen - 1] == '\t')) vLen--;
+		if (vLen >= sizeof(extractedVictim)) vLen = sizeof(extractedVictim) - 1;
+		Q_strncpyz(extractedVictim, cleanMsg, vLen + 1);
+
 		const char *byPos = Q_stristr(wasPos, " by ");
 		if (byPos) {
-			char extractedKiller[64];
 			const char *killerStart = byPos + 4;
 			const char *withPos = Q_stristr(killerStart, " with ");
 			if (withPos) {
@@ -1035,7 +1056,21 @@ void CL_XP_OnPrintMessage(const char *msg) {
 		g_lastParsedKillerBP = 0;
 	}
 
+	if (iAmVictim) {
+		g_lastDuelOutcome = -1;
+		if (extractedKiller[0]) Q_strncpyz(g_lastParsedKillerName, extractedKiller, sizeof(g_lastParsedKillerName));
+		if (extractedVictim[0]) Q_strncpyz(g_lastParsedVictimName, extractedVictim, sizeof(g_lastParsedVictimName));
+		if (cls.realtime - s_lastDeathPrintMs > 1000) {
+			s_lastDeathPrintMs = cls.realtime;
+			CL_XP_OnPlayerDeath();
+		}
+		return;
+	}
+
 	if (iAmKiller) {
+		g_lastDuelOutcome = 1;
+		if (extractedVictim[0]) Q_strncpyz(g_lastParsedVictimName, extractedVictim, sizeof(g_lastParsedVictimName));
+		if (extractedKiller[0]) Q_strncpyz(g_lastParsedKillerName, extractedKiller, sizeof(g_lastParsedKillerName));
 		if (cls.realtime - s_lastKillPrintMs > 100) {
 			s_lastKillPrintMs = cls.realtime;
 			Com_DPrintf("[RPG MOD] Killer Match: '%s' | MyName: '%s'\n", cleanMsg, cleanMyName);
@@ -1217,6 +1252,22 @@ void CL_XP_OnDuelWin(qboolean perfect, qboolean quickDraw, int duelDurationMs) {
 	}
 
 	CL_XP_AddXP(grantedXP, "Private Duel Victory");
+
+	// Activate local Victory UI Toast overlay card
+	g_rpgToast.active       = qtrue;
+	g_rpgToast.isWin        = qtrue;
+	g_rpgToast.eloDelta     = 15;
+	g_rpgToast.credits      = 10;
+	g_rpgToast.xp           = grantedXP;
+	g_rpgToast.startTimeMs  = cls.realtime;
+	g_rpgToast.victimBP     = g_lastParsedVictimBP;
+	g_rpgToast.killerHP     = g_lastParsedKillerHP;
+	g_rpgToast.killerBP     = g_lastParsedKillerBP;
+	if (g_lastParsedVictimName[0]) {
+		Q_strncpyz(g_rpgToast.opponentName, g_lastParsedVictimName, sizeof(g_rpgToast.opponentName));
+	} else {
+		Q_strncpyz(g_rpgToast.opponentName, "Opponent", sizeof(g_rpgToast.opponentName));
+	}
 }
 
 void CL_XP_OnDuelLoss(void) {
@@ -1227,6 +1278,22 @@ void CL_XP_OnDuelLoss(void) {
 	// Optional PLAYER DIED popup notification during duels
 	if (cg_rpg_duel_popups && cg_rpg_duel_popups->integer) {
 		CL_XP_PushNotification(RPG_NOTIF_DUEL, "PLAYER DIED", "Defeated in private duel", 0, NULL, 3500);
+	}
+
+	// Activate local Defeat UI Toast overlay card
+	g_rpgToast.active       = qtrue;
+	g_rpgToast.isWin        = qfalse;
+	g_rpgToast.eloDelta     = -10;
+	g_rpgToast.credits      = 0;
+	g_rpgToast.xp           = 0;
+	g_rpgToast.startTimeMs  = cls.realtime;
+	g_rpgToast.victimBP     = g_lastParsedVictimBP;
+	g_rpgToast.killerHP     = g_lastParsedKillerHP;
+	g_rpgToast.killerBP     = g_lastParsedKillerBP;
+	if (g_lastParsedKillerName[0]) {
+		Q_strncpyz(g_rpgToast.opponentName, g_lastParsedKillerName, sizeof(g_rpgToast.opponentName));
+	} else {
+		Q_strncpyz(g_rpgToast.opponentName, "Opponent", sizeof(g_rpgToast.opponentName));
 	}
 
 	CL_XP_SaveProfile();
