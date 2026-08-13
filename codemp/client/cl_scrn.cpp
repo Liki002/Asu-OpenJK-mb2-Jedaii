@@ -57,6 +57,7 @@ cvar_t		*cg_drawBounty;
 cvar_t		*cg_rpg_toast_pos;
 cvar_t		*cg_rpg_notif_pos;
 cvar_t		*cg_rpg_duel_popups;
+qboolean	g_rpgResetConfirm = qfalse;
 rpgPlayerStats_t g_rpgStats;
 rpgToastNotif_t  g_rpgToast   = {qfalse, qfalse, 0, 0, 0, "", 0, 0, 0, 0};
 rpgInspectCard_t g_rpgInspect = {qfalse, 1, 1000, "Padawan", "", 0};
@@ -865,28 +866,26 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 	// Register HD TGA Shaders dynamically upon map load/reconnect
 	static int s_lastServerTime = -1;
-	if ( !s_shadersTried || cl.snap.serverTime < s_lastServerTime ) {
+	static int s_lastClState = -1;
+	if ( !s_shadersTried || cls.state != s_lastClState || cl.snap.serverTime < s_lastServerTime ) {
 		s_shadersTried = qtrue;
+		s_lastClState = cls.state;
 		s_lastServerTime = cl.snap.serverTime;
-		if ( re && re->RegisterShader ) {
-			s_hHoloJediFrame       = re->RegisterShader( "gfx/rpg_hud/hud_style0_clean" );
-			s_hHoloSithFrame       = re->RegisterShader( "gfx/rpg_hud/hud_style0_sith_clean" );
-			s_hFrameStyle1Saber    = re->RegisterShader( "gfx/rpg_hud/hud_style1_clean" );
-			s_hFrameStyle2Pill     = re->RegisterShader( "gfx/rpg_hud/hud_style2_clean" );
-			s_hFrameStyle3Imperial = re->RegisterShader( "gfx/rpg_hud/hud_style3_clean" );
-			s_hFrameStyle4Neon     = re->RegisterShader( "gfx/rpg_hud/hud_style3_sith_clean" );
-			s_hWinSettings         = re->RegisterShader( "gfx/rpg_hud/window_settings_clean" );
-			s_hWinRanks            = re->RegisterShader( "gfx/rpg_hud/window_ranks_clean" );
-			s_hWinStats            = re->RegisterShader( "gfx/rpg_hud/window_stats_clean" );
-			s_hWinHelp             = re->RegisterShader( "gfx/rpg_hud/window_help_clean" );
-			s_hBtnNormal           = re->RegisterShader( "gfx/rpg_hud/btn_normal" );
-			s_hBtnHover            = re->RegisterShader( "gfx/rpg_hud/btn_hover" );
-			s_hBtnActive           = re->RegisterShader( "gfx/rpg_hud/btn_active" );
-			s_hBtnSithNormal       = re->RegisterShader( "gfx/rpg_hud/btn_sith_normal" );
-			s_hBtnSithHover        = re->RegisterShader( "gfx/rpg_hud/btn_sith_hover" );
-			s_hMousePointer        = re->RegisterShader( "gfx/rpg_hud/mouse_pointer" );
-			s_hFillXPJedi          = re->RegisterShader( "gfx/rpg_hud/bar_fill_xp_jedi" );
-			s_hFillXPSith          = re->RegisterShader( "gfx/rpg_hud/bar_fill_xp_sith" );
+		if ( re && re->RegisterShaderNoMip ) {
+			s_hHoloJediFrame       = re->RegisterShaderNoMip( "gfx/rpg_hud/hud_style0_clean" );
+			s_hHoloSithFrame       = re->RegisterShaderNoMip( "gfx/rpg_hud/hud_style0_sith_clean" );
+			s_hFrameStyle1Saber    = re->RegisterShaderNoMip( "gfx/rpg_hud/hud_style1_clean" );
+			s_hFrameStyle2Pill     = re->RegisterShaderNoMip( "gfx/rpg_hud/hud_style2_clean" );
+			s_hFrameStyle3Imperial = re->RegisterShaderNoMip( "gfx/rpg_hud/hud_style3_clean" );
+			s_hFrameStyle4Neon     = re->RegisterShaderNoMip( "gfx/rpg_hud/hud_style3_sith_clean" );
+			s_hBtnNormal           = re->RegisterShaderNoMip( "gfx/rpg_hud/btn_normal" );
+			s_hBtnHover            = re->RegisterShaderNoMip( "gfx/rpg_hud/btn_hover" );
+			s_hBtnActive           = re->RegisterShaderNoMip( "gfx/rpg_hud/btn_active" );
+			s_hBtnSithNormal       = re->RegisterShaderNoMip( "gfx/rpg_hud/btn_sith_normal" );
+			s_hBtnSithHover        = re->RegisterShaderNoMip( "gfx/rpg_hud/btn_sith_hover" );
+			s_hMousePointer        = re->RegisterShaderNoMip( "gfx/rpg_hud/mouse_pointer" );
+			s_hFillXPJedi          = re->RegisterShaderNoMip( "gfx/rpg_hud/bar_fill_xp_jedi" );
+			s_hFillXPSith          = re->RegisterShaderNoMip( "gfx/rpg_hud/bar_fill_xp_sith" );
 		}
 	}
 
@@ -1885,7 +1884,50 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 	SCR_DrawMBIICapsule( cardX + 20.0f, cardY + cardH - 28.0f, cardW - 40.0f, 1.5f, lineCol, NULL );
 	SCR_DrawVirtualString( cardX + 20.0f, cardY + cardH - 18.0f, 9.0f, "^5Click buttons with mouse cursor or press ESC to close", whiteColor );
 
+	// Modal Reset Confirmation Dialog Box
+	if ( g_rpgResetConfirm ) {
+		float boxW = 420.0f;
+		float boxH = 140.0f;
+		float boxX = 320.0f - boxW * 0.5f;
+		float boxY = 240.0f - boxH * 0.5f;
+
+		vec4_t mBg = { 0.08f, 0.02f, 0.02f, 0.96f };
+		vec4_t mBorder = { 0.95f, 0.15f, 0.15f, 1.00f };
+		SCR_DrawMBIICapsule( boxX, boxY, boxW, boxH, mBg, mBorder );
+
+		SCR_DrawCenteredText( boxX, boxY + 14.0f, boxW, 11.5f, "^1CONFIRM STATS RESET?", whiteColor );
+		SCR_DrawCenteredText( boxX, boxY + 34.0f, boxW, 9.5f, "^7Are you sure you want to reset all RPG stats and Level?", whiteColor );
+		SCR_DrawCenteredText( boxX, boxY + 50.0f, boxW, 9.0f, "^7This will reset your Level, XP, Kills, Deaths & Quests to 0!", whiteColor );
+
+		// YES Button
+		float yX = boxX + 30.0f;
+		float yY = boxY + 84.0f;
+		float yW = 160.0f;
+		float yH = 30.0f;
+		qboolean yHover = (g_rpgMouseX >= yX && g_rpgMouseX <= yX + yW && g_rpgMouseY >= yY && g_rpgMouseY <= yY + yH) ? qtrue : qfalse;
+		vec4_t yBg = { 0.50f, 0.08f, 0.08f, 0.95f };
+		vec4_t yBdr = { 1.00f, 0.20f, 0.20f, 1.00f };
+		if ( yHover ) { yBg[0] = 0.70f; yBg[1] = 0.10f; }
+		SCR_DrawMBIICapsule( yX, yY, yW, yH, yBg, yBdr );
+		SCR_DrawCenteredText( yX, yY + 7.0f, yW, 10.5f, "^7YES, RESET STATS", whiteColor );
+
+		// CANCEL Button
+		float cX = boxX + 230.0f;
+		float cY = boxY + 84.0f;
+		float cW = 160.0f;
+		float cH = 30.0f;
+		qboolean cHover = (g_rpgMouseX >= cX && g_rpgMouseX <= cX + cW && g_rpgMouseY >= cY && g_rpgMouseY <= cY + cH) ? qtrue : qfalse;
+		vec4_t cBg = { 0.08f, 0.25f, 0.50f, 0.90f };
+		vec4_t cBdr = { 0.00f, 0.90f, 1.00f, 1.00f };
+		if ( cHover ) { cBg[0] = 0.12f; cBg[1] = 0.40f; }
+		SCR_DrawMBIICapsule( cX, cY, cW, cH, cBg, cBdr );
+		SCR_DrawCenteredText( cX, cY + 7.0f, cW, 10.5f, "^7CANCEL", whiteColor );
+	}
+
 	// Render Holographic Mouse Cursor Pointer
+	if ( (!s_hMousePointer || s_hMousePointer == 0) && re && re->RegisterShaderNoMip ) {
+		s_hMousePointer = re->RegisterShaderNoMip( "gfx/rpg_hud/mouse_pointer" );
+	}
 	float curX = g_rpgMouseX;
 	float curY = g_rpgMouseY;
 	if ( s_hMousePointer > 0 ) {

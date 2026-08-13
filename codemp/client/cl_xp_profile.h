@@ -179,6 +179,8 @@ void CL_XP_OnDuelLoss(void);
 void CL_XP_OnRoundWin(void);
 void CL_XP_OnRoundLoss(void);
 void CL_XP_ClaimAchievement(int achievementId);
+void CL_XP_ResetProfile(void);
+extern qboolean g_rpgResetConfirm;
 
 // --- HUD Popup Notifications + Sounds (standalone client-only) ---
 void CL_XP_PushNotification(rpgNotifType_t type, const char *text, const char *subtext,

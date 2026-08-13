@@ -896,31 +896,37 @@ void CL_XP_CheckGameEvents(void) {
 	} else if (g_lastDuelInProgress && !currentDuel) {
 		// Duel just ended — check outcome
 		int durationMs = (g_duelStartMs > 0) ? (cls.realtime - g_duelStartMs) : 0;
-		qboolean isWin = qfalse;
-		if (g_lastDuelOutcome == 1) {
-			isWin = qtrue;
-		} else if (g_lastDuelOutcome == -1) {
-			isWin = qfalse;
+		if (g_lastDuelOutcome == -2 || durationMs < 500) {
+			// Duel ended manually or prematurely — do NOT grant win or loss!
+			g_duelStartMs = 0;
+			g_lastDuelOutcome = 0;
 		} else {
-			isWin = (!g_playerIsDead && currentHealth >= g_duelStartHealth) ? qtrue : qfalse;
-		}
+			qboolean isWin = qfalse;
+			if (g_lastDuelOutcome == 1) {
+				isWin = qtrue;
+			} else if (g_lastDuelOutcome == -1) {
+				isWin = qfalse;
+			} else {
+				isWin = (!g_playerIsDead && currentHealth >= g_duelStartHealth) ? qtrue : qfalse;
+			}
 
-		if (isWin) {
-			qboolean perfectDuel = qfalse;
-			qboolean quickDraw = qfalse;
-			int hitsDelta = (g_lastHits >= g_duelStartHits) ? (g_lastHits - g_duelStartHits) : 0;
-			if ((currentHealth >= g_duelStartHealth) && hitsDelta == 0) {
-				perfectDuel = qtrue;
+			if (isWin) {
+				qboolean perfectDuel = qfalse;
+				qboolean quickDraw = qfalse;
+				int hitsDelta = (g_lastHits >= g_duelStartHits) ? (g_lastHits - g_duelStartHits) : 0;
+				if ((currentHealth >= g_duelStartHealth) && hitsDelta == 0) {
+					perfectDuel = qtrue;
+				}
+				if (perfectDuel && durationMs > 0 && durationMs < QUICKDRAW_WINDOW_MS) {
+					quickDraw = qtrue;
+				}
+				CL_XP_OnDuelWin(perfectDuel, quickDraw, durationMs);
+			} else {
+				CL_XP_OnDuelLoss();
 			}
-			if (perfectDuel && durationMs > 0 && durationMs < QUICKDRAW_WINDOW_MS) {
-				quickDraw = qtrue;
-			}
-			CL_XP_OnDuelWin(perfectDuel, quickDraw, durationMs);
-		} else {
-			CL_XP_OnDuelLoss();
+			g_duelStartMs = 0;
+			g_lastDuelOutcome = 0;
 		}
-		g_duelStartMs = 0;
-		g_lastDuelOutcome = 0;
 	}
 	g_lastDuelInProgress = currentDuel;
 }
@@ -935,6 +941,11 @@ void CL_XP_OnPrintMessage(const char *msg) {
 	// Recursion prevention: ignore our own RPG MOD console logs to prevent infinite kill count loops
 	if (Q_stristr(msg, "[RPG MOD]")) {
 		return;
+	}
+
+	// Detect manual or premature duel end
+	if (Q_stristr(msg, "Duel has been ended manually") || Q_stristr(msg, "became one with the Force") || Q_stristr(msg, "duel was declined") || Q_stristr(msg, "duel forfeited")) {
+		g_lastDuelOutcome = -2; // Manual / Premature cancel flag
 	}
 
 	cvar_t *clName = Cvar_Get("name", "Player", 0);
@@ -1126,7 +1137,14 @@ void CL_XP_AddXP(int amount, const char *reason) {
 	}
 }
 
+static int s_lastKillProcessedMs = 0;
+
 void CL_XP_OnPlayerKill(int weapon) {
+	if (cls.realtime - s_lastKillProcessedMs < 600) {
+		return; // Ignore duplicate kill signals within 600ms
+	}
+	s_lastKillProcessedMs = cls.realtime;
+
 	g_xpProfile.kills++;
 	if (weapon == 10) { // WP_SABER
 		g_xpProfile.saberKills++;
@@ -1135,8 +1153,7 @@ void CL_XP_OnPlayerKill(int weapon) {
 	}
 	CL_XP_AddXP(XP_GRANT_PLAYER_KILL, "Player Kill");
 
-	// Instant feedback popups and chimes for kills outside duels
-	CL_XP_PlaySound(RPG_SND_XP);
+	// Instant feedback popup (No sound on basic kill per user request)
 	char sub[96];
 	if (g_lastParsedKillerHP > 0 || g_lastParsedKillerBP > 0) {
 		Com_sprintf(sub, sizeof(sub), "My HP: %d | My BP: %d", g_lastParsedKillerHP, g_lastParsedKillerBP);
@@ -1172,8 +1189,7 @@ void CL_XP_OnNPCKill(void) {
 
 void CL_XP_OnDuelWin(qboolean perfect, qboolean quickDraw, int duelDurationMs) {
 	g_xpProfile.duelWins++;
-	g_xpProfile.kills++;
-	g_xpProfile.saberKills++;
+	// Note: g_xpProfile.kills and saberKills are already counted by CL_XP_OnPlayerKill via obituary!
 
 	// Optional PLAYER KILL popup notification during duels
 	if (cg_rpg_duel_popups && cg_rpg_duel_popups->integer) {
@@ -1335,6 +1351,21 @@ const char *CL_XP_GetProfileName(void) {
 		return cvarName->string;
 	}
 	return g_xpProfile.profileName;
+}
+
+void CL_XP_ResetProfile(void) {
+	int curFaction = g_xpProfile.faction;
+	memset(&g_xpProfile, 0, sizeof(g_xpProfile));
+	g_xpProfile.level = 1;
+	g_xpProfile.xp = 0;
+	g_xpProfile.faction = curFaction;
+	g_xpProfile.soundVolume = 4;
+	g_xpProfile.announcerEnabled = 1;
+	g_xpProfile.levelupSndEnabled = 1;
+	g_xpProfile.duelSndEnabled = 1;
+	g_xpProfile.shortestDuelMs = -1;
+	CL_XP_SaveProfile();
+	CL_XP_PushNotification(RPG_NOTIF_MILESTONE, "RPG PROFILE RESET", "All stats & level reset to 1", 0, NULL, 4000);
 }
 
 void CL_XP_SetProfileName(const char *name) {

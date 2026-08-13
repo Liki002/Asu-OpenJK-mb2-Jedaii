@@ -1375,6 +1375,35 @@ void CL_KeyDownEvent( int key, unsigned time )
 			float cardX = 320.0f - cardW * 0.5f;
 			float cardY = 240.0f - cardH * 0.5f;
 
+			// Check Modal Reset Confirmation Dialog Clicks FIRST
+			if ( g_rpgResetConfirm ) {
+				float boxW = 420.0f;
+				float boxH = 140.0f;
+				float boxX = 320.0f - boxW * 0.5f;
+				float boxY = 240.0f - boxH * 0.5f;
+
+				float yX = boxX + 30.0f;
+				float yY = boxY + 84.0f;
+				float yW = 160.0f;
+				float yH = 30.0f;
+				if ( mx >= yX && mx <= yX + yW && my >= yY && my <= yY + yH ) {
+					CL_XP_ResetProfile();
+					g_rpgResetConfirm = qfalse;
+					return;
+				}
+
+				float cX = boxX + 230.0f;
+				float cY = boxY + 84.0f;
+				float cW = 160.0f;
+				float cH = 30.0f;
+				if ( mx >= cX && mx <= cX + cW && my >= cY && my <= cY + cH ) {
+					g_rpgResetConfirm = qfalse;
+					return;
+				}
+
+				return; // Modal blocks all other clicks
+			}
+
 			// Top Tab Buttons (0 to 4)
 			for ( int i = 0; i < 5; i++ ) {
 				float tabX = cardX + 20.0f + i * 110.0f;
@@ -1490,6 +1519,16 @@ void CL_KeyDownEvent( int key, unsigned time )
 						return;
 					}
 				}
+
+				// 6. Reset Profile Stats Button
+				float rX = cardX + 20.0f;
+				float rY = cardY + 346.0f;
+				float rW = 540.0f;
+				float rH = 26.0f;
+				if ( mx >= rX && mx <= rX + rW && my >= rY && my <= rY + rH ) {
+					g_rpgResetConfirm = qtrue;
+					return;
+				}
 			}
 			// TAB 2: Achievements & Quests
 			else if ( g_rpgMenuTab == 2 ) {
@@ -1520,6 +1559,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 					float btnH = 26.0f;
 					if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
 						g_xpProfile.soundVolume = i;
+						Cvar_Set("cg_rpg_notify_sounds", (i > 0) ? "1" : "0");
 						CL_XP_SaveProfile();
 						return;
 					}
