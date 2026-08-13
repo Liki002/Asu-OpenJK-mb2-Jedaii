@@ -985,8 +985,8 @@ if ( style == 0 ) {
 
 	// Player Info Column
 	float textX = panelX + 46.0f;
-	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s", playerName), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.0f, 5.4f, va("^7%s", playerName), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.8f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	// Hardcoded Pulsating Energy XP Progress Bar Track
 	float barX = textX + 2.0f;
@@ -1018,8 +1018,8 @@ else if ( style == 1 ) {
 	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
 
 	float textX = panelX + 48.0f;
-	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.0f, 5.4f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.8f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	// Hardcoded Pulsating Energy XP Progress Bar Track
 	float barX = textX + 2.0f;
@@ -1050,8 +1050,8 @@ else if ( style == 2 ) {
 	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
 
 	float textX = panelX + 46.0f;
-	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.0f, 5.4f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.8f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	float barX = textX + 2.0f;
 	float barY = panelY + 31.5f;
@@ -1083,8 +1083,8 @@ else if ( style == 3 || style == 4 ) {
 	SCR_DrawRPGAvatar( avatarX, avatarY, avatarSize, g_xpProfile.faction );
 
 	float textX = panelX + 46.0f;
-	SCR_DrawVirtualString( textX, panelY + 6.5f, 5.2f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
-	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.0f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 6.0f, 5.4f, va("^7%s ^3Lv%d", playerName, level), whiteColor );
+	SCR_DrawVirtualString( textX, panelY + 18.0f, 4.8f, va("^3%s ^7|^2%dK^7/^1%dD ^7|^2%dW^7/^1%dL", rankTitle, g_xpProfile.kills, g_xpProfile.deaths, g_xpProfile.duelWins, g_xpProfile.duelLosses), whiteColor );
 
 	float barX = textX + 2.0f;
 	float barY = panelY + 31.5f;
@@ -1936,20 +1936,38 @@ void SCR_DrawSettingsWindowOverlay( void ) {
 		SCR_DrawCenteredText( cX, cY + 7.0f, cW, 10.5f, "^7CANCEL", whiteColor );
 	}
 
+	// Reset shader cache on reconnect/map change to prevent dead handle references
+	static int s_lastMouseClsState = -1;
+	if ( cls.state != s_lastMouseClsState ) {
+		s_lastMouseClsState = cls.state;
+		s_hMousePointer = 0;
+	}
+
 	// Render Holographic Mouse Cursor Pointer
 	if ( (!s_hMousePointer || s_hMousePointer == 0) && re && re->RegisterShaderNoMip ) {
 		s_hMousePointer = re->RegisterShaderNoMip( "gfx/rpg_hud/mouse_pointer" );
 	}
+
 	float curX = g_rpgMouseX;
 	float curY = g_rpgMouseY;
-	if ( s_hMousePointer > 0 ) {
+
+	// Check if shader is valid and NOT the plain white fallback shader
+	if ( s_hMousePointer > 0 && s_hMousePointer != cls.whiteShader ) {
 		SCR_DrawPic( curX - 12.0f, curY - 12.0f, 24.0f, 24.0f, s_hMousePointer );
 	} else {
-		vec4_t curColor = { 1.00f, 0.85f, 0.20f, 0.95f };
-		SCR_FillRect( curX - 4.0f, curY - 1.0f, 9.0f, 2.0f, curColor );
-		SCR_FillRect( curX - 1.0f, curY - 4.0f, 2.0f, 9.0f, curColor );
+		// Sleek procedural holographic Star Wars arrow cursor (Cyan/Sith Red)
+		vec4_t curColor = { 0.00f, 0.85f, 1.00f, 0.95f };
+		if ( g_xpProfile.faction == FACTION_SITH ) {
+			curColor[0] = 1.00f; curColor[1] = 0.20f; curColor[2] = 0.20f;
+		}
+		SCR_FillRect( curX, curY, 2.0f, 12.0f, curColor );
+		SCR_FillRect( curX, curY, 12.0f, 2.0f, curColor );
+		SCR_FillRect( curX + 2.0f, curY + 2.0f, 8.0f, 2.0f, curColor );
+		SCR_FillRect( curX + 2.0f, curY + 4.0f, 6.0f, 2.0f, curColor );
+		SCR_FillRect( curX + 2.0f, curY + 6.0f, 4.0f, 2.0f, curColor );
+		SCR_FillRect( curX + 2.0f, curY + 8.0f, 2.0f, 2.0f, curColor );
 		vec4_t curDot = { 1.00f, 1.00f, 1.00f, 1.00f };
-		SCR_FillRect( curX - 1.0f, curY - 1.0f, 2.0f, 2.0f, curDot );
+		SCR_FillRect( curX + 1.0f, curY + 1.0f, 2.0f, 2.0f, curDot );
 	}
 }
 

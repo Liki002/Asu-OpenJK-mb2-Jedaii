@@ -79,10 +79,14 @@ qboolean CL_XP_IsNPCName(const char *name) {
 		Q_stristr(name, "stormtrooper") || Q_stristr(name, "shadowtrooper") || Q_stristr(name, "alora") ||
 		Q_stristr(name, "tavion") || Q_stristr(name, "desann") || Q_stristr(name, "gran") ||
 		Q_stristr(name, "rodian") || Q_stristr(name, "trandoshan") || Q_stristr(name, "weequay") ||
-		Q_stristr(name, "tusken") || Q_stristr(name, "boba_fett") || Q_stristr(name, "jawa") ||
-		Q_stristr(name, "swamptrooper") || Q_stristr(name, "seeker") || Q_stristr(name, "sentry") ||
-		Q_stristr(name, "remote") || Q_stristr(name, "dummy") || Q_stristr(name, "bot") ||
-		Q_stristr(name, "npc")) {
+		Q_stristr(name, "tusken") || Q_stristr(name, "boba") || Q_stristr(name, "jango") ||
+		Q_stristr(name, "jawa") || Q_stristr(name, "swamptrooper") || Q_stristr(name, "seeker") ||
+		Q_stristr(name, "sentry") || Q_stristr(name, "remote") || Q_stristr(name, "dummy") ||
+		Q_stristr(name, "bot") || Q_stristr(name, "npc") || Q_stristr(name, "officer") ||
+		Q_stristr(name, "commander") || Q_stristr(name, "droid") || Q_stristr(name, "pilot") ||
+		Q_stristr(name, "merc") || Q_stristr(name, "impman") || Q_stristr(name, "rebel") ||
+		Q_stristr(name, "shadow") || Q_stristr(name, "hazard") || Q_stristr(name, "kyle") ||
+		Q_stristr(name, "luke") || Q_stristr(name, "jan")) {
 		return qtrue;
 	}
 	return qfalse;
@@ -912,20 +916,16 @@ void CL_XP_CheckGameEvents(void) {
 	} else if (g_lastDuelInProgress && !currentDuel) {
 		// Duel just ended — check outcome
 		int durationMs = (g_duelStartMs > 0) ? (cls.realtime - g_duelStartMs) : 0;
-		if (g_lastDuelOutcome == -2 || durationMs < 500 || CL_XP_IsNPCName(g_duelOpponentName) || CL_XP_IsNPCName(g_lastParsedVictimName)) {
+		qboolean isNPCDuel = (CL_XP_IsNPCName(g_duelOpponentName) || CL_XP_IsNPCName(g_lastParsedVictimName) || CL_XP_IsNPCName(g_lastParsedKillerName)) ? qtrue : qfalse;
+
+		if (g_lastDuelOutcome == -2 || durationMs < 500 || isNPCDuel) {
 			// Duel ended manually, prematurely, or against an NPC — do NOT grant duel win/loss or show Toast!
 			g_duelStartMs = 0;
 			g_lastDuelOutcome = 0;
 			g_duelOpponentName[0] = '\0';
 		} else {
-			qboolean isWin = qfalse;
-			if (g_lastDuelOutcome == 1) {
-				isWin = qtrue;
-			} else if (g_lastDuelOutcome == -1) {
-				isWin = qfalse;
-			} else {
-				isWin = (!g_playerIsDead && currentHealth >= g_duelStartHealth) ? qtrue : qfalse;
-			}
+			// Strictly player vs player duel win check
+			qboolean isWin = (g_lastDuelOutcome == 1) ? qtrue : qfalse;
 
 			if (isWin) {
 				qboolean perfectDuel = qfalse;
@@ -938,7 +938,7 @@ void CL_XP_CheckGameEvents(void) {
 					quickDraw = qtrue;
 				}
 				CL_XP_OnDuelWin(perfectDuel, quickDraw, durationMs);
-			} else {
+			} else if (g_lastDuelOutcome == -1) {
 				CL_XP_OnDuelLoss();
 			}
 			g_duelStartMs = 0;
