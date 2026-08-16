@@ -1576,6 +1576,29 @@ static void SV_Ranked_Cmd_ChangeUsername(client_t *cl, const char *chatText) {
   SV_Ranked_Log("RENAME: client %d renamed to '%s'", clientNum, newKey);
 }
 
+void SV_Ranked_ShowPartyStudio(client_t *cl) {
+  int activeCount = 0;
+  SV_SendServerCommand(cl, "party_list_clear");
+  SV_SendServerCommand(cl, "print \"\n^5--- ^2Active Server Parties ^5---\n\"");
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    rankedParty_t *p = &sv_rankedParties[i];
+    if (p->active && svs.clients[i].state >= CS_ACTIVE) {
+      const char *colorNames[8] = { "Blue", "Red", "Green", "Yellow", "Purple", "Orange", "Black", "White" };
+      const char *colName = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorNames[p->teamColorIdx] : "Blue";
+      SV_SendServerCommand(cl, va("party_list_item %d \"%s\" %d %d \"%s\"",
+                                  i, p->teamName, p->teamColorIdx, p->memberCount, svs.clients[i].name));
+      SV_SendServerCommand(cl, va("print \"^3Party #%d: ^7'%s^7' | Leader: %s ^7| Members: ^2%d/%d ^7| Color: ^5%s\n\"",
+                                  i, p->teamName, svs.clients[i].name, p->memberCount, MAX_PARTY_MEMBERS, colName));
+      activeCount++;
+    }
+  }
+  if (activeCount == 0) {
+    SV_SendServerCommand(cl, "print \"^7No active parties right now. Type ^3!party <TeamName> ^7to create one!\n\"");
+  }
+  SV_SendServerCommand(cl, "print \"^5---------------------------------\n\n\"");
+  SV_SendServerCommand(cl, "partymenu_open");
+}
+
 qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
   if (!chatText || chatText[0] == '\0')
     return qfalse;
@@ -1865,73 +1888,70 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     return qtrue;
   } else if (!Q_stricmp(cmdSpace, "duel_bp") || !Q_stricmp(cmdSpace, "my_bp")) {
     int val1 = atoi(Cmd_Argv(1));
+    int cNum = (int)(cl - svs.clients);
     if (Cmd_Argc() >= 3) {
       int val2 = atoi(Cmd_Argv(2));
       if (val1 >= 0 && val1 < sv_maxclients->integer && val2 >= 0) {
         sv_rankedPlayers[val1].lastBP = val2;
+        Com_Printf("[RANKED] Client %d (%s) reported live combat BP: %d\n", val1, svs.clients[val1].name, val2);
       }
     } else {
       if (val1 >= 0) {
-        sv_rankedPlayers[cl - svs.clients].lastBP = val1;
+        sv_rankedPlayers[cNum].lastBP = val1;
+        Com_Printf("[RANKED] Client %d (%s) reported live combat BP: %d\n", cNum, cl->name, val1);
       }
     }
     return qtrue;
 
-  } else if (!Q_stricmp(cmdSpace, "!createparty") || !Q_stricmp(cmdSpace, "!party") || !Q_stricmp(cmdSpace, "!cp")) {
-    int clientNum = cl - svs.clients;
-    char teamName[64] = "Party";
-    char colorOrIdsBuf[128] = "";
+  } else if (!Q_stricmp(cmdSpace, "!rpgmenu") || !Q_stricmp(cmdSpace, "!menu") ||
+             !Q_stricmp(cmdSpace, "!settings") || !Q_stricmp(cmdSpace, "!rpg")) {
+    SV_Ranked_SyncClientRPG(cl);
+    SV_SendServerCommand(cl, "rpgmenu_open");
+    return qtrue;
 
-    int numParsed = sscanf(chatText, "%*s %63s %127s", teamName, colorOrIdsBuf);
-    if (numParsed < 1) {
-      SV_SendServerCommand(cl, "chat \"^3Usage: ^5!createparty <TeamName> [color]\n^7Colors: ^5blue, red, green, yellow, purple, orange, black, white\"");
-      return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!admin") || !Q_stricmp(cmdSpace, "!adminmenu") ||
+             !Q_stricmp(cmdSpace, "!adminpanel") || !Q_stricmp(cmdSpace, "!panel")) {
+    if (!SV_Ranked_IsAdmin(cl)) {
+      SV_SendServerCommand(cl, "chat \"^1Admin only.\"");
+    } else {
+      SV_SendServerCommand(cl, "adminmenu_open");
     }
+    return qtrue;
 
-    rankedParty_t *p = &sv_rankedParties[clientNum];
-    memset(p, 0, sizeof(rankedParty_t));
-    p->active = qtrue;
-    Q_strncpyz(p->teamName, teamName, sizeof(p->teamName));
-    p->teamColorIdx = clientNum % 8;
-    p->score = 0;
-
-    if (colorOrIdsBuf[0]) {
-      int cIdx = -1;
-      if (!Q_stricmp(colorOrIdsBuf, "blue")) cIdx = 0;
-      else if (!Q_stricmp(colorOrIdsBuf, "red")) cIdx = 1;
-      else if (!Q_stricmp(colorOrIdsBuf, "green")) cIdx = 2;
-      else if (!Q_stricmp(colorOrIdsBuf, "yellow")) cIdx = 3;
-      else if (!Q_stricmp(colorOrIdsBuf, "purple")) cIdx = 4;
-      else if (!Q_stricmp(colorOrIdsBuf, "orange")) cIdx = 5;
-      else if (!Q_stricmp(colorOrIdsBuf, "black")) cIdx = 6;
-      else if (!Q_stricmp(colorOrIdsBuf, "white")) cIdx = 7;
-
-      if (cIdx >= 0) p->teamColorIdx = cIdx;
-    }
-
-    p->clientNums[0] = clientNum;
-    p->memberCount = 1;
-
-    const qboolean isAdmin = SV_Ranked_IsAdmin(cl);
-    if (isAdmin && colorOrIdsBuf[0] && strchr(colorOrIdsBuf, '.')) {
-      char *token = strtok(colorOrIdsBuf, ".,; ");
-      while (token && p->memberCount < MAX_PARTY_MEMBERS) {
-        int id = atoi(token);
-        if (id >= 0 && id < sv_maxclients->integer && id != clientNum) {
-          qboolean alreadyIn = qfalse;
-          for (int j = 0; j < p->memberCount; j++) {
-            if (p->clientNums[j] == id) { alreadyIn = qtrue; break; }
-          }
-          if (!alreadyIn) {
-            p->clientNums[p->memberCount++] = id;
+  } else if (!Q_stricmp(cmdSpace, "!createparty") || !Q_stricmp(cmdSpace, "!party") ||
+             !Q_stricmp(cmdSpace, "!partymenu") || !Q_stricmp(cmdSpace, "!partystudio")) {
+    const char *arg = strchr(chatText, ' ');
+    if (arg && *(arg + 1) != '\0') {
+      char teamName[64] = "Party";
+      char colorOrIdsBuf[128] = "";
+      int numParsed = sscanf(chatText, "%*s %63s %127s", teamName, colorOrIdsBuf);
+      if (numParsed >= 1 && teamName[0] != '\0') {
+        int clientNum = cl - svs.clients;
+        const char *colorNames[8] = { "blue", "red", "green", "yellow", "purple", "orange", "black", "white" };
+        int selectedColor = 0;
+        for (int c = 0; c < 8; c++) {
+          if (!Q_stricmp(colorOrIdsBuf, colorNames[c])) {
+            selectedColor = c;
+            break;
           }
         }
-        token = strtok(NULL, ".,; ");
+
+        rankedParty_t *p = &sv_rankedParties[clientNum];
+        memset(p, 0, sizeof(rankedParty_t));
+        p->active = qtrue;
+        Q_strncpyz(p->teamName, teamName, sizeof(p->teamName));
+        p->teamColorIdx = selectedColor;
+        p->score = 0;
+        p->memberCount = 1;
+        p->clientNums[0] = clientNum;
+
+        SV_Ranked_UpdateParty(clientNum);
+        SV_SendServerCommand(cl, va("chat \"^2Party '^5%s^2' created with shield color ^5%s^2!\"", p->teamName, colorNames[selectedColor]));
+        SV_SendServerCommand(NULL, va("chat \"^3[NEW TEAM] ^5%s ^7formed party '^3%s^7'!\"", cl->name, p->teamName));
       }
     }
-
-    SV_Ranked_UpdateParty(clientNum);
-    SV_SendServerCommand(cl, va("chat \"^2Party '^5%s^2' created! Use ^3!inviteparty <ID>^2 to invite members.\"", p->teamName));
+    // Sync active party list and open Party Management Studio overlay
+    SV_Ranked_ShowPartyStudio(cl);
     return qtrue;
 
   } else if (!Q_stricmp(cmdSpace, "!partycolor") || !Q_stricmp(cmdSpace, "!teamcolor")) {
@@ -1960,56 +1980,6 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       } else {
         SV_SendServerCommand(cl, "chat \"^3Colors: ^5blue, red, green, yellow, purple, orange, black, white\"");
       }
-    }
-    return qtrue;
-
-  } else if (!Q_stricmp(cmdSpace, "duel_bp") || !Q_stricmp(cmdSpace, "my_bp")) {
-    int val1 = atoi(Cmd_Argv(1));
-    int cNum = (int)(cl - svs.clients);
-    if (Cmd_Argc() >= 3) {
-      int val2 = atoi(Cmd_Argv(2));
-      if (val1 >= 0 && val1 < sv_maxclients->integer && val2 >= 0) {
-        sv_rankedPlayers[val1].lastBP = val2;
-        Com_Printf("[RANKED] Client %d (%s) reported live combat BP: %d\n", val1, svs.clients[val1].name, val2);
-      }
-    } else {
-      if (val1 >= 0) {
-        sv_rankedPlayers[cNum].lastBP = val1;
-        Com_Printf("[RANKED] Client %d (%s) reported live combat BP: %d\n", cNum, cl->name, val1);
-      }
-    }
-    return qtrue;
-
-  } else if (!Q_stricmp(cmdSpace, "!createparty") || !Q_stricmp(cmdSpace, "!party") || !Q_stricmp(cmdSpace, "!cp")) {
-    int clientNum = cl - svs.clients;
-    char teamName[64] = "Party";
-    char colorOrIdsBuf[128] = "";
-
-    int numParsed = sscanf(chatText, "%*s %63s %127s", teamName, colorOrIdsBuf);
-    if (numParsed >= 1 && teamName[0] != '\0') {
-      const char *colorNames[8] = { "blue", "red", "green", "yellow", "purple", "orange", "black", "white" };
-      int selectedColor = 0; // default Blue
-      for (int c = 0; c < 8; c++) {
-        if (!Q_stricmp(colorOrIdsBuf, colorNames[c])) {
-          selectedColor = c;
-          break;
-        }
-      }
-
-      rankedParty_t *p = &sv_rankedParties[clientNum];
-      p->active = qtrue;
-      Q_strncpyz(p->teamName, teamName, sizeof(p->teamName));
-      p->teamColorIdx = selectedColor;
-      p->score = 0;
-      p->memberCount = 1;
-      p->clientNums[0] = clientNum;
-
-      SV_Ranked_UpdateParty(clientNum);
-      SV_SendServerCommand(cl, va("chat \"^2Party '^5%s^2' created with shield color ^5%s^2!\"", p->teamName, colorNames[selectedColor]));
-      SV_SendServerCommand(NULL, va("chat \"^3[NEW TEAM] ^5%s ^7formed party '^3%s^7'!\"", cl->name, p->teamName));
-    } else {
-      SV_SendServerCommand(cl, "chat \"^3Usage: ^5!createparty <TeamName> [Color]\"");
-      SV_SendServerCommand(cl, "chat \"^7Colors: ^5blue, red, green, yellow, purple, orange, black, white\"");
     }
     return qtrue;
 
@@ -2113,25 +2083,7 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     return qtrue;
 
   } else if (!Q_stricmp(cmdSpace, "!parties") || !Q_stricmp(cmdSpace, "!partylist")) {
-    int activeCount = 0;
-    SV_SendServerCommand(cl, "party_list_clear");
-    SV_SendServerCommand(cl, "print \"\n^5--- ^2Active Server Parties ^5---\n\"");
-    for (int i = 0; i < sv_maxclients->integer; i++) {
-      rankedParty_t *p = &sv_rankedParties[i];
-      if (p->active && svs.clients[i].state >= CS_ACTIVE) {
-        const char *colorNames[8] = { "Blue", "Red", "Green", "Yellow", "Purple", "Orange", "Black", "White" };
-        const char *colName = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorNames[p->teamColorIdx] : "Blue";
-        SV_SendServerCommand(cl, va("party_list_item %d \"%s\" %d %d \"%s\"",
-                                    i, p->teamName, p->teamColorIdx, p->memberCount, svs.clients[i].name));
-        SV_SendServerCommand(cl, va("print \"^3Party #%d: ^7'%s^7' | Leader: %s ^7| Members: ^2%d/%d ^7| Color: ^5%s\n\"",
-                                    i, p->teamName, svs.clients[i].name, p->memberCount, MAX_PARTY_MEMBERS, colName));
-        activeCount++;
-      }
-    }
-    if (activeCount == 0) {
-      SV_SendServerCommand(cl, "print \"^7No active parties right now. Type ^3!party ^7to create one!\n\"");
-    }
-    SV_SendServerCommand(cl, "print \"^5---------------------------------\n\n\"");
+    SV_Ranked_ShowPartyStudio(cl);
     return qtrue;
 
   } else if (!Q_stricmp(cmdSpace, "!requestparty") || !Q_stricmp(cmdSpace, "!joinparty") || !Q_stricmp(cmdSpace, "!rp")) {

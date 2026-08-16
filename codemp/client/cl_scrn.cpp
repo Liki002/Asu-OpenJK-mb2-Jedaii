@@ -636,8 +636,14 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
 	Cmd_AddCommand( "hudsettings", SCR_HUDSettings_f, "Toggle HUD settings configuration studio overlay" );
 	Cmd_AddCommand( "rpgmenu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
+	Cmd_AddCommand( "menu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
+	Cmd_AddCommand( "settings", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "partymenu", SCR_PartyMenu_f, "Toggle Party Management Studio overlay" );
+	Cmd_AddCommand( "party", SCR_PartyMenu_f, "Toggle Party Management Studio overlay" );
+	Cmd_AddCommand( "partystudio", SCR_PartyMenu_f, "Toggle Party Management Studio overlay" );
 	Cmd_AddCommand( "adminmenu", SCR_AdminMenu_f, "Toggle Admin Control Panel overlay" );
+	Cmd_AddCommand( "admin", SCR_AdminMenu_f, "Toggle Admin Control Panel overlay" );
+	Cmd_AddCommand( "adminpanel", SCR_AdminMenu_f, "Toggle Admin Control Panel overlay" );
 
 	scr_initialized = qtrue;
 }
@@ -4004,6 +4010,15 @@ void CL_ResetRPGOverlays( void ) {
 	g_rpgShop.active = qfalse;
 	g_rpgQuest.active = qfalse;
 	g_rpgInventory.active = qfalse;
+	g_rpgAch.active = qfalse;
+	g_rpgTopCredits.active = qfalse;
+	g_rpgTopPotato.active = qfalse;
+	g_rpgStats.active = qfalse;
+	g_rpgBounty.active = qfalse;
+	g_rpgMenu.active = qfalse;
+	g_rpgPartyStudio.active = qfalse;
+	g_rpgAdmin.active = qfalse;
+	g_rpgSettings.active = qfalse;
 	g_rpgStats.xp = 0; // Just in case, reset stats too
 	Cvar_Set( "cg_drawShop", "0" );
 	Cvar_Set( "cg_drawQuest", "0" );

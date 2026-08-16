@@ -1239,6 +1239,24 @@ void CL_ParseCommandString( msg_t *msg ) {
 	} else if ( !Q_strncmp( s, "adv_close", 9 ) ) {
 		g_rpgAdv.active = qfalse;
 		Cvar_Set( "cg_drawAdv", "0" );
+	} else if ( !Q_strncmp( s, "rpgmenu_open", 12 ) || !Q_strncmp( s, "menu_open", 9 ) ) {
+		g_rpgMenu.active = qtrue;
+	} else if ( !Q_strncmp( s, "rpgmenu_close", 13 ) || !Q_strncmp( s, "menu_close", 10 ) ) {
+		g_rpgMenu.active = qfalse;
+	} else if ( !Q_strncmp( s, "rpgmenu_toggle", 14 ) || !Q_strncmp( s, "menu_toggle", 11 ) ) {
+		g_rpgMenu.active = (qboolean)(!g_rpgMenu.active);
+	} else if ( !Q_strncmp( s, "partymenu_open", 14 ) || !Q_strncmp( s, "party_open", 10 ) || !Q_strncmp( s, "partystudio_open", 16 ) ) {
+		g_rpgPartyStudio.active = qtrue;
+	} else if ( !Q_strncmp( s, "partymenu_close", 15 ) || !Q_strncmp( s, "party_close", 11 ) || !Q_strncmp( s, "partystudio_close", 17 ) ) {
+		g_rpgPartyStudio.active = qfalse;
+	} else if ( !Q_strncmp( s, "partymenu_toggle", 16 ) || !Q_strncmp( s, "party_toggle", 12 ) || !Q_strncmp( s, "partystudio_toggle", 18 ) ) {
+		g_rpgPartyStudio.active = (qboolean)(!g_rpgPartyStudio.active);
+	} else if ( !Q_strncmp( s, "adminmenu_open", 14 ) || !Q_strncmp( s, "admin_open", 10 ) || !Q_strncmp( s, "adminpanel_open", 15 ) ) {
+		g_rpgAdmin.active = qtrue;
+	} else if ( !Q_strncmp( s, "adminmenu_close", 15 ) || !Q_strncmp( s, "admin_close", 11 ) || !Q_strncmp( s, "adminpanel_close", 16 ) ) {
+		g_rpgAdmin.active = qfalse;
+	} else if ( !Q_strncmp( s, "adminmenu_toggle", 16 ) || !Q_strncmp( s, "admin_toggle", 12 ) || !Q_strncmp( s, "adminpanel_toggle", 17 ) ) {
+		g_rpgAdmin.active = (qboolean)(!g_rpgAdmin.active);
 	}
 }
 
