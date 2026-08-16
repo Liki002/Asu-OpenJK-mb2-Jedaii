@@ -18,7 +18,7 @@ jobs:
           docker run --rm -v "${{ github.workspace }}:/src" -w /src i386/debian:bullseye bash -c "
             set -e
             apt-get update && apt-get install -y --no-install-recommends \
-              build-essential cmake ninja-build git zlib1g-dev
+              build-essential cmake ninja-build git zlib1g-dev libjpeg-dev libpng-dev
             mkdir -p build-linux && cd build-linux
             cmake -G Ninja \
               -DCMAKE_BUILD_TYPE=Release \
@@ -27,6 +27,9 @@ jobs:
               -DCMAKE_C_COMPILER='/usr/bin/gcc' \
               -DCMAKE_CXX_COMPILER='/usr/bin/g++' \
               -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+              -DUseInternalJPEG=ON \
+              -DUseInternalZlib=ON \
+              -DUseInternalPNG=ON \
               -DBuildMPDed=ON \
               -DBuildMPGame=OFF \
               -DBuildMPCGame=OFF \
