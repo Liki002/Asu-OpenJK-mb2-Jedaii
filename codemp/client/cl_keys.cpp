@@ -42,6 +42,7 @@ field_t		historyEditLines[COMMAND_HISTORY];
 field_t		chatField;
 qboolean	chat_team;
 int			chat_playerNum;
+int			cl_lastChatPlayerNum = -1;
 
 keyGlobals_t	kg;
 
@@ -407,7 +408,6 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 	int		prestep;
 	int		cursorChar;
 	char	str[MAX_STRING_CHARS];
-	int		i;
 
 	drawLen = edit->widthInChars - 1; // - 1 so there is always a space for the cursor
 	len = strlen( edit->buffer );
@@ -463,14 +463,12 @@ void Field_VariableSizeDraw( field_t *edit, int x, int y, int width, int size, q
 			cursorChar = 10;
 		}
 
-		i = drawLen - strlen( str );
-
 		if ( size == SMALLCHAR_WIDTH ) {
-			SCR_DrawSmallChar( x + ( edit->cursor - prestep - i ) * size, y, cursorChar );
+			SCR_DrawSmallChar( x + ( edit->cursor - prestep ) * SMALLCHAR_WIDTH, y, cursorChar );
 		} else {
 			str[0] = cursorChar;
 			str[1] = 0;
-			SCR_DrawBigString( x + ( edit->cursor - prestep - i ) * size, y, str, 1.0, qfalse );
+			SCR_DrawBigString( x + ( edit->cursor - prestep ) * ( BIGCHAR_WIDTH / 2 ), y, str, 1.0, qfalse );
 		}
 	}
 }
@@ -804,7 +802,7 @@ In game talk message
 ================
 */
 void Message_Key( int key ) {
-	char buffer[MAX_STRING_CHARS] = {0};
+	char buffer[MAX_STRING_CHARS];
 
 	if ( key == A_ESCAPE ) {
 		Key_SetCatcher( Key_GetCatcher() & ~KEYCATCH_MESSAGE );
@@ -814,11 +812,12 @@ void Message_Key( int key ) {
 
 	if ( key == A_ENTER || key == A_KP_ENTER ) {
 		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
-				 if ( chat_playerNum != -1 )	Com_sprintf( buffer, sizeof( buffer ), "tell %i \"%s\"\n", chat_playerNum, chatField.buffer );
-			else if ( chat_team )				Com_sprintf( buffer, sizeof( buffer ), "say_team \"%s\"\n", chatField.buffer );
-			else								Com_sprintf( buffer, sizeof( buffer ), "say \"%s\"\n", chatField.buffer );
-
-			CL_AddReliableCommand( buffer, qfalse );
+			if ( chat_playerNum != -1 )
+				Cbuf_AddText( va( "tell %i \"%s\"\n", chat_playerNum, chatField.buffer ) );
+			else if ( chat_team )
+				Cbuf_AddText( va( "say_team \"%s\"\n", chatField.buffer ) );
+			else
+				Cbuf_AddText( va( "say \"%s\"\n", chatField.buffer ) );
 		}
 		Key_SetCatcher( Key_GetCatcher() & ~KEYCATCH_MESSAGE );
 		Field_Clear( &chatField );
@@ -1325,29 +1324,41 @@ void CL_KeyDownEvent( int key, unsigned time )
 
 
 		if ( key == A_MOUSE1 ) {
-			float winW = 460.0f;
+			float winW = 412.0f;
+			float winH = 220.0f;
 			float winX = 320.0f - winW * 0.5f;
 			float winY = 130.0f;
 			float mx = (float)g_rpgMouseX;
 			float my = (float)g_rpgMouseY;
 
-
-
-			float cY1 = winY + 110.0f;
-			float cY2 = cY1 + 18.0f;
-			float cY3 = cY2 + 18.0f;
-
-			if ( g_rpgAdv.choice1[0] && mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= cY1 - 2.0f && my <= cY1 + 16.0f ) {
-				CL_AddReliableCommand( "!choose 1", qfalse );
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 45.0f && mx <= winX + winW - 5.0f && my >= winY + 9.0f && my <= winY + 29.0f ) {
+				g_rpgAdv.active = qfalse;
+				Cvar_Set( "cg_drawAdv", "0" );
 				return;
 			}
-			if ( g_rpgAdv.choice2[0] && mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= cY2 - 2.0f && my <= cY2 + 16.0f ) {
-				CL_AddReliableCommand( "!choose 2", qfalse );
-				return;
+
+			float currentY = g_rpgAdv.choiceY <= 0 ? (winY + 110.0f) : g_rpgAdv.choiceY;
+			if ( g_rpgAdv.choice1[0] ) {
+				if ( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= currentY - 6.0f && my <= currentY + 12.0f ) {
+					CL_AddReliableCommand( "!choose 1", qfalse );
+					return;
+				}
+				currentY += 18.0f;
 			}
-			if ( g_rpgAdv.choice3[0] && mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= cY3 - 2.0f && my <= cY3 + 16.0f ) {
-				CL_AddReliableCommand( "!choose 3", qfalse );
-				return;
+			if ( g_rpgAdv.choice2[0] ) {
+				if ( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= currentY - 6.0f && my <= currentY + 12.0f ) {
+					CL_AddReliableCommand( "!choose 2", qfalse );
+					return;
+				}
+				currentY += 18.0f;
+			}
+			if ( g_rpgAdv.choice3[0] ) {
+				if ( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= currentY - 6.0f && my <= currentY + 12.0f ) {
+					CL_AddReliableCommand( "!choose 3", qfalse );
+					return;
+				}
+				currentY += 18.0f;
 			}
 		}
 
@@ -1374,15 +1385,958 @@ void CL_KeyDownEvent( int key, unsigned time )
 
 
 
-	// Mouse Wheel Scrolling for Shop UI Overlay
-	if ( g_rpgShop.active ) {
+	// Shop UI Modal Input Handling (Clicks & Escape/Wheel/Scroll)
+	if ( g_rpgShop.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 300.0f;
+			float winH = 400.0f;
+			float winX = 640.0f - winW - 14.0f;
+			float winY = 40.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+				g_rpgShop.active = qfalse;
+				Cvar_Set( "cg_drawShop", "0" );
+				return;
+			}
+
+			// Check item button clicks
+			float startY = winY + 62.0f;
+			int maxVisible = 8;
+			int startIdx = g_rpgShop.scroll;
+			if ( startIdx < 0 ) startIdx = 0;
+
+			float rowY = startY;
+			for ( int i = startIdx; i < g_rpgShop.count && (i - startIdx) < maxVisible; i++ ) {
+				rpgShopItem_t *item = &g_rpgShop.items[i];
+				if ( mx >= winX + 8.0f && mx <= winX + winW - 8.0f && my >= rowY && my <= rowY + 32.0f ) {
+					// Check BUY or SELL button
+					if ( mx >= winX + winW - 95.0f && mx <= winX + winW - 60.0f ) {
+						CL_AddReliableCommand( va( "buy %s", item->key ), qfalse );
+						return;
+					} else if ( mx >= winX + winW - 55.0f && mx <= winX + winW - 20.0f ) {
+						CL_AddReliableCommand( va( "sell %s", item->key ), qfalse );
+						return;
+					}
+				}
+				rowY += 34.0f;
+			}
+		}
+
+		if ( key == A_ESCAPE ) {
+			g_rpgShop.active = qfalse;
+			Cvar_Set( "cg_drawShop", "0" );
+			return;
+		}
+
 		if ( key == A_MWHEELUP ) {
 			if ( g_rpgShop.scroll > 0 ) g_rpgShop.scroll--;
 			return;
 		} else if ( key == A_MWHEELDOWN ) {
-			int maxScroll = g_rpgShop.count - 7;
+			int maxScroll = g_rpgShop.count - 8;
 			if ( maxScroll < 0 ) maxScroll = 0;
 			if ( g_rpgShop.scroll < maxScroll ) g_rpgShop.scroll++;
+			return;
+		}
+	}
+
+	// HUD Settings UI Modal Input Handling
+	if ( g_rpgSettings.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 480.0f;
+			float winH = 360.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 240.0f - winH * 0.5f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			float col1X = winX + 40.0f;
+			float col2X = winX + 240.0f;
+
+			// 1. HUD Style Button
+			if ( mx >= col1X && mx <= col1X + 160.0f && my >= winY + 90.0f && my <= winY + 130.0f ) {
+				int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
+				curStyle = (curStyle + 1) % 4;
+				Cvar_SetValue( "cg_rpg_style", curStyle );
+				Com_Printf( "^2HUD Style cycled to %d\n", curStyle );
+				return;
+			}
+
+			// 2. HUD Position Button
+			if ( mx >= col1X && mx <= col1X + 160.0f && my >= winY + 150.0f && my <= winY + 190.0f ) {
+				const char *curPos = (cg_rpg_pos && cg_rpg_pos->string[0]) ? cg_rpg_pos->string : "left";
+				if ( !Q_stricmp( curPos, "left" ) ) Cbuf_AddText( "rpg_hud_pos right\n" );
+				else if ( !Q_stricmp( curPos, "right" ) ) Cbuf_AddText( "rpg_hud_pos bottomright\n" );
+				else if ( !Q_stricmp( curPos, "bottomright" ) ) Cbuf_AddText( "rpg_hud_pos bottomleft\n" );
+				else if ( !Q_stricmp( curPos, "bottomleft" ) ) Cbuf_AddText( "rpg_hud_pos bottomcenter\n" );
+				else Cbuf_AddText( "rpg_hud_pos left\n" );
+				return;
+			}
+
+			// 3. Reset Button
+			if ( mx >= col1X && mx <= col1X + 160.0f && my >= winY + 210.0f && my <= winY + 250.0f ) {
+				Cvar_SetValue( "cg_rpg_style", 0 );
+				Cvar_Set( "cg_rpg_pos", "left" );
+				Cvar_SetValue( "cg_rpg_x", 14 );
+				Cvar_SetValue( "cg_rpg_y", 14 );
+				Cvar_Set( "cg_rpg_avatar", "gfx/rpg_hud/avatar_default" );
+				Com_Printf( "^2RPG HUD reset to default config\n" );
+				return;
+			}
+
+			// 4. Avatar Cycle Left
+			if ( mx >= col2X && mx <= col2X + 40.0f && my >= winY + 210.0f && my <= winY + 250.0f ) {
+				extern int SCR_GetCurrentAvatarIndex( void );
+				extern void SCR_SetAvatarIndex( int idx );
+				int curAvIdx = SCR_GetCurrentAvatarIndex();
+				curAvIdx = (curAvIdx - 1 + 5) % 5;
+				SCR_SetAvatarIndex( curAvIdx );
+				return;
+			}
+
+			// 5. Avatar Cycle Right
+			if ( mx >= col2X + 120.0f && mx <= col2X + 160.0f && my >= winY + 210.0f && my <= winY + 250.0f ) {
+				extern int SCR_GetCurrentAvatarIndex( void );
+				extern void SCR_SetAvatarIndex( int idx );
+				int curAvIdx = SCR_GetCurrentAvatarIndex();
+				curAvIdx = (curAvIdx + 1) % 5;
+				SCR_SetAvatarIndex( curAvIdx );
+				return;
+			}
+
+			// 6. Close Button
+			if ( mx >= winX + (winW - 160.0f) * 0.5f && mx <= winX + (winW - 160.0f) * 0.5f + 160.0f && my >= winY + 290.0f && my <= winY + 330.0f ) {
+				g_rpgSettings.active = qfalse;
+				return;
+			}
+		}
+
+		if ( key == A_ESCAPE ) {
+			g_rpgSettings.active = qfalse;
+			return;
+		}
+	}
+
+	// Master RPG Menu UI Modal Input Handling
+	if ( g_rpgMenu.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 540.0f;
+			float winH = 390.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 240.0f - winH * 0.5f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+				g_rpgMenu.active = qfalse;
+				return;
+			}
+
+			// Tab Clicks
+			float tabW = 120.0f;
+			float tabY = winY + 38.0f;
+			float tabStartX = winX + (winW - (4 * tabW + 3 * 8.0f)) * 0.5f;
+			for ( int i = 0; i < 4; i++ ) {
+				float tx = tabStartX + i * (tabW + 8.0f);
+				if ( mx >= tx && mx <= tx + tabW && my >= tabY && my <= tabY + 22.0f ) {
+					g_rpgMenu.tab = i;
+					return;
+				}
+			}
+
+			float contentY = tabY + 34.0f;
+
+			// Tab 0 (Profile) Actions - Toggle Ranked Mode button
+			if ( g_rpgMenu.tab == 0 ) {
+				float boxX = winX + 25.0f;
+				float boxW = winW - 50.0f;
+				float btnX = boxX;
+				float btnY = contentY + 224.0f;
+				float btnW = boxW;
+				float btnH = 24.0f;
+				if ( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH ) {
+					Cbuf_AddText( "say !toggleranked\n" );
+					return;
+				}
+			}
+
+			// Tab 1 (Settings) Actions
+			if ( g_rpgMenu.tab == 1 ) {
+				// Button 1: Style
+				if ( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 20.0f && my <= contentY + 55.0f ) {
+					int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
+					Cvar_SetValue( "cg_rpg_style", (curStyle + 1) % 4 );
+					return;
+				}
+				// Button 2: Position
+				if ( mx >= winX + 270.0f && mx <= winX + 480.0f && my >= contentY + 20.0f && my <= contentY + 55.0f ) {
+					const char *curPos = (cg_rpg_pos && cg_rpg_pos->string[0]) ? cg_rpg_pos->string : "left";
+					if ( !Q_stricmp( curPos, "left" ) ) Cbuf_AddText( "rpg_hud_pos right\n" );
+					else if ( !Q_stricmp( curPos, "right" ) ) Cbuf_AddText( "rpg_hud_pos bottomright\n" );
+					else if ( !Q_stricmp( curPos, "bottomright" ) ) Cbuf_AddText( "rpg_hud_pos bottomleft\n" );
+					else if ( !Q_stricmp( curPos, "bottomleft" ) ) Cbuf_AddText( "rpg_hud_pos bottomcenter\n" );
+					else Cbuf_AddText( "rpg_hud_pos left\n" );
+					return;
+				}
+				// Slider X & Y and Party UI Sliders
+				{
+					float col2X = winX + 270.0f;
+					// Slider 1: HUD X
+					if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 60.0f && my <= contentY + 80.0f ) {
+						float newProgress = (mx - col2X) / 200.0f;
+						if ( newProgress < 0.0f ) newProgress = 0.0f;
+						if ( newProgress > 1.0f ) newProgress = 1.0f;
+						Cvar_SetValue( "cg_rpg_x", newProgress * 640.0f );
+						return;
+					}
+					// Slider 2: HUD Y
+					if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 95.0f && my <= contentY + 115.0f ) {
+						float newProgress = (mx - col2X) / 200.0f;
+						if ( newProgress < 0.0f ) newProgress = 0.0f;
+						if ( newProgress > 1.0f ) newProgress = 1.0f;
+						Cvar_SetValue( "cg_rpg_y", newProgress * 480.0f );
+						return;
+					}
+					// Slider 3: Party UI X
+					if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 130.0f && my <= contentY + 150.0f ) {
+						float newProgress = (mx - col2X) / 200.0f;
+						if ( newProgress < 0.0f ) newProgress = 0.0f;
+						if ( newProgress > 1.0f ) newProgress = 1.0f;
+						Cvar_SetValue( "cg_partyX", newProgress * 640.0f );
+						return;
+					}
+					// Slider 4: Party UI Y
+					if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 165.0f && my <= contentY + 185.0f ) {
+						float newProgress = (mx - col2X) / 200.0f;
+						if ( newProgress < 0.0f ) newProgress = 0.0f;
+						if ( newProgress > 1.0f ) newProgress = 1.0f;
+						Cvar_SetValue( "cg_partyY", newProgress * 480.0f );
+						return;
+					}
+				}
+				// Chat Position Button
+				if ( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 160.0f && my <= contentY + 193.0f ) {
+					cvar_t *cPosCv = Cvar_Get( "cg_chat_pos", "0", CVAR_ARCHIVE );
+					int curCP = cPosCv ? cPosCv->integer : 0;
+					Cvar_SetValue( "cg_chat_pos", (curCP + 1) % 3 );
+					return;
+				}
+				// Chat Style Button (4 styles: Dark Glass, Cyber Cyan, Solid Black, No BG)
+				if ( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 200.0f && my <= contentY + 233.0f ) {
+					cvar_t *cStyCv = Cvar_Get( "cg_chat_style", "0", CVAR_ARCHIVE );
+					int curCS = cStyCv ? cStyCv->integer : 0;
+					Cvar_SetValue( "cg_chat_style", (curCS + 1) % 4 );
+					return;
+				}
+				// Button 3: Reset Defaults
+				if ( mx >= winX + 270.0f && mx <= winX + 470.0f && my >= contentY + 200.0f && my <= contentY + 233.0f ) {
+					Cvar_SetValue( "cg_rpg_style", 0 );
+					Cvar_Set( "cg_rpg_pos", "left" );
+					Cvar_SetValue( "cg_rpg_x", 14 );
+					Cvar_SetValue( "cg_rpg_y", 14 );
+					Cvar_SetValue( "cg_partyX", 15 );
+					Cvar_SetValue( "cg_partyY", 140 );
+					Cvar_SetValue( "cg_chat_pos", 0 );
+					Cvar_SetValue( "cg_chat_style", 0 );
+					return;
+				}
+				// Avatar Prev/Next
+				float avBoxX = winX + 160.0f;
+				float avBoxY = contentY + 108.0f;
+				if ( mx >= avBoxX - 45.0f && mx <= avBoxX - 10.0f && my >= avBoxY + 3.0f && my <= avBoxY + 33.0f ) {
+					extern int SCR_GetCurrentAvatarIndex( void );
+					extern void SCR_SetAvatarIndex( int idx );
+					int curAv = SCR_GetCurrentAvatarIndex();
+					SCR_SetAvatarIndex( (curAv - 1 + 5) % 5 );
+					return;
+				}
+				if ( mx >= avBoxX + 45.0f && mx <= avBoxX + 80.0f && my >= avBoxY + 3.0f && my <= avBoxY + 33.0f ) {
+					extern int SCR_GetCurrentAvatarIndex( void );
+					extern void SCR_SetAvatarIndex( int idx );
+					int curAv = SCR_GetCurrentAvatarIndex();
+					SCR_SetAvatarIndex( (curAv + 1) % 5 );
+					return;
+				}
+			}
+		}
+
+		if ( key == A_ESCAPE ) {
+			g_rpgMenu.active = qfalse;
+			return;
+		}
+	}
+
+	// Party Studio UI Modal Input Handling
+	if ( g_rpgPartyStudio.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		extern int g_partyPlayerScroll;
+
+		if ( key == A_MWHEELUP ) {
+			if ( g_partyPlayerScroll > 0 ) g_partyPlayerScroll--;
+			return;
+		} else if ( key == A_MWHEELDOWN ) {
+			g_partyPlayerScroll++;
+			return;
+		}
+
+		if ( key == A_MOUSE1 ) {
+			float winW = 500.0f;
+			float winH = 370.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 240.0f - winH * 0.5f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+				g_rpgPartyStudio.active = qfalse;
+				return;
+			}
+
+			// Tab Switching
+			float tabY = winY + 34.0f;
+			float tabW = 220.0f;
+			float tabH = 20.0f;
+			extern int g_partyStudioTab;
+			if ( mx >= winX + 25.0f && mx <= winX + 25.0f + tabW && my >= tabY && my <= tabY + tabH ) {
+				g_partyStudioTab = 0;
+				return;
+			}
+			if ( mx >= winX + 255.0f && mx <= winX + 255.0f + tabW && my >= tabY && my <= tabY + tabH ) {
+				g_partyStudioTab = 1;
+				Cbuf_AddText( "say !parties\n" );
+				return;
+			}
+
+			if ( g_partyStudioTab == 0 ) {
+				// Tab 0 Clicks (Create, Leave, Disband, Invites)
+				float leftX = winX + 20.0f;
+				float leftW = 200.0f;
+				float topY = winY + 68.0f;
+
+				extern int g_partyColorIdx;
+				extern char g_partyTeamName[32];
+				extern qboolean s_partyEditingName;
+
+				// Click on party name field to enable typing
+				if ( mx >= leftX && mx <= leftX + 180.0f && my >= topY + 48.0f && my <= topY + 66.0f ) {
+					s_partyEditingName = qtrue;
+					return;
+				} else {
+					s_partyEditingName = qfalse;
+				}
+
+				// Check Color Picker Clicks
+				float colorX = leftX;
+				float colorY = topY + 82.0f;
+				for ( int c = 0; c < 8; c++ ) {
+					float cx = colorX + (c % 4) * 26.0f;
+					float cy = colorY + (c / 4) * 22.0f;
+					if ( mx >= cx && mx <= cx + 22.0f && my >= cy && my <= cy + 18.0f ) {
+						g_partyColorIdx = c;
+						return;
+					}
+				}
+
+				float btnY = topY + 130.0f;
+
+				// Create Party
+				if ( mx >= leftX && mx <= leftX + leftW && my >= btnY && my <= btnY + 26.0f ) {
+					const char *colorNames[8] = { "blue", "red", "green", "yellow", "purple", "orange", "black", "white" };
+					int validColIdx = (g_partyColorIdx >= 0 && g_partyColorIdx < 8) ? g_partyColorIdx : 0;
+					Cbuf_AddText( va("say !createparty %s %s\n", g_partyTeamName[0] ? g_partyTeamName : "Team", colorNames[validColIdx]) );
+					return;
+				}
+				// Leave Party
+				btnY += 32.0f;
+				if ( mx >= leftX && mx <= leftX + leftW && my >= btnY && my <= btnY + 26.0f ) {
+					Cbuf_AddText( "say !leaveparty\n" );
+					return;
+				}
+				// Disband Party
+				btnY += 32.0f;
+				if ( mx >= leftX && mx <= leftX + leftW && my >= btnY && my <= btnY + 26.0f ) {
+					Cbuf_AddText( "say !disbandparty\n" );
+					return;
+				}
+
+				// Online Player Invite Clicks
+				extern int SCR_GetPlayersCSBase( void );
+				int csBase = SCR_GetPlayersCSBase();
+				float rightX = winX + 245.0f;
+				float rightW = winW - 265.0f;
+
+				int onlineIds[MAX_CLIENTS];
+				int onlineTotal = 0;
+				for ( int i = 0; i < MAX_CLIENTS; i++ ) {
+					if ( i + csBase >= MAX_CONFIGSTRINGS ) break;
+					if ( !cl.gameState.stringOffsets[csBase + i] ) continue;
+					const char *cInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ csBase + i ];
+					if ( !cInfo || !cInfo[0] ) continue;
+					char nameBuf[64];
+					Q_strncpyz( nameBuf, Info_ValueForKey( cInfo, "n" ), sizeof( nameBuf ) );
+					if ( !nameBuf[0] ) continue;
+					onlineIds[onlineTotal++] = i;
+				}
+
+				int maxVisible = 8;
+				int maxScroll = onlineTotal - maxVisible;
+				if ( maxScroll < 0 ) maxScroll = 0;
+				if ( g_partyPlayerScroll > maxScroll ) g_partyPlayerScroll = maxScroll;
+				if ( g_partyPlayerScroll < 0 ) g_partyPlayerScroll = 0;
+
+				float rowY = topY + 20.0f;
+				for ( int v = 0; v < maxVisible && (g_partyPlayerScroll + v) < onlineTotal; v++ ) {
+					int targetClient = onlineIds[g_partyPlayerScroll + v];
+					float invBtnX = rightX + rightW - 58.0f;
+					float invBtnY = rowY + 2.0f;
+					if ( mx >= invBtnX && mx <= invBtnX + 55.0f && my >= invBtnY && my <= invBtnY + 18.0f ) {
+						Cbuf_AddText( va("say !inviteparty %d\n", targetClient) );
+						return;
+					}
+					rowY += 25.0f;
+				}
+			} else if ( g_partyStudioTab == 1 ) {
+				// Tab 1 Clicks (Active Parties & Join Requests)
+				float contentX = winX + 25.0f;
+				float contentW = winW - 50.0f;
+				float contentY = winY + 68.0f;
+
+				// 1. Accept Incoming Party Invite
+				extern int g_pendingInviteLeaderId;
+				if ( g_pendingInviteLeaderId >= 0 ) {
+					float acBtnX = contentX + contentW - 75.0f;
+					float acBtnY = contentY + 3.0f;
+					if ( mx >= acBtnX && mx <= acBtnX + 70.0f && my >= acBtnY && my <= acBtnY + 20.0f ) {
+						Cbuf_AddText( va( "say !acceptparty %d\n", g_pendingInviteLeaderId ) );
+						g_pendingInviteLeaderId = -1;
+						return;
+					}
+					contentY += 32.0f;
+				}
+
+				// 2. Accept Incoming Join Request (Leader)
+				extern int g_pendingJoinReqId;
+				if ( g_pendingJoinReqId >= 0 ) {
+					float acBtnX = contentX + contentW - 75.0f;
+					float acBtnY = contentY + 3.0f;
+					if ( mx >= acBtnX && mx <= acBtnX + 70.0f && my >= acBtnY && my <= acBtnY + 20.0f ) {
+						Cbuf_AddText( va( "say !acceptjoin %d\n", g_pendingJoinReqId ) );
+						g_pendingJoinReqId = -1;
+						return;
+					}
+					contentY += 32.0f;
+				}
+
+				contentY += 18.0f;
+
+				extern int g_clientPartyCount;
+				extern clientPartyItem_t g_clientPartyList[32];
+				for ( int p = 0; p < g_clientPartyCount && p < 6; p++ ) {
+					float reqBtnX = contentX + contentW - 115.0f;
+					float reqBtnY = contentY + 3.0f;
+					if ( mx >= reqBtnX && mx <= reqBtnX + 110.0f && my >= reqBtnY && my <= reqBtnY + 20.0f ) {
+						Cbuf_AddText( va( "say !joinparty %d\n", g_clientPartyList[p].leaderId ) );
+						return;
+					}
+					contentY += 30.0f;
+				}
+			}
+		}
+
+		// Handle typing in party name field
+		extern char g_partyTeamName[32];
+		extern qboolean s_partyEditingName;
+		if ( s_partyEditingName ) {
+			if ( key == A_BACKSPACE ) {
+				int len = (int)strlen( g_partyTeamName );
+				if ( len > 0 ) g_partyTeamName[len - 1] = '\0';
+				return;
+			}
+			if ( key >= 32 && key < 127 ) {
+				int len = (int)strlen( g_partyTeamName );
+				if ( len < 30 ) {
+					g_partyTeamName[len] = (char)key;
+					g_partyTeamName[len + 1] = '\0';
+				}
+				return;
+			}
+			if ( key == A_ENTER ) {
+				s_partyEditingName = qfalse;
+				return;
+			}
+		}
+
+		if ( key == A_ESCAPE ) {
+			s_partyEditingName = qfalse;
+			g_rpgPartyStudio.active = qfalse;
+			return;
+		}
+	}
+
+	// Admin Control Panel UI Modal Input Handling
+	if ( g_rpgAdmin.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		extern int g_adminPlayerScroll;
+		extern char g_adminCreditsInput[16];
+		extern char g_adminEloInput[16];
+		extern char g_adminRankInput[32];
+		extern char g_adminCpInput[64];
+		extern qboolean s_adminEditingCredits;
+		extern qboolean s_adminEditingElo;
+		extern qboolean s_adminEditingRank;
+		extern qboolean s_adminEditingCp;
+
+		if ( key == A_MWHEELUP ) {
+			if ( g_adminPlayerScroll > 0 ) g_adminPlayerScroll--;
+			return;
+		} else if ( key == A_MWHEELDOWN ) {
+			g_adminPlayerScroll++;
+			return;
+		}
+
+		if ( key == A_MOUSE1 ) {
+			float winW = 630.0f;
+			float winH = 430.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 240.0f - winH * 0.5f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+				s_adminEditingCredits = qfalse;
+				s_adminEditingElo = qfalse;
+				s_adminEditingRank = qfalse;
+				s_adminEditingCp = qfalse;
+				g_rpgAdmin.active = qfalse;
+				return;
+			}
+
+			float leftX = winX + 20.0f;
+			float leftW = 230.0f;
+			float topY = winY + 52.0f;
+
+			// Collect online player IDs
+			extern int SCR_GetPlayersCSBase( void );
+			int csBase = SCR_GetPlayersCSBase();
+
+			int onlineIds[MAX_CLIENTS];
+			int onlineTotal = 0;
+			for ( int i = 0; i < MAX_CLIENTS; i++ ) {
+				if ( i + csBase >= MAX_CONFIGSTRINGS ) break;
+				if ( !cl.gameState.stringOffsets[csBase + i] ) continue;
+				const char *cInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ csBase + i ];
+				if ( !cInfo || !cInfo[0] ) continue;
+				char nameBuf[64];
+				Q_strncpyz( nameBuf, Info_ValueForKey( cInfo, "n" ), sizeof( nameBuf ) );
+				if ( !nameBuf[0] ) continue;
+				onlineIds[onlineTotal++] = i;
+			}
+
+			int maxVisible = 10;
+			int maxScroll = onlineTotal - maxVisible;
+			if ( maxScroll < 0 ) maxScroll = 0;
+			if ( g_adminPlayerScroll > maxScroll ) g_adminPlayerScroll = maxScroll;
+			if ( g_adminPlayerScroll < 0 ) g_adminPlayerScroll = 0;
+
+			// Select Player from list
+			float rowY = topY + 20.0f;
+			for ( int v = 0; v < maxVisible && (g_adminPlayerScroll + v) < onlineTotal; v++ ) {
+				int targetClient = onlineIds[g_adminPlayerScroll + v];
+				if ( mx >= leftX && mx <= leftX + leftW && my >= rowY && my <= rowY + 22.0f ) {
+					s_adminEditingCredits = qfalse;
+					s_adminEditingElo = qfalse;
+					s_adminEditingRank = qfalse;
+					s_adminEditingCp = qfalse;
+					g_rpgAdmin.selectedClient = targetClient;
+					return;
+				}
+				rowY += 25.0f;
+			}
+
+			// Admin Command Grid Clicks
+			float rightX = winX + 270.0f;
+			float gridY = topY + 20.0f;
+			int sel = g_rpgAdmin.selectedClient;
+
+			char selName[64] = {0};
+			if ( sel >= 0 && cl.gameState.stringOffsets[csBase + sel] ) {
+				const char *cInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ csBase + sel ];
+				if ( cInfo && cInfo[0] ) {
+					Q_strncpyz( selName, Info_ValueForKey( cInfo, "n" ), sizeof( selName ) );
+				}
+			}
+
+			// Grid buttons click check (12 Buttons Grid)
+			for ( int b = 0; b < 12; b++ ) {
+				float bx = rightX + (b % 2) * (140.0f + 10.0f);
+				float by = gridY + (b / 2) * 28.0f;
+
+				if ( mx >= bx && mx <= bx + 140.0f && my >= by && my <= by + 22.0f ) {
+					s_adminEditingCredits = qfalse;
+					s_adminEditingElo = qfalse;
+					s_adminEditingRank = qfalse;
+					s_adminEditingCp = qfalse;
+					switch ( b ) {
+					case 0: // !freeze
+						if ( selName[0] ) CL_AddReliableCommand( va("say !freeze %s", selName), qfalse );
+						break;
+					case 1: // !unfreeze
+						if ( selName[0] ) CL_AddReliableCommand( va("say !unfreeze %s", selName), qfalse );
+						break;
+					case 2: // !goto
+						if ( selName[0] ) CL_AddReliableCommand( va("say !goto %s", selName), qfalse );
+						break;
+					case 3: // !bring
+						if ( selName[0] ) CL_AddReliableCommand( va("say !bring %s", selName), qfalse );
+						break;
+					case 4: // !jail
+						if ( selName[0] ) CL_AddReliableCommand( va("say !jail %s 5", selName), qfalse );
+						break;
+					case 5: // !unjail
+						if ( selName[0] ) CL_AddReliableCommand( va("say !unjail %s", selName), qfalse );
+						break;
+					case 6: // !givecredits
+						if ( selName[0] ) CL_AddReliableCommand( va("say !givecredits %s %s", selName, g_adminCreditsInput), qfalse );
+						break;
+					case 7: // !setelo
+						if ( selName[0] ) CL_AddReliableCommand( va("say !setelo %s %s", selName, g_adminEloInput), qfalse );
+						break;
+					case 8: // !setrank
+						if ( selName[0] ) CL_AddReliableCommand( va("say !setrank %s \"%s\"", selName, g_adminRankInput), qfalse );
+						break;
+					case 9: // !cp broadcast
+						if ( g_adminCpInput[0] ) {
+							if ( sel >= 0 && selName[0] ) {
+								CL_AddReliableCommand( va("say !cp %s %s", selName, g_adminCpInput), qfalse );
+							} else {
+								CL_AddReliableCommand( va("say !cp all %s", g_adminCpInput), qfalse );
+							}
+						}
+						break;
+					case 10: // !forcepotato
+						CL_AddReliableCommand( "say !forcepotato", qfalse );
+						break;
+					case 11: // !stoppotato
+						CL_AddReliableCommand( "say !stoppotato", qfalse );
+						break;
+					}
+					return;
+				}
+			}
+
+			// Text Boxes Clicks
+			float crBoxY = gridY + 175.0f;
+			float eloBoxY = crBoxY + 20.0f;
+			float rankBoxY = eloBoxY + 20.0f;
+			float cpBoxY = rankBoxY + 20.0f;
+
+			if ( mx >= rightX + 100.0f && mx <= rightX + 240.0f && my >= crBoxY - 4.0f && my <= crBoxY + 14.0f ) {
+				s_adminEditingCredits = qtrue;
+				s_adminEditingElo = qfalse;
+				s_adminEditingRank = qfalse;
+				s_adminEditingCp = qfalse;
+				return;
+			} else if ( mx >= rightX + 100.0f && mx <= rightX + 240.0f && my >= eloBoxY - 4.0f && my <= eloBoxY + 14.0f ) {
+				s_adminEditingElo = qtrue;
+				s_adminEditingCredits = qfalse;
+				s_adminEditingRank = qfalse;
+				s_adminEditingCp = qfalse;
+				return;
+			} else if ( mx >= rightX + 100.0f && mx <= rightX + 240.0f && my >= rankBoxY - 4.0f && my <= rankBoxY + 14.0f ) {
+				s_adminEditingRank = qtrue;
+				s_adminEditingCredits = qfalse;
+				s_adminEditingElo = qfalse;
+				s_adminEditingCp = qfalse;
+				return;
+			} else if ( mx >= rightX + 100.0f && mx <= rightX + 240.0f && my >= cpBoxY - 4.0f && my <= cpBoxY + 14.0f ) {
+				s_adminEditingCp = qtrue;
+				s_adminEditingCredits = qfalse;
+				s_adminEditingElo = qfalse;
+				s_adminEditingRank = qfalse;
+				return;
+			} else {
+				s_adminEditingCredits = qfalse;
+				s_adminEditingElo = qfalse;
+				s_adminEditingRank = qfalse;
+				s_adminEditingCp = qfalse;
+			}
+		}
+
+		// Handle typing in Credits input field
+		if ( s_adminEditingCredits ) {
+			if ( key == A_BACKSPACE ) {
+				int len = (int)strlen( g_adminCreditsInput );
+				if ( len > 0 ) g_adminCreditsInput[len - 1] = '\0';
+				return;
+			}
+			if ( (key >= '0' && key <= '9') || key == '-' ) {
+				int len = (int)strlen( g_adminCreditsInput );
+				if ( len < 15 ) {
+					g_adminCreditsInput[len] = (char)key;
+					g_adminCreditsInput[len + 1] = '\0';
+				}
+				return;
+			}
+			if ( key == A_ENTER ) {
+				s_adminEditingCredits = qfalse;
+				return;
+			}
+		}
+
+		// Handle typing in Elo input field
+		if ( s_adminEditingElo ) {
+			if ( key == A_BACKSPACE ) {
+				int len = (int)strlen( g_adminEloInput );
+				if ( len > 0 ) g_adminEloInput[len - 1] = '\0';
+				return;
+			}
+			if ( (key >= '0' && key <= '9') || key == '-' ) {
+				int len = (int)strlen( g_adminEloInput );
+				if ( len < 15 ) {
+					g_adminEloInput[len] = (char)key;
+					g_adminEloInput[len + 1] = '\0';
+				}
+				return;
+			}
+			if ( key == A_ENTER ) {
+				s_adminEditingElo = qfalse;
+				return;
+			}
+		}
+
+		// Handle typing in Rank input field
+		if ( s_adminEditingRank ) {
+			if ( key == A_BACKSPACE ) {
+				int len = (int)strlen( g_adminRankInput );
+				if ( len > 0 ) g_adminRankInput[len - 1] = '\0';
+				return;
+			}
+			if ( key >= 32 && key < 127 ) {
+				int len = (int)strlen( g_adminRankInput );
+				if ( len < 30 ) {
+					g_adminRankInput[len] = (char)key;
+					g_adminRankInput[len + 1] = '\0';
+				}
+				return;
+			}
+			if ( key == A_ENTER ) {
+				s_adminEditingRank = qfalse;
+				return;
+			}
+		}
+
+		// Handle typing in Broadcast !cp input field
+		if ( s_adminEditingCp ) {
+			if ( key == A_BACKSPACE ) {
+				int len = (int)strlen( g_adminCpInput );
+				if ( len > 0 ) g_adminCpInput[len - 1] = '\0';
+				return;
+			}
+			if ( key >= 32 && key < 127 ) {
+				int len = (int)strlen( g_adminCpInput );
+				if ( len < 60 ) {
+					g_adminCpInput[len] = (char)key;
+					g_adminCpInput[len + 1] = '\0';
+				}
+				return;
+			}
+			if ( key == A_ENTER ) {
+				s_adminEditingCp = qfalse;
+				return;
+			}
+		}
+
+		if ( key == A_ESCAPE ) {
+			s_adminEditingCredits = qfalse;
+			s_adminEditingElo = qfalse;
+			s_adminEditingRank = qfalse;
+			s_adminEditingCp = qfalse;
+			g_rpgAdmin.active = qfalse;
+			return;
+		}
+	}
+
+	// Quest UI Modal Input Handling
+	if ( g_rpgQuest.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 380.0f;
+			float winH = 304.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 88.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+				g_rpgQuest.active = qfalse;
+				Cvar_Set( "cg_drawQuest", "0" );
+				return;
+			}
+		}
+
+		if ( key == A_ESCAPE ) {
+			g_rpgQuest.active = qfalse;
+			Cvar_Set( "cg_drawQuest", "0" );
+			return;
+		}
+	}
+
+	// Inventory UI Modal Input Handling
+	if ( g_rpgInventory.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 240.0f;
+			float winH = 350.0f;
+			float winX = 640.0f - winW - 14.0f;
+			float winY = 50.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 10.0f && my <= winY + 30.0f ) {
+				g_rpgInventory.active = qfalse;
+				Cvar_Set( "cg_drawInventory", "0" );
+				return;
+			}
+
+			// Check item USE button clicks
+			float startY = winY + 68.0f;
+			int maxVisible = 6;
+			int startIdx = g_rpgInventory.scroll;
+			if ( startIdx < 0 ) startIdx = 0;
+
+			float rowY = startY;
+			for ( int i = startIdx; i < g_rpgInventory.invCount && (i - startIdx) < maxVisible; i++ ) {
+				rpgInvEntry_t *item = &g_rpgInventory.inv[i];
+				if ( mx >= winX + 8.0f && mx <= winX + winW - 8.0f && my >= rowY && my <= rowY + 34.0f ) {
+					// Check USE button
+					float btnUseX = winX + winW - 71.0f;
+					float btnY = rowY + 8.0f;
+					float btnW = 45.0f;
+					float btnH = 18.0f;
+					if ( mx >= btnUseX && mx <= btnUseX + btnW && my >= btnY && my <= btnY + btnH ) {
+						CL_AddReliableCommand( va( "use %s", item->key ), qfalse );
+						return;
+					}
+				}
+				rowY += 36.0f;
+			}
+		}
+
+		if ( key == A_ESCAPE ) {
+			g_rpgInventory.active = qfalse;
+			Cvar_Set( "cg_drawInventory", "0" );
+			return;
+		}
+
+		if ( key == A_MWHEELUP ) {
+			if ( g_rpgInventory.scroll > 0 ) g_rpgInventory.scroll--;
+			return;
+		} else if ( key == A_MWHEELDOWN ) {
+			int maxScroll = g_rpgInventory.invCount - 6;
+			if ( maxScroll < 0 ) maxScroll = 0;
+			if ( g_rpgInventory.scroll < maxScroll ) g_rpgInventory.scroll++;
+			return;
+		}
+	}
+
+	// Stats UI Modal Input Handling
+	if ( g_rpgStats.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 290.0f;
+			float winH = 400.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 40.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			// Check close button click [ESC]
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 6.0f && my <= winY + 26.0f ) {
+				g_rpgStats.active = qfalse;
+				Cvar_Set( "cg_drawStats", "0" );
+				return;
+			}
+		}
+		if ( key == A_ESCAPE ) {
+			g_rpgStats.active = qfalse;
+			Cvar_Set( "cg_drawStats", "0" );
+			return;
+		}
+	}
+
+	// Achievements UI Modal Input Handling
+	if ( g_rpgAch.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 270.0f;
+			float winH = 360.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 60.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 6.0f && my <= winY + 26.0f ) {
+				g_rpgAch.active = qfalse;
+				Cvar_Set( "cg_drawAch", "0" );
+				return;
+			}
+		}
+		if ( key == A_ESCAPE ) {
+			g_rpgAch.active = qfalse;
+			Cvar_Set( "cg_drawAch", "0" );
+			return;
+		}
+	}
+
+	// Bounties UI Modal Input Handling
+	if ( g_rpgBounty.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 300.0f;
+			float winH = 400.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 40.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 10.0f && my <= winY + 32.0f ) {
+				g_rpgBounty.active = qfalse;
+				Cvar_Set( "cg_drawBounty", "0" );
+				return;
+			}
+		}
+		if ( key == A_ESCAPE ) {
+			g_rpgBounty.active = qfalse;
+			Cvar_Set( "cg_drawBounty", "0" );
+			return;
+		}
+	}
+
+	// Top Leaderboard (Credits / Potato) UI Modal Input Handling
+	if ( (g_rpgTopCredits.active || g_rpgTopPotato.active || (cg_drawLeaderboard && cg_drawLeaderboard->integer)) && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_MOUSE1 ) {
+			float winW = 290.0f;
+			float winH = 400.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 40.0f;
+			float mx = (float)g_rpgMouseX;
+			float my = (float)g_rpgMouseY;
+
+			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 10.0f && my <= winY + 32.0f ) {
+				g_rpgTopCredits.active = qfalse;
+				g_rpgTopPotato.active = qfalse;
+				Cvar_Set( "cg_drawTopCredits", "0" );
+				Cvar_Set( "cg_drawTopPotato", "0" );
+				Cvar_Set( "cg_drawLeaderboard", "0" );
+				return;
+			}
+		}
+		if ( key == A_ESCAPE ) {
+			g_rpgTopCredits.active = qfalse;
+			g_rpgTopPotato.active = qfalse;
+			Cvar_Set( "cg_drawTopCredits", "0" );
+			Cvar_Set( "cg_drawTopPotato", "0" );
+			Cvar_Set( "cg_drawLeaderboard", "0" );
 			return;
 		}
 	}
@@ -1438,9 +2392,14 @@ void CL_KeyDownEvent( int key, unsigned time )
 				g_rpgShop.active = qfalse;
 				return;
 			}
-			if ( cg_drawQuestInv && cg_drawQuestInv->integer ) {
-				Cvar_Set( "cg_drawQuestInv", "0" );
-				g_rpgQuestInv.active = qfalse;
+			if ( cg_drawQuest && cg_drawQuest->integer ) {
+				Cvar_Set( "cg_drawQuest", "0" );
+				g_rpgQuest.active = qfalse;
+				return;
+			}
+			if ( cg_drawInventory && cg_drawInventory->integer ) {
+				Cvar_Set( "cg_drawInventory", "0" );
+				g_rpgInventory.active = qfalse;
 				return;
 			}
 			if ( cg_drawAch && cg_drawAch->integer ) {
@@ -1463,6 +2422,18 @@ void CL_KeyDownEvent( int key, unsigned time )
 				g_rpgAdv.active = qfalse;
 				return;
 			}
+			if ( g_rpgMenu.active ) {
+				g_rpgMenu.active = qfalse;
+				return;
+			}
+			if ( g_rpgPartyStudio.active ) {
+				g_rpgPartyStudio.active = qfalse;
+				return;
+			}
+			if ( g_rpgAdmin.active ) {
+				g_rpgAdmin.active = qfalse;
+				return;
+			}
 
 
 			if ( cls.state == CA_ACTIVE && !clc.demoplaying )
@@ -1478,9 +2449,6 @@ void CL_KeyDownEvent( int key, unsigned time )
 		UIVM_KeyEvent( key, qtrue );
 		return;
 	}
-
-	// send the bound action
-	CL_ParseBinding( key, qtrue, time );
 
 	// distribute the key down event to the appropriate handler
 	// console
@@ -1502,6 +2470,9 @@ void CL_KeyDownEvent( int key, unsigned time )
 	// console
 	else if ( cls.state == CA_DISCONNECTED )
 		Console_Key( key );
+	else
+		// send the bound action ONLY when not in console/chat/ui!
+		CL_ParseBinding( key, qtrue, time );
 }
 
 /*

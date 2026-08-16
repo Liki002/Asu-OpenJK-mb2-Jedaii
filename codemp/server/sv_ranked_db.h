@@ -59,17 +59,21 @@ typedef struct {
   int activeXpBoost;    // +50% XP this round
   int activeCrBoost;    // +50% credits this round
   int activeLuckyCharm; // +10% roll luck this round
-  int activeEloBoost;   // +15% FR gain for next duel win
+  int activeEloBoost;   // +15% Elo gain for next duel win
 
   // Adventure system (per-player)
   int adventureNodeIdx;     // -1 = not on an adventure, else index into sv_rankedAdventureNodes[]
   int adventureCooldownEnd; // svs.time when player can start another adventure
 
   int pendingPartyLeader; // Client ID of party leader who invited this player (-1 if none)
+  int pendingPartyJoinRequester; // Client ID who requested to join this leader's party (-1 if none)
 
   int tempElo;                    // In-memory session ELO (starts at 1000 for guests, synced on login for registered)
   char username[MAX_AUTH_STRING]; // Used for saving back to DB
   char displayName[MAX_AUTH_STRING]; // Un-truncated display name from auth/client
+  qboolean rankedEnabled;         // qtrue = ranked matches enabled, qfalse = casual/unranked
+  char lastDuelOpponent[MAX_AUTH_STRING]; // Anti-farm: track last opponent username
+  int consecutiveSameOpponentCount;       // Anti-farm: consecutive matches vs same opponent
 } rankedMatchState_t;
 
 // Externally accessible match state array (parallel to svs.clients)
@@ -115,6 +119,7 @@ void SV_Ranked_Logout(client_t *cl);
 
 // Economy and Progression Additions
 void UpdateAccountCredits(const char *username, int credDelta);
+const char *SV_Ranked_GetItemDisplayName(const char *key);
 int SV_Ranked_CalculateLevel(int xp);
 const char* SV_Ranked_GetTitle(int fr, struct cJSON *acc = 0);
 

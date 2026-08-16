@@ -3,3 +3,6 @@ build-server/
 build-wacky/
 CMakeCache.txt
 CMakeFiles/
+scratch/
+.git/
+pk3_ranked_rpg/

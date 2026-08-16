@@ -705,10 +705,13 @@ void SV_Ranked_Cmd_AdminFreeze(client_t *cl, const char *target) {
 
   sv_rankedPlayers[targetClient].isFrozen = qtrue;
   VectorCopy(ps->origin, sv_rankedPlayers[targetClient].frozenOrigin);
-  if (ps->pm_type == PM_FREEZE) {
-    ps->pm_type = PM_NORMAL;
-  }
+  ps->pm_type = PM_NORMAL;
   VectorClear(ps->velocity);
+  ps->weaponTime = 1000;
+  ps->saberMove = 0;
+  ps->forceHandExtend = HANDEXTEND_NONE;
+  ps->fd.forcePower = 0;
+  ps->saberHolstered = 2;
 
   SV_SendServerCommand(NULL, va("chat \"^5Force Freeze! ^1%s^7 has been frozen in time by High Admin ^1%s^7!\"", targetCl->name, cl->name));
   SV_Ranked_Log("ADMIN: High Admin %s froze %s", cl->name, targetCl->name);
@@ -741,6 +744,8 @@ void SV_Ranked_Cmd_AdminUnfreeze(client_t *cl, const char *target) {
     if (ps->pm_type == PM_FREEZE) {
       ps->pm_type = PM_NORMAL;
     }
+    ps->weaponTime = 0;
+    ps->saberHolstered = 0;
   }
 
   SV_SendServerCommand(NULL, va("chat \"^2Force Release! ^1%s^7 was unfrozen by High Admin ^1%s^7.\"", targetCl->name, cl->name));
@@ -1049,7 +1054,7 @@ static void SV_Ranked_Cmd_Wanted(client_t *cl) {
 }
 
 // Parse `!inventory` — show owned items from JSON account
-static void SV_Ranked_Cmd_Inventory(client_t *cl) {
+void SV_Ranked_Cmd_Inventory(client_t *cl) {
   int clientNum = cl - svs.clients;
   rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
   if (!r->loggedIn) {
@@ -1072,8 +1077,9 @@ static void SV_Ranked_Cmd_Inventory(client_t *cl) {
       const char *itemName = item->string;
       int qty = item->valueint;
       if (qty > 0) {
-        SV_SendServerCommand(cl, "print \"^7  %s ^5x%d\n\"", itemName, qty);
-        SV_SendServerCommand(cl, va("inv_entry %d \"%s\" \"%s\"", qty, itemName, itemName));
+        const char *dispName = SV_Ranked_GetItemDisplayName(itemName);
+        SV_SendServerCommand(cl, "print \"^7  %s ^5x%d\n\"", dispName, qty);
+        SV_SendServerCommand(cl, "inv_entry %d \"%s\" \"%s\"", qty, itemName, dispName);
         count++;
       }
     }
@@ -1081,8 +1087,6 @@ static void SV_Ranked_Cmd_Inventory(client_t *cl) {
       SV_SendServerCommand(cl, "print \"^7  (empty)\n\"");
     }
   }
-  // Populate quest data as well so the combined tabbed modal has both tabs ready
-  SV_Ranked_ShowQuests(cl);
   SV_SendServerCommand(cl, "inv_open");
 }
 
@@ -1606,6 +1610,32 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_Ranked_ShowStats(cl);
     }
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!ranked")) {
+    int clientNum = cl - svs.clients;
+    sv_rankedPlayers[clientNum].rankedEnabled = qtrue;
+    SV_SendServerCommand(cl, "chat \"^2[RANKED] ^7Ranked mode is now ^2ENABLED^7. Your duels will count towards Elo & stats.\"");
+    SV_SendServerCommand(cl, "ranked_status 1");
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!unranked") || !Q_stricmp(cmdSpace, "!casual")) {
+    int clientNum = cl - svs.clients;
+    sv_rankedPlayers[clientNum].rankedEnabled = qfalse;
+    SV_SendServerCommand(cl, "chat \"^3[RANKED] ^7Ranked mode is now ^1DISABLED (Casual)^7. Your duels will be friendly matches with no Elo changes.\"");
+    SV_SendServerCommand(cl, "ranked_status 0");
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!toggleranked") || !Q_stricmp(cmdSpace, "!tr")) {
+    int clientNum = cl - svs.clients;
+    sv_rankedPlayers[clientNum].rankedEnabled = (qboolean)!sv_rankedPlayers[clientNum].rankedEnabled;
+    if (sv_rankedPlayers[clientNum].rankedEnabled) {
+      SV_SendServerCommand(cl, "chat \"^2[RANKED] ^7Ranked mode is now ^2ENABLED^7.\"");
+      SV_SendServerCommand(cl, "ranked_status 1");
+    } else {
+      SV_SendServerCommand(cl, "chat \"^3[RANKED] ^7Ranked mode is now ^1DISABLED (Casual)^7.\"");
+      SV_SendServerCommand(cl, "ranked_status 0");
+    }
+    return qtrue;
+
   } else if (!Q_stricmp(cmdSpace, "!top") || !Q_stricmp(cmdSpace, "!t") ||
              !Q_stricmp(cmdSpace, "!topelo")) {
     SV_Ranked_ShowTop(cl);
@@ -1697,10 +1727,26 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     }
     return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!giveitem") || !Q_stricmp(cmdSpace, "!givegun") || !Q_stricmp(cmdSpace, "!giveall") || !Q_stricmp(cmdSpace, "!giveguns") ||
-             !Q_stricmp(cmdSpace, "!yeet") || !Q_stricmp(cmdSpace, "!slap") || !Q_stricmp(cmdSpace, "!freeze") || !Q_stricmp(cmdSpace, "!unfreeze") ||
+             !Q_stricmp(cmdSpace, "!yeet") || !Q_stricmp(cmdSpace, "!slap") ||
              !Q_stricmp(cmdSpace, "!giveforce") || !Q_stricmp(cmdSpace, "!grantforce") ||
              !Q_stricmp(cmdSpace, "!godforce") || !Q_stricmp(cmdSpace, "!infforce") || !Q_stricmp(cmdSpace, "!speed")) {
     SV_SendServerCommand(cl, "chat \"^1Command disabled on this server to comply with MovieBattles II ToS.\"");
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!freeze")) {
+    char target[64];
+    if (sscanf(chatText, "%*s %63s", target) == 1) {
+      SV_Ranked_Cmd_AdminFreeze(cl, target);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !freeze <player>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!unfreeze")) {
+    char target[64];
+    if (sscanf(chatText, "%*s %63s", target) == 1) {
+      SV_Ranked_Cmd_AdminUnfreeze(cl, target);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !unfreeze <player>\"");
+    }
     return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!givecredits") || !Q_stricmp(cmdSpace, "!gc")) {
     SV_Ranked_Cmd_GiveCredits(cl, chatText);
@@ -1808,20 +1854,27 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
   } else if (!Q_stricmp(cmdSpace, "!adventure") || !Q_stricmp(cmdSpace, "!adv")) {
     SV_Ranked_Adventure_Start(cl);
     return qtrue;
-  } else if (!Q_stricmp(cmdSpace, "duel_bp") || !Q_stricmp(cmdSpace, "my_bp")) {
-    int bpVal = atoi(Cmd_Argv(1));
-    if (bpVal >= 0) {
-      sv_rankedPlayers[cl - svs.clients].lastBP = bpVal;
+  } else if (!Q_stricmp(cmdSpace, "!choose") || !Q_stricmp(cmdSpace, "!c")) {
+    const char *arg = strchr(chatText, ' ');
+    if (arg && *(arg + 1) != '\0') {
+      extern void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex);
+      SV_Ranked_Adventure_Choose(cl, atoi(arg + 1));
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !choose <choice_number>\"");
     }
     return qtrue;
-
-  } else if (!Q_stricmp(cmdSpace, "!emojis") || !Q_stricmp(cmdSpace, "!emoji")) {
-    SV_SendServerCommand(cl, "print \"\n^5====== CHAT EMOJIS ======\n\"");
-    SV_SendServerCommand(cl, "print \"^3:fire: \x80         :potato: \x81        :swords:/\x82        :crown: \x83\n\"");
-    SV_SendServerCommand(cl, "print \"^3:trophy: \x84       :skull: \x85         :100: \x86           :heart: \x87\n\"");
-    SV_SendServerCommand(cl, "print \"^3:star: \x88         :zap: \x89          :flex: \x8a          :gg: \x8b\n\"");
-    SV_SendServerCommand(cl, "print \"^3:thumbsup: \x8c     :target: \x8d        :rocket: \x8e        :poop: \x8f\n\"");
-    SV_SendServerCommand(cl, "print \"^5========================\n\n\"");
+  } else if (!Q_stricmp(cmdSpace, "duel_bp") || !Q_stricmp(cmdSpace, "my_bp")) {
+    int val1 = atoi(Cmd_Argv(1));
+    if (Cmd_Argc() >= 3) {
+      int val2 = atoi(Cmd_Argv(2));
+      if (val1 >= 0 && val1 < sv_maxclients->integer && val2 >= 0) {
+        sv_rankedPlayers[val1].lastBP = val2;
+      }
+    } else {
+      if (val1 >= 0) {
+        sv_rankedPlayers[cl - svs.clients].lastBP = val1;
+      }
+    }
     return qtrue;
 
   } else if (!Q_stricmp(cmdSpace, "!createparty") || !Q_stricmp(cmdSpace, "!party") || !Q_stricmp(cmdSpace, "!cp")) {
@@ -1910,8 +1963,107 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     }
     return qtrue;
 
+  } else if (!Q_stricmp(cmdSpace, "duel_bp") || !Q_stricmp(cmdSpace, "my_bp")) {
+    int val1 = atoi(Cmd_Argv(1));
+    int cNum = (int)(cl - svs.clients);
+    if (Cmd_Argc() >= 3) {
+      int val2 = atoi(Cmd_Argv(2));
+      if (val1 >= 0 && val1 < sv_maxclients->integer && val2 >= 0) {
+        sv_rankedPlayers[val1].lastBP = val2;
+        Com_Printf("[RANKED] Client %d (%s) reported live combat BP: %d\n", val1, svs.clients[val1].name, val2);
+      }
+    } else {
+      if (val1 >= 0) {
+        sv_rankedPlayers[cNum].lastBP = val1;
+        Com_Printf("[RANKED] Client %d (%s) reported live combat BP: %d\n", cNum, cl->name, val1);
+      }
+    }
+    return qtrue;
 
-  } else if (!Q_stricmp(cmdSpace, "!inviteparty") || !Q_stricmp(cmdSpace, "!partyinvite") || !Q_stricmp(cmdSpace, "!pi")) {
+  } else if (!Q_stricmp(cmdSpace, "!createparty") || !Q_stricmp(cmdSpace, "!party") || !Q_stricmp(cmdSpace, "!cp")) {
+    int clientNum = cl - svs.clients;
+    char teamName[64] = "Party";
+    char colorOrIdsBuf[128] = "";
+
+    int numParsed = sscanf(chatText, "%*s %63s %127s", teamName, colorOrIdsBuf);
+    if (numParsed >= 1 && teamName[0] != '\0') {
+      const char *colorNames[8] = { "blue", "red", "green", "yellow", "purple", "orange", "black", "white" };
+      int selectedColor = 0; // default Blue
+      for (int c = 0; c < 8; c++) {
+        if (!Q_stricmp(colorOrIdsBuf, colorNames[c])) {
+          selectedColor = c;
+          break;
+        }
+      }
+
+      rankedParty_t *p = &sv_rankedParties[clientNum];
+      p->active = qtrue;
+      Q_strncpyz(p->teamName, teamName, sizeof(p->teamName));
+      p->teamColorIdx = selectedColor;
+      p->score = 0;
+      p->memberCount = 1;
+      p->clientNums[0] = clientNum;
+
+      SV_Ranked_UpdateParty(clientNum);
+      SV_SendServerCommand(cl, va("chat \"^2Party '^5%s^2' created with shield color ^5%s^2!\"", p->teamName, colorNames[selectedColor]));
+      SV_SendServerCommand(NULL, va("chat \"^3[NEW TEAM] ^5%s ^7formed party '^3%s^7'!\"", cl->name, p->teamName));
+    } else {
+      SV_SendServerCommand(cl, "chat \"^3Usage: ^5!createparty <TeamName> [Color]\"");
+      SV_SendServerCommand(cl, "chat \"^7Colors: ^5blue, red, green, yellow, purple, orange, black, white\"");
+    }
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!disbandparty") || !Q_stricmp(cmdSpace, "!dp")) {
+    int clientNum = cl - svs.clients;
+    rankedParty_t *p = &sv_rankedParties[clientNum];
+    if (!p->active) {
+      SV_SendServerCommand(cl, "chat \"^1You are not the leader of an active party!\"");
+      return qtrue;
+    }
+
+    p->active = qfalse;
+    SV_Ranked_UpdateParty(clientNum);
+    p->memberCount = 0;
+    SV_SendServerCommand(NULL, va("chat \"^1[PARTY] ^5%s ^7has disbanded party '^3%s^7'!\"", cl->name, p->teamName));
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!leaveparty") || !Q_stricmp(cmdSpace, "!lp")) {
+    int clientNum = cl - svs.clients;
+    qboolean left = qfalse;
+
+    for (int i = 0; i < sv_maxclients->integer; i++) {
+      rankedParty_t *p = &sv_rankedParties[i];
+      if (p->active) {
+        for (int j = 0; j < p->memberCount; j++) {
+          if (p->clientNums[j] == clientNum) {
+            if (i == clientNum) {
+              p->active = qfalse;
+              SV_Ranked_UpdateParty(i);
+              p->memberCount = 0;
+              SV_SendServerCommand(NULL, va("chat \"^1[PARTY] ^5%s ^7disbanded party '^3%s^7'!\"", cl->name, p->teamName));
+            } else {
+              for (int k = j; k < p->memberCount - 1; k++) {
+                p->clientNums[k] = p->clientNums[k + 1];
+              }
+              p->memberCount--;
+              SV_SendServerCommand(cl, "party_clear");
+              SV_Ranked_UpdateParty(i);
+              SV_SendServerCommand(svs.clients + i, va("chat \"^1[PARTY] ^5%s ^7has left your party.\"", cl->name));
+              SV_SendServerCommand(cl, va("chat \"^2You left party '^5%s^2'.\"", p->teamName));
+            }
+            left = qtrue;
+            break;
+          }
+        }
+        if (left) break;
+      }
+    }
+    if (!left) {
+      SV_SendServerCommand(cl, "chat \"^1You are not currently in a party!\"");
+    }
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!inviteparty") || !Q_stricmp(cmdSpace, "!ip")) {
     int clientNum = cl - svs.clients;
     rankedParty_t *p = &sv_rankedParties[clientNum];
     if (!p->active) {
@@ -1926,6 +2078,7 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     int targetId = -1;
     if (sscanf(chatText, "%*s %d", &targetId) == 1 && targetId >= 0 && targetId < sv_maxclients->integer && svs.clients[targetId].state >= CS_ACTIVE) {
       sv_rankedPlayers[targetId].pendingPartyLeader = clientNum;
+      SV_SendServerCommand(svs.clients + targetId, va("party_invite_req %d \"%s\" \"%s\"", clientNum, cl->name, p->teamName));
       SV_SendServerCommand(svs.clients + targetId, va("chat \"^3[PARTY INVITE] ^5%s ^7invited you to join team '^3%s^7'!\n^7Type ^2!acceptparty^7 or ^2!ap^7 to join!\"", cl->name, p->teamName));
       SV_SendServerCommand(cl, va("chat \"^2Invited ^5%s ^2to your party!\"", svs.clients[targetId].name));
     } else {
@@ -1956,6 +2109,88 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       }
     } else {
       SV_SendServerCommand(cl, "chat \"^7You don't have any pending party invites.\"");
+    }
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!parties") || !Q_stricmp(cmdSpace, "!partylist")) {
+    int activeCount = 0;
+    SV_SendServerCommand(cl, "party_list_clear");
+    SV_SendServerCommand(cl, "print \"\n^5--- ^2Active Server Parties ^5---\n\"");
+    for (int i = 0; i < sv_maxclients->integer; i++) {
+      rankedParty_t *p = &sv_rankedParties[i];
+      if (p->active && svs.clients[i].state >= CS_ACTIVE) {
+        const char *colorNames[8] = { "Blue", "Red", "Green", "Yellow", "Purple", "Orange", "Black", "White" };
+        const char *colName = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorNames[p->teamColorIdx] : "Blue";
+        SV_SendServerCommand(cl, va("party_list_item %d \"%s\" %d %d \"%s\"",
+                                    i, p->teamName, p->teamColorIdx, p->memberCount, svs.clients[i].name));
+        SV_SendServerCommand(cl, va("print \"^3Party #%d: ^7'%s^7' | Leader: %s ^7| Members: ^2%d/%d ^7| Color: ^5%s\n\"",
+                                    i, p->teamName, svs.clients[i].name, p->memberCount, MAX_PARTY_MEMBERS, colName));
+        activeCount++;
+      }
+    }
+    if (activeCount == 0) {
+      SV_SendServerCommand(cl, "print \"^7No active parties right now. Type ^3!party ^7to create one!\n\"");
+    }
+    SV_SendServerCommand(cl, "print \"^5---------------------------------\n\n\"");
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!requestparty") || !Q_stricmp(cmdSpace, "!joinparty") || !Q_stricmp(cmdSpace, "!rp")) {
+    const char *arg = strchr(chatText, ' ');
+    if (arg && *(arg + 1) != '\0') {
+      int leaderId = SV_Ranked_FindPlayerByNameOrId(arg + 1);
+      if (leaderId >= 0 && leaderId < sv_maxclients->integer && sv_rankedParties[leaderId].active) {
+        rankedParty_t *p = &sv_rankedParties[leaderId];
+        if (p->memberCount >= MAX_PARTY_MEMBERS) {
+          SV_SendServerCommand(cl, "chat \"^1That party is full!\"");
+          return qtrue;
+        }
+        int clientNum = cl - svs.clients;
+        sv_rankedPlayers[leaderId].pendingPartyJoinRequester = clientNum;
+        // Notify Leader
+        SV_SendServerCommand(svs.clients + leaderId, va("party_join_req %d \"%s\"", clientNum, cl->name));
+        SV_SendServerCommand(svs.clients + leaderId, va("chat \"^3[PARTY] ^7%s has requested to join your party! Type ^2!acceptjoin %d\"", cl->name, clientNum));
+        SV_SendServerCommand(svs.clients + leaderId, va("cp \"^3JOIN REQUEST:\n^7%s wants to join!\"", cl->name));
+        SV_SendServerCommand(cl, va("chat \"^2Requested to join party '^5%s^2' (Leader: %s). Waiting for approval...\"", p->teamName, svs.clients[leaderId].name));
+      } else {
+        SV_SendServerCommand(cl, "chat \"^1Party or leader not found! Type ^3!parties ^1to view active teams.\"");
+      }
+    } else {
+      SV_SendServerCommand(cl, "chat \"^3Usage: ^5!joinparty <LeaderName/ID>\"");
+    }
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!acceptjoin") || !Q_stricmp(cmdSpace, "!aj")) {
+    int clientNum = cl - svs.clients;
+    rankedParty_t *p = &sv_rankedParties[clientNum];
+    if (!p->active) {
+      SV_SendServerCommand(cl, "chat \"^1You are not the leader of an active party!\"");
+      return qtrue;
+    }
+    int targetId = sv_rankedPlayers[clientNum].pendingPartyJoinRequester;
+    const char *arg = strchr(chatText, ' ');
+    if (arg && *(arg + 1) != '\0') {
+      targetId = SV_Ranked_FindPlayerByNameOrId(arg + 1);
+    }
+    if (targetId >= 0 && targetId < sv_maxclients->integer && svs.clients[targetId].state >= CS_ACTIVE) {
+      if (p->memberCount < MAX_PARTY_MEMBERS) {
+        qboolean alreadyIn = qfalse;
+        for (int j = 0; j < p->memberCount; j++) {
+          if (p->clientNums[j] == targetId) { alreadyIn = qtrue; break; }
+        }
+        if (!alreadyIn) {
+          p->clientNums[p->memberCount++] = targetId;
+          sv_rankedPlayers[clientNum].pendingPartyJoinRequester = -1;
+          SV_SendServerCommand(cl, "party_join_req -1 \"\"");
+          SV_Ranked_UpdateParty(clientNum);
+          SV_SendServerCommand(svs.clients + targetId, va("chat \"^2You joined party '^5%s^2'!\"", p->teamName));
+          SV_SendServerCommand(cl, va("chat \"^2Accepted ^5%s ^2into your party!\"", svs.clients[targetId].name));
+          return qtrue;
+        }
+      } else {
+        SV_SendServerCommand(cl, "chat \"^1Party is full!\"");
+      }
+    } else {
+      SV_SendServerCommand(cl, "chat \"^7No pending join requests.\"");
     }
     return qtrue;
 
@@ -2025,12 +2260,12 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     SV_SendServerCommand(cl, "print \"^3!stats [name] / !info   ^7View ranked stats\n\"");
     SV_SendServerCommand(cl, "print \"^3!rank / !r              ^7View your rank title\n\"");
     SV_SendServerCommand(cl, "print \"^3!ranks                 ^7View all rank thresholds\n\"");
-    SV_SendServerCommand(cl, "print \"^3!top / !t               ^7Top 5 by FR\n\"");
+    SV_SendServerCommand(cl, "print \"^3!top / !t               ^7Top 5 by Elo\n\"");
     SV_SendServerCommand(cl, "print \"^3!topcredits / !topcr    ^7Top 5 Wealthiest\n\"");
     SV_SendServerCommand(cl, "print \"^3!toppotato              ^7Top 5 Hot Potato\n\"");
     SV_SendServerCommand(cl, "print \"^3!wanted / !w            ^7Top 5 by duel streak\n\"");
 
-    // -- Quests / Achievements --
+    // -- Quests & Achievements --
     SV_SendServerCommand(cl, "print \"\n^5[Quests & Achievements]\n\"");
     SV_SendServerCommand(cl, "print \"^3!quests                 ^7View daily quests\n\"");
     SV_SendServerCommand(cl, "print \"^5!achievements / !ach    ^7View achievements\n\"");
@@ -2067,7 +2302,7 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "print \"^1!forcepotato            ^7Force-start Hot Potato\n\"");
       SV_SendServerCommand(cl, "print \"^1!stoppotato             ^7Stop Hot Potato\n\"");
       SV_SendServerCommand(cl, "print \"^1!givecredits <name> <n> ^7Grant credits  (alias !gc)\n\"");
-      SV_SendServerCommand(cl, "print \"^1!setelo <name> <n>      ^7Set player FR\n\"");
+      SV_SendServerCommand(cl, "print \"^1!setelo <name> <n>      ^7Set player Elo\n\"");
       SV_SendServerCommand(cl, "print \"^1!setrank <name> <rank>  ^7Set player rank title\n\"");
       SV_SendServerCommand(cl, "print \"^1!bring <name>           ^7Teleport player in front of you (Level 1 Admin)\n\"");
       SV_SendServerCommand(cl, "print \"^1!goto <name>            ^7Teleport to player (Level 1 Admin)\n\"");

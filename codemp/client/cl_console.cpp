@@ -82,7 +82,7 @@ void Con_MessageMode_f (void) {	//yell
 	chat_playerNum = -1;
 	chat_team = qfalse;
 	Field_Clear( &chatField );
-	chatField.widthInChars = 30;
+	chatField.widthInChars = 34;
 
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
 }
@@ -96,7 +96,7 @@ void Con_MessageMode2_f (void) {	//team chat
 	chat_playerNum = -1;
 	chat_team = qtrue;
 	Field_Clear( &chatField );
-	chatField.widthInChars = 25;
+	chatField.widthInChars = 29;
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
 }
 
@@ -115,12 +115,12 @@ void Con_MessageMode3_f (void)
 
 	chat_playerNum = CGVM_CrosshairPlayer();
 	if ( chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS ) {
-		chat_playerNum = -1;
-		return;
+		extern int cl_lastChatPlayerNum;
+		chat_playerNum = cl_lastChatPlayerNum;
 	}
 	chat_team = qfalse;
 	Field_Clear( &chatField );
-	chatField.widthInChars = 30;
+	chatField.widthInChars = 34;
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
 }
 
@@ -144,7 +144,7 @@ void Con_MessageMode4_f (void)
 	}
 	chat_team = qfalse;
 	Field_Clear( &chatField );
-	chatField.widthInChars = 30;
+	chatField.widthInChars = 34;
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
 }
 
@@ -426,6 +426,11 @@ static void Con_Linefeed (qboolean skipnotify)
 		con.text[(con.current%con.totallines)*con.linewidth+i] = (ColorIndex(COLOR_WHITE)<<8) | ' ';
 }
 
+int g_liveCombatBP = 100;
+int g_lastParsedKillerHP = 0;
+int g_lastParsedKillerBP = 0;
+int g_lastParsedVictimBP = 0;
+
 /*
 ================
 CL_ConsolePrint
@@ -453,12 +458,30 @@ void CL_ConsolePrint( const char *txt) {
 		txt += 1;
 	}
 
-	// Auto-extract MBII duel kill Block Points (BP) and send to server
-	if ( txt && strstr( txt, "BP remaining) was" ) != NULL ) {
-		int hp2 = 0, bp2 = 0;
-		const char *match = strstr( txt, "with " );
-		if ( match && sscanf( match, "with %dHP and %dBP remaining", &hp2, &bp2 ) == 2 ) {
-			CL_AddReliableCommand( va( "my_bp %d", bp2 ), qfalse );
+	// Auto-extract MBII duel kill Block Points (BP) from client-side obituary print
+	if ( txt ) {
+		char cleanTxt[1024];
+		Q_strncpyz( cleanTxt, txt, sizeof( cleanTxt ) );
+		Q_CleanStr( cleanTxt );
+
+		const char *withPos = strstr( cleanTxt, "with " );
+		if ( withPos ) {
+			int parsedHP = 0, parsedBP = 0;
+			if ( sscanf( withPos + 5, "%dHP and %dBP", &parsedHP, &parsedBP ) == 2 ) {
+				g_lastParsedKillerHP = parsedHP;
+				g_lastParsedKillerBP = parsedBP;
+				g_liveCombatBP = parsedBP;
+				CL_AddReliableCommand( va( "my_bp %d", parsedBP ), qfalse );
+			} else if ( sscanf( withPos + 5, "%dHP", &parsedHP ) == 1 ) {
+				g_lastParsedKillerHP = parsedHP;
+			}
+		}
+		const char *paren = strchr( cleanTxt, '(' );
+		if ( paren && strstr( cleanTxt, "BP remaining" ) ) {
+			int victimBP = 0;
+			if ( sscanf( paren, "(%dBP", &victimBP ) == 1 ) {
+				g_lastParsedVictimBP = victimBP;
+			}
 		}
 	}
 
@@ -589,7 +612,6 @@ void Con_DrawNotify (void)
 	short	*text;
 	int		i;
 	int		time;
-	int		skip;
 	int		currentColor;
 	const char* chattext;
 
@@ -677,25 +699,64 @@ void Con_DrawNotify (void)
 	// draw the chat line
 	if ( Key_GetCatcher( ) & KEYCATCH_MESSAGE )
 	{
-		if (chat_team)
+		if (chat_playerNum != -1)
 		{
-			chattext = SE_GetString("MP_SVGAME", "SAY_TEAM");
-			SCR_DrawBigString (8, v, chattext, 1.0f, qfalse );
-			skip = strlen(chattext)+1;
+			// Read player name from their configstring
+			// Define CS_PLAYERS fallback if not defined
+#ifndef CS_PLAYERS
+#define CS_PLAYERS (132 + 64) // CS_ICONS + MAX_ICONS from bg_public.h
+#endif
+			const char *info = cl.gameState.stringData + cl.gameState.stringOffsets[ CS_PLAYERS + chat_playerNum ];
+			const char *targetName = Info_ValueForKey( info, "n" );
+			if ( targetName && targetName[0] ) {
+				chattext = va("^3Tell %s: ", targetName);
+			} else {
+				chattext = "^3Tell: ";
+			}
+		}
+		else if (chat_team)
+		{
+			chattext = "^3say_team: ";
 		}
 		else
 		{
-			chattext = SE_GetString("MP_SVGAME", "SAY");
-			SCR_DrawBigString (8, v, chattext, 1.0f, qfalse );
-			skip = strlen(chattext)+1;
+			chattext = "^3say: ";
 		}
 
-		Field_BigDraw( &chatField, skip * BIGCHAR_WIDTH, v,
-			SCREEN_WIDTH - ( skip + 1 ) * BIGCHAR_WIDTH, qtrue, qtrue );
+		cvar_t *cg_chat_pos = Cvar_Get( "cg_chat_pos", "0", CVAR_ARCHIVE );
+		cvar_t *cg_chat_style = Cvar_Get( "cg_chat_style", "0", CVAR_ARCHIVE );
 
-		v += BIGCHAR_HEIGHT;
+		int chatY = SCREEN_HEIGHT - 34;
+		if ( cg_chat_pos && cg_chat_pos->integer == 1 ) {
+			chatY = 28; // Top
+		} else if ( cg_chat_pos && cg_chat_pos->integer == 2 ) {
+			chatY = (v > 0) ? (v + 4) : (SCREEN_HEIGHT - 34); // Classic
+		}
+
+		int promptW = Q_PrintStrlen( chattext ) * (BIGCHAR_WIDTH / 2);
+		int chatFieldX = 14 + promptW;
+		int chatFieldW = SCREEN_WIDTH - chatFieldX - 16;
+
+		// Chat Box Background Styles: 0=Dark Glass, 1=Cyber Cyan, 2=Solid Black, 3=No Background (Transparent)
+		vec4_t chatBg = { 0.02f, 0.04f, 0.08f, 0.88f };
+		qboolean drawBg = qtrue;
+		if ( cg_chat_style && cg_chat_style->integer == 1 ) {
+			// Cyber Cyan style
+			chatBg[0] = 0.02f; chatBg[1] = 0.12f; chatBg[2] = 0.20f; chatBg[3] = 0.92f;
+		} else if ( cg_chat_style && cg_chat_style->integer == 2 ) {
+			// Solid Black style
+			chatBg[0] = 0.00f; chatBg[1] = 0.00f; chatBg[2] = 0.00f; chatBg[3] = 0.98f;
+		} else if ( cg_chat_style && cg_chat_style->integer == 3 ) {
+			// Transparent / No Background style
+			drawBg = qfalse;
+		}
+
+		if ( drawBg ) {
+			SCR_FillRect( 8.0f, (float)(chatY - 3), (float)(SCREEN_WIDTH - 16), (float)(BIGCHAR_HEIGHT + 6), chatBg );
+		}
+		SCR_DrawBigString (14, chatY, chattext, 1.0f, qfalse );
+		Field_BigDraw( &chatField, chatFieldX, chatY, chatFieldW, qtrue, qtrue );
 	}
-
 }
 
 /*

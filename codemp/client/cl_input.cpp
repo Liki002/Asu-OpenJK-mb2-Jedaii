@@ -944,7 +944,7 @@ void CL_MouseEvent( int dx, int dy, int time ) {
 		g_clAutoMapInput.yaw = 0.0f;
 		g_clAutoMapInput.pitch = 0.0f;
 	}
-	else if ( g_rpgAdv.active ) {
+	else if ( g_rpgAdv.active || g_rpgShop.active || g_rpgInventory.active || g_rpgSettings.active ) {
 		// RPG Modal active: freeze camera view movement, track cursor position only
 		return;
 	} else if ( Key_GetCatcher( ) & KEYCATCH_UI ) {
@@ -1162,6 +1162,11 @@ void CL_MouseMove( usercmd_t *cmd ) {
 			mx *= cl_sensitivity->value;
 			my *= cl_sensitivity->value;
 		}
+	}
+
+	// Disable camera viewangle movement when interactive RPG modal UIs are active
+	if ( g_rpgShop.active || g_rpgInventory.active || g_rpgAdv.active || g_rpgSettings.active || g_rpgMenu.active || g_rpgPartyStudio.active || g_rpgAdmin.active || g_rpgQuest.active || g_rpgAch.active || g_rpgTopCredits.active || g_rpgTopPotato.active ) {
+		return;
 	}
 
 	// ingame FOV

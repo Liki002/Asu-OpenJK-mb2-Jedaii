@@ -602,11 +602,20 @@ extern cvar_t *cg_drawLeaderboard;
 extern cvar_t *cg_drawStats;
 extern cvar_t *cg_drawBounty;
 extern cvar_t *cg_drawShop;
-extern cvar_t *cg_drawQuestInv;
+extern cvar_t *cg_drawQuest;
+extern cvar_t *cg_drawInventory;
 extern cvar_t *cg_drawAch;
 extern cvar_t *cg_drawTopCredits;
 extern cvar_t *cg_drawTopPotato;
 extern cvar_t *cg_drawAdv;
+extern cvar_t *cg_rpg_style;
+extern cvar_t *cg_rpg_pos;
+extern cvar_t *cg_rpg_x;
+extern cvar_t *cg_rpg_y;
+extern cvar_t *cg_rpg_avatar;
+
+float SCR_GetCharWidthFactor( int ch );
+float SCR_GetStringWidth( const char *str, float charSize );
 
 
 typedef struct {
@@ -643,6 +652,8 @@ typedef struct {
 	char rivalName[64];
 	char topRivalName[64];
 	char favWeapon[64];
+	char loginUser[64];
+	char loginPass[64];
 } rpgPlayerStats_t;
 
 extern rpgPlayerStats_t g_rpgStats;
@@ -666,6 +677,11 @@ typedef struct {
 } rpgToastNotif_t;
 
 extern rpgToastNotif_t g_rpgToast;
+
+extern int g_liveCombatBP;
+extern int g_lastParsedKillerHP;
+extern int g_lastParsedKillerBP;
+extern int g_lastParsedVictimBP;
 
 
 // --- Inspect Duelist Hover Card ---
@@ -722,6 +738,12 @@ typedef struct {
 
 extern rpgShopOverlay_t g_rpgShop;
 
+typedef struct {
+	qboolean active;
+} rpgSettingsOverlay_t;
+
+extern rpgSettingsOverlay_t g_rpgSettings;
+
 #define MAX_PARTY_MEMBERS 6
 typedef struct {
 	char name[64];
@@ -729,6 +751,8 @@ typedef struct {
 	int  level;
 	int  health;
 	int  maxHealth;
+	int  fp;
+	int  maxFP;
 	int  bp;
 	int  maxBP;
 } rpgPartyMember_t;
@@ -742,9 +766,45 @@ typedef struct {
 	rpgPartyMember_t members[MAX_PARTY_MEMBERS];
 } rpgPartyOverlay_t;
 
+typedef struct {
+	int  leaderId;
+	char teamName[64];
+	int  colorIdx;
+	int  memberCount;
+	char leaderName[64];
+} clientPartyItem_t;
+
+extern int g_clientPartyCount;
+extern clientPartyItem_t g_clientPartyList[32];
+extern int g_pendingInviteLeaderId;
+extern char g_pendingInviteLeaderName[64];
+extern char g_pendingInviteTeamName[64];
+
 extern rpgPartyOverlay_t g_rpgParty;
 extern int g_rpgMouseX;
 extern int g_rpgMouseY;
+
+// --- Master RPG Menu Overlay ---
+typedef struct {
+	qboolean active;
+	int      tab; // 0 = Profile, 1 = Settings, 2 = Ranks, 3 = Commands
+} rpgMenuOverlay_t;
+extern rpgMenuOverlay_t g_rpgMenu;
+
+// --- Party Studio Modal Overlay ---
+typedef struct {
+	qboolean active;
+	int      scroll;
+} rpgPartyStudioOverlay_t;
+extern rpgPartyStudioOverlay_t g_rpgPartyStudio;
+
+// --- Admin Control Panel Overlay ---
+typedef struct {
+	qboolean active;
+	int      selectedClient; // -1 or target clientNum
+	int      scroll;
+} rpgAdminOverlay_t;
+extern rpgAdminOverlay_t g_rpgAdmin;
 
 
 
@@ -773,14 +833,20 @@ typedef struct {
 
 typedef struct {
 	qboolean active;
-	int      activeTab; // 0 = Quests, 1 = Inventory
 	int      questCount;
 	rpgQuestEntry_t quests[10];
+} rpgQuestOverlay_t;
+
+extern rpgQuestOverlay_t g_rpgQuest;
+
+typedef struct {
+	qboolean active;
 	int      invCount;
 	rpgInvEntry_t inv[20];
-} rpgQuestInvOverlay_t;
+	int      scroll;
+} rpgInventoryOverlay_t;
 
-extern rpgQuestInvOverlay_t g_rpgQuestInv;
+extern rpgInventoryOverlay_t g_rpgInventory;
 
 // --- Achievements Overlay ---
 typedef struct {
@@ -835,16 +901,20 @@ typedef struct {
 	char     choice1[64];
 	char     choice2[64];
 	char     choice3[64];
+	float    choiceY;
 } rpgAdventureOverlay_t;
 
 extern rpgAdventureOverlay_t g_rpgAdv;
 
 // Overlay Drawing Declarations
 void SCR_DrawShopOverlay( void );
-void SCR_DrawQuestInvOverlay( void );
+void SCR_DrawQuestOverlay( void );
+void SCR_DrawInventoryOverlay( void );
 void SCR_DrawAchievementsOverlay( void );
 void SCR_DrawTopCreditsOverlay( void );
 void SCR_DrawTopPotatoOverlay( void );
-void SCR_DrawAdventureOverlay( void );
 void SCR_DrawHotPotatoOverheadIcon( void );
+
+void CL_ResetRPGOverlays( void );
+void CL_ResetShaderHandles( void );
 

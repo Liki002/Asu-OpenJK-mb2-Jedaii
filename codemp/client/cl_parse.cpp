@@ -818,6 +818,14 @@ void CL_ParseCommandString( msg_t *msg ) {
 				Cvar_Set( "cg_rpg_name", nameBuf );
 			}
 		}
+	} else if ( !Q_strncmp( s, "rpg_creds", 9 ) ) {
+		char uBuf[64] = "";
+		char pBuf[64] = "";
+		int num = sscanf( s, "rpg_creds \"%63[^\"]\" \"%63[^\"]\"", uBuf, pBuf );
+		if ( num >= 2 ) {
+			Q_strncpyz( g_rpgStats.loginUser, uBuf, sizeof( g_rpgStats.loginUser ) );
+			Q_strncpyz( g_rpgStats.loginPass, pBuf, sizeof( g_rpgStats.loginPass ) );
+		}
 	} else if ( !Q_strncmp( s, "top_clear", 9 ) ) {
 		g_topLeaderboardCount = 0;
 	} else if ( !Q_strncmp( s, "top_entry", 9 ) ) {
@@ -849,7 +857,7 @@ void CL_ParseCommandString( msg_t *msg ) {
 		int curStr = 0, highStr = 0, trivia = 0, rivalCnt = 0;
 		int num = sscanf( s, "stats_sync %d %d %d %d %d %d %d %d %d %d %d %d \"%31[^\"]\" \"%63[^\"]\" \"%63[^\"]\"",
 			&xp, &lvl, &creds, &fr, &wins, &losses, &kills, &deaths, &curStr, &highStr, &trivia, &rivalCnt, rankBuf, nameBuf, rivalBuf );
-		if ( num >= 12 ) {
+		if ( num >= 4 ) {
 			g_rpgStats.xp = xp;
 			g_rpgStats.level = lvl;
 			g_rpgStats.credits = creds;
@@ -862,9 +870,19 @@ void CL_ParseCommandString( msg_t *msg ) {
 			g_rpgStats.highStreak = highStr;
 			g_rpgStats.triviaWins = trivia;
 			g_rpgStats.rivalCount = rivalCnt;
-			Q_strncpyz( g_rpgStats.rankTitle, rankBuf, sizeof( g_rpgStats.rankTitle ) );
-			Q_strncpyz( g_rpgStats.displayName, nameBuf, sizeof( g_rpgStats.displayName ) );
-			Q_strncpyz( g_rpgStats.rivalName, rivalBuf, sizeof( g_rpgStats.rivalName ) );
+			if ( rankBuf[0] ) Q_strncpyz( g_rpgStats.rankTitle, rankBuf, sizeof( g_rpgStats.rankTitle ) );
+			if ( nameBuf[0] ) {
+				Q_strncpyz( g_rpgStats.displayName, nameBuf, sizeof( g_rpgStats.displayName ) );
+				Q_strncpyz( g_rpgStats.name, nameBuf, sizeof( g_rpgStats.name ) );
+			}
+			if ( rivalBuf[0] ) Q_strncpyz( g_rpgStats.rivalName, rivalBuf, sizeof( g_rpgStats.rivalName ) );
+
+			// Also update HUD cvars for real-time styles syncing
+			Cvar_Set( "cg_rpg_level", va( "%d", lvl ) );
+			Cvar_Set( "cg_rpg_fr", va( "%d", fr ) );
+			Cvar_Set( "cg_rpg_xp", va( "%d", xp ) );
+			if ( rankBuf[0] ) Cvar_Set( "cg_rpg_rank", rankBuf );
+			if ( nameBuf[0] ) Cvar_Set( "cg_rpg_name", nameBuf );
 		}
 	} else if ( !Q_strncmp( s, "stats_open", 10 ) ) {
 		Cvar_Set( "cg_drawStats", "1" );
@@ -883,19 +901,33 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgToast.bp           = bp;
 		g_rpgToast.startTimeMs  = cls.realtime;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
+
+		extern int SCR_GetClientNumByName( const char *name );
+		CL_AddReliableCommand( va( "my_bp %d", bp ), qfalse );
+		int oppId = SCR_GetClientNumByName( oppBuf );
+		if ( oppId >= 0 ) {
+			CL_AddReliableCommand( va( "duel_bp %d 0", oppId ), qfalse );
+		}
 	} else if ( !Q_strncmp( s, "toast_lose", 10 ) ) {
-		int eloDelta = 0, cr = 0, xp = 0;
+		int eloDelta = 0, cr = 0, xp = 0, hp = 0, bp = 0;
 		char oppBuf[64] = "";
-		sscanf( s, "toast_lose %d %d %d \"%63[^\"]\"", &eloDelta, &cr, &xp, oppBuf );
+		sscanf( s, "toast_lose %d %d %d \"%63[^\"]\" %d %d", &eloDelta, &cr, &xp, oppBuf, &hp, &bp );
 		g_rpgToast.active       = qtrue;
 		g_rpgToast.isWin        = qfalse;
 		g_rpgToast.eloDelta     = eloDelta;
 		g_rpgToast.credits      = cr;
 		g_rpgToast.xp           = xp;
-		g_rpgToast.health       = 0;
-		g_rpgToast.bp           = 0;
+		g_rpgToast.health       = hp;
+		g_rpgToast.bp           = bp;
 		g_rpgToast.startTimeMs  = cls.realtime;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
+
+		extern int SCR_GetClientNumByName( const char *name );
+		CL_AddReliableCommand( "my_bp 0", qfalse );
+		int oppId = SCR_GetClientNumByName( oppBuf );
+		if ( oppId >= 0 ) {
+			CL_AddReliableCommand( va( "duel_bp %d %d", oppId, bp ), qfalse );
+		}
 	}
  else if ( !Q_strncmp( s, "inspect_data", 12 ) ) {
 		int tNum = 0, lvl = 1, fr = 1000;
@@ -963,10 +995,25 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgShop.scroll = 0;
 		g_rpgShop.active = qtrue;
 		Cvar_Set( "cg_drawShop", "1" );
-	} else if ( !Q_strncmp( s, "stats_data", 10 ) ) {
+	} else if ( !Q_strncmp( s, "ranked_status", 13 ) ) {
+		int st = 1;
+		sscanf( s, "ranked_status %d", &st );
+		extern int g_clientRankedEnabled;
+		g_clientRankedEnabled = st;
+	} else if ( !Q_strncmp( s, "party_join_req", 14 ) ) {
+		int rid = -1;
+		char rName[64] = "";
+		if ( sscanf( s, "party_join_req %d \"%63[^\"]\"", &rid, rName ) >= 1 ) {
+			extern int g_pendingJoinReqId;
+			extern char g_pendingJoinReqName[64];
+			g_pendingJoinReqId = rid;
+			Q_strncpyz( g_pendingJoinReqName, rName, sizeof( g_pendingJoinReqName ) );
+		}
+	} else if ( !Q_strncmp( s, "stats_sync", 10 ) || !Q_strncmp( s, "stats_data", 10 ) ) {
+		qboolean isExplicitOpen = (qboolean)(!Q_strncmp( s, "stats_data", 10 ));
 		char nameBuf[64] = "", titleBuf[64] = "", favBuf[64] = "", rivalBuf[64] = "";
 		int lvl = 1, xp = 0, elo = 1000, cr = 0, w = 0, l = 0, k = 0, d = 0, streak = 0, tw = 0, rc = 0;
-		int num = sscanf( s, "stats_data \"%63[^\"]\" %d %d \"%63[^\"]\" %d %d %d %d %d %d %d \"%63[^\"]\" %d \"%63[^\"]\" %d",
+		int num = sscanf( s + 10, " \"%63[^\"]\" %d %d \"%63[^\"]\" %d %d %d %d %d %d %d \"%63[^\"]\" %d \"%63[^\"]\" %d",
 			nameBuf, &lvl, &xp, titleBuf, &elo, &cr, &w, &l, &k, &d, &streak, favBuf, &tw, rivalBuf, &rc );
 		if ( num >= 11 ) {
 			Q_strncpyz( g_rpgStats.name, nameBuf, sizeof( g_rpgStats.name ) );
@@ -984,8 +1031,10 @@ void CL_ParseCommandString( msg_t *msg ) {
 			g_rpgStats.triviaWins = tw;
 			Q_strncpyz( g_rpgStats.topRivalName, rivalBuf[0] ? rivalBuf : "None", sizeof( g_rpgStats.topRivalName ) );
 			g_rpgStats.topRivalCount = rc;
-			g_rpgStats.active = qtrue;
-			Cvar_Set( "cg_drawStats", "1" );
+			if ( isExplicitOpen ) {
+				g_rpgStats.active = qtrue;
+				Cvar_Set( "cg_drawStats", "1" );
+			}
 		}
 	} else if ( !Q_strncmp( s, "adv_node", 8 ) ) {
 		char titleBuf[64] = "", descBuf[1024] = "", c1[256] = "", c2[256] = "", c3[256] = "";
@@ -1019,31 +1068,63 @@ void CL_ParseCommandString( msg_t *msg ) {
 			g_rpgParty.memberCount = cnt;
 
 			int argIdx = 5;
-			for ( int i = 0; i < cnt && argIdx + 6 < argc; i++ ) {
+			for ( int i = 0; i < cnt && argIdx + 8 <= argc; i++ ) {
 				rpgPartyMember_t *m = &g_rpgParty.members[i];
 				m->clientNum = atoi( Cmd_Argv( argIdx++ ) );
 				Q_strncpyz( m->name, Cmd_Argv( argIdx++ ), sizeof( m->name ) );
 				m->level = atoi( Cmd_Argv( argIdx++ ) );
 				m->health = atoi( Cmd_Argv( argIdx++ ) );
 				m->maxHealth = atoi( Cmd_Argv( argIdx++ ) );
+				m->fp = atoi( Cmd_Argv( argIdx++ ) );
+				m->maxFP = atoi( Cmd_Argv( argIdx++ ) );
 				m->bp = atoi( Cmd_Argv( argIdx++ ) );
 				m->maxBP = atoi( Cmd_Argv( argIdx++ ) );
 				if ( m->maxHealth <= 0 ) m->maxHealth = 100;
+				if ( m->maxFP <= 0 ) m->maxFP = 100;
 				if ( m->maxBP <= 0 ) m->maxBP = 100;
 			}
 			g_rpgParty.active = qtrue;
 		}
 
-
+	} else if ( !Q_strncmp( s, "party_list_clear", 16 ) ) {
+		extern int g_clientPartyCount;
+		g_clientPartyCount = 0;
+	} else if ( !Q_strncmp( s, "party_list_item", 15 ) ) {
+		extern int g_clientPartyCount;
+		extern clientPartyItem_t g_clientPartyList[32];
+		if ( g_clientPartyCount < 32 ) {
+			clientPartyItem_t *pItem = &g_clientPartyList[g_clientPartyCount];
+			int lId = 0, col = 0, mCnt = 1;
+			char tName[64] = "", lName[64] = "";
+			if ( sscanf( s, "party_list_item %d \"%63[^\"]\" %d %d \"%63[^\"]\"", &lId, tName, &col, &mCnt, lName ) >= 5 ) {
+				pItem->leaderId = lId;
+				Q_strncpyz( pItem->teamName, tName, sizeof( pItem->teamName ) );
+				pItem->colorIdx = col;
+				pItem->memberCount = mCnt;
+				Q_strncpyz( pItem->leaderName, lName, sizeof( pItem->leaderName ) );
+				g_clientPartyCount++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "party_invite_req", 16 ) ) {
+		extern int g_pendingInviteLeaderId;
+		extern char g_pendingInviteLeaderName[64];
+		extern char g_pendingInviteTeamName[64];
+		int lId = -1;
+		char lName[64] = "", tName[64] = "";
+		if ( sscanf( s, "party_invite_req %d \"%63[^\"]\" \"%63[^\"]\"", &lId, lName, tName ) >= 3 ) {
+			g_pendingInviteLeaderId = lId;
+			Q_strncpyz( g_pendingInviteLeaderName, lName, sizeof( g_pendingInviteLeaderName ) );
+			Q_strncpyz( g_pendingInviteTeamName, tName, sizeof( g_pendingInviteTeamName ) );
+		}
 	} else if ( !Q_strncmp( s, "shop_close", 10 ) ) {
 
 		g_rpgShop.active = qfalse;
 		Cvar_Set( "cg_drawShop", "0" );
 	} else if ( !Q_strncmp( s, "quest_clear", 11 ) ) {
-		g_rpgQuestInv.questCount = 0;
+		g_rpgQuest.questCount = 0;
 	} else if ( !Q_strncmp( s, "quest_entry", 11 ) ) {
-		if ( g_rpgQuestInv.questCount < 10 ) {
-			rpgQuestEntry_t *q = &g_rpgQuestInv.quests[g_rpgQuestInv.questCount];
+		if ( g_rpgQuest.questCount < 10 ) {
+			rpgQuestEntry_t *q = &g_rpgQuest.quests[g_rpgQuest.questCount];
 			int qid = 0, pr = 0, gl = 1, rCr = 0, rFr = 0, isDone = 0;
 			char modeBuf[16] = "", descBuf[80] = "";
 			int num = sscanf( s, "quest_entry %d %d %d %d %d %d \"%15[^\"]\" \"%79[^\"]\"", &qid, &pr, &gl, &rCr, &rFr, &isDone, modeBuf, descBuf );
@@ -1051,21 +1132,21 @@ void CL_ParseCommandString( msg_t *msg ) {
 				q->id = qid; q->prog = pr; q->goal = gl; q->rewardCr = rCr; q->rewardFr = rFr; q->done = (isDone != 0) ? qtrue : qfalse;
 				Q_strncpyz( q->mode, modeBuf, sizeof( q->mode ) );
 				Q_strncpyz( q->desc, descBuf, sizeof( q->desc ) );
-				g_rpgQuestInv.questCount++;
+				g_rpgQuest.questCount++;
 			}
 		}
 	} else if ( !Q_strncmp( s, "quest_open", 10 ) ) {
-		g_rpgQuestInv.activeTab = 0; // Daily Quests tab
-		g_rpgQuestInv.active = qtrue;
-		Cvar_Set( "cg_drawQuestInv", "1" );
+		g_rpgQuest.active = qtrue;
+		Cvar_Set( "cg_drawQuest", "1" );
 	} else if ( !Q_strncmp( s, "quest_close", 11 ) ) {
-		g_rpgQuestInv.active = qfalse;
-		Cvar_Set( "cg_drawQuestInv", "0" );
+		g_rpgQuest.active = qfalse;
+		Cvar_Set( "cg_drawQuest", "0" );
 	} else if ( !Q_strncmp( s, "inv_clear", 9 ) ) {
-		g_rpgQuestInv.invCount = 0;
+		g_rpgInventory.invCount = 0;
+		g_rpgInventory.scroll = 0;
 	} else if ( !Q_strncmp( s, "inv_entry", 9 ) ) {
-		if ( g_rpgQuestInv.invCount < 20 ) {
-			rpgInvEntry_t *item = &g_rpgQuestInv.inv[g_rpgQuestInv.invCount];
+		if ( g_rpgInventory.invCount < 20 ) {
+			rpgInvEntry_t *item = &g_rpgInventory.inv[g_rpgInventory.invCount];
 			int q = 0;
 			char keyBuf[32] = "", dispBuf[64] = "";
 			int num = sscanf( s, "inv_entry %d \"%31[^\"]\" \"%63[^\"]\"", &q, keyBuf, dispBuf );
@@ -1073,16 +1154,15 @@ void CL_ParseCommandString( msg_t *msg ) {
 				item->qty = q;
 				Q_strncpyz( item->key, keyBuf, sizeof( item->key ) );
 				Q_strncpyz( item->display, dispBuf, sizeof( item->display ) );
-				g_rpgQuestInv.invCount++;
+				g_rpgInventory.invCount++;
 			}
 		}
 	} else if ( !Q_strncmp( s, "inv_open", 8 ) ) {
-		g_rpgQuestInv.activeTab = 1; // Inventory tab
-		g_rpgQuestInv.active = qtrue;
-		Cvar_Set( "cg_drawQuestInv", "1" );
+		g_rpgInventory.active = qtrue;
+		Cvar_Set( "cg_drawInventory", "1" );
 	} else if ( !Q_strncmp( s, "inv_close", 9 ) ) {
-		g_rpgQuestInv.active = qfalse;
-		Cvar_Set( "cg_drawQuestInv", "0" );
+		g_rpgInventory.active = qfalse;
+		Cvar_Set( "cg_drawInventory", "0" );
 	} else if ( !Q_strncmp( s, "ach_clear", 9 ) ) {
 		g_rpgAch.count = 0;
 	} else if ( !Q_strncmp( s, "ach_entry", 9 ) ) {

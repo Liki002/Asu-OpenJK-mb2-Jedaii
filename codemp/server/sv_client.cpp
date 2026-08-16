@@ -815,6 +815,8 @@ void SV_ClientEnterWorld(client_t *client, usercmd_t *cmd) {
   GVM_ClientBegin(client - svs.clients);
 
   SV_Ranked_ClientConnect(client);
+  extern void SV_Ranked_SyncClientRPG(client_t *cl);
+  SV_Ranked_SyncClientRPG(client);
 
   SV_BeginAutoRecordDemos();
 }
@@ -1773,23 +1775,61 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
     return;
   }
 
-  // Intercept Ranked Chat Commands & Translate Emojis
+  // Intercept client-direct choice and shop commands (e.g. from mouse clicking HUD overlays)
+  if (!Q_stricmp(Cmd_Argv(0), "choose") || !Q_stricmp(Cmd_Argv(0), "!choose") ||
+      !Q_stricmp(Cmd_Argv(0), "c") || !Q_stricmp(Cmd_Argv(0), "!c")) {
+    extern void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex);
+    SV_Ranked_Adventure_Choose(cl, atoi(Cmd_Argv(1)));
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "buy") || !Q_stricmp(Cmd_Argv(0), "!buy")) {
+    extern void SV_Ranked_ShopBuy(client_t *cl, const char *itemName);
+    SV_Ranked_ShopBuy(cl, Cmd_Argv(1));
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "sell") || !Q_stricmp(Cmd_Argv(0), "!sell")) {
+    extern void SV_Ranked_ShopSell(client_t *cl, const char *itemName);
+    SV_Ranked_ShopSell(cl, Cmd_Argv(1));
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "use") || !Q_stricmp(Cmd_Argv(0), "!use")) {
+    extern void SV_Ranked_ShopUse(client_t *cl, const char *itemName);
+    SV_Ranked_ShopUse(cl, Cmd_Argv(1));
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "my_bp") || !Q_stricmp(Cmd_Argv(0), "duel_bp") || !Q_stricmp(Cmd_Argv(0), "combat_report")) {
+    int cNum = (int)(cl - svs.clients);
+    int reportedBP = atoi(Cmd_Argv(1));
+    int reportedHP = (Cmd_Argc() >= 3) ? atoi(Cmd_Argv(2)) : 0;
+    if (reportedBP > 0) {
+      sv_rankedPlayers[cNum].lastBP = reportedBP;
+    }
+    Com_Printf("[RANKED] Client %d (%s) reported live combat status: %d BP (HP: %d)\n", cNum, cl->name, reportedBP, reportedHP);
+    SV_Ranked_Log("COMBAT_BP_REPORT: Client %d (%s) reported BP:%d HP:%d", cNum, cl->name, reportedBP, reportedHP);
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "victim_bp")) {
+    int vBP = atoi(Cmd_Argv(1));
+    int cNum = (int)(cl - svs.clients);
+    Com_Printf("[RANKED] Client %d (%s) reported victim BP remaining: %d\n", cNum, cl->name, vBP);
+    SV_Ranked_Log("VICTIM_BP_REPORT: Client %d (%s) reported victim BP:%d", cNum, cl->name, vBP);
+    return;
+  }
+
+  // Intercept Ranked Chat Commands (Reconstruct full command string to handle spaces/quotes)
   if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team") || !Q_stricmp(Cmd_Argv(0), "tell")) {
-    const char *chatText = Cmd_Argv(1);
-    if (chatText && (chatText[0] == '!' || chatText[0] == '#')) {
-        if (SV_Ranked_ProcessCommand(cl, chatText)) {
-            return; // Command handled internally
-        }
+    char fullChatText[MAX_STRING_CHARS] = {0};
+    int startArg = (!Q_stricmp(Cmd_Argv(0), "tell")) ? 2 : 1; // "tell <clientNum> <msg>" starts at index 2
+    for ( int i = startArg; i < Cmd_Argc(); i++ ) {
+      Q_strcat( fullChatText, sizeof(fullChatText), Cmd_Argv(i) );
+      if ( i != Cmd_Argc() - 1 ) {
+        Q_strcat( fullChatText, sizeof(fullChatText), " " );
+      }
     }
 
-    // Auto-translate chat emoji shortcodes (:fire:, :swords:, :crown:, :potato:, etc.)
-    const char *rawArgs = Cmd_Args();
-    if (rawArgs && rawArgs[0]) {
-      extern void SV_Ranked_TranslateEmojis(const char *inStr, char *outStr, int outSize);
-      char translated[MAX_STRING_CHARS];
-      SV_Ranked_TranslateEmojis(rawArgs, translated, sizeof(translated));
-      if (strcmp(rawArgs, translated) != 0) {
-        Cmd_TokenizeString(va("%s %s", Cmd_Argv(0), translated));
+    if (fullChatText[0] == '!' || fullChatText[0] == '#') {
+      if (SV_Ranked_ProcessCommand(cl, fullChatText)) {
+        return; // Command handled internally
       }
     }
   }
@@ -1836,11 +1876,9 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
       !Q_stricmpn(cmd, "tell", 4)) {
     sayCmd = qtrue;
 
-    // 256 because we don't need more, the chat can handle 150 max char
-    // and allowing 256 prevent a message to not be sent instead of being
-    // truncated if this is a bit more than 150
+    // 512 to ensure long client chat messages (up to input limit) aren't silently dropped
     if (svs.gvmIsLegacy && sv_legacyFixes->integer &&
-        strlen(Cmd_Args()) > 256) {
+        strlen(Cmd_Args()) > 512) {
       clientOK = qfalse;
     }
   }

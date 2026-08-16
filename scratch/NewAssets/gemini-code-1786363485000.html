@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sci-Fi UI Vector Exporter Studio</title>
+  <style>
+    body {
+      background-color: #08090c;
+      color: #e0e6ed;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 25px;
+      align-items: center;
+      background: #12151d;
+      padding: 15px 25px;
+      border-radius: 8px;
+      border: 1px solid #2a3245;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      flex-wrap: wrap;
+    }
+
+    select, button {
+      padding: 10px 18px;
+      background: #1e2538;
+      color: #ffb400;
+      border: 1px solid #ffb400;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      outline: none;
+    }
+
+    button {
+      background: #ffb400;
+      color: #08090c;
+      transition: all 0.2s ease;
+    }
+
+    button.batch-all-btn {
+      background: #00e676;
+      color: #08090c;
+      border-color: #00e676;
+    }
+
+    button:hover {
+      background: #ffd060;
+      box-shadow: 0 0 10px rgba(255, 180, 0, 0.4);
+    }
+    
+    button.batch-all-btn:hover {
+      background: #66ffa6;
+      box-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
+    }
+
+    #export-wrapper {
+      padding: 20px;
+      background: repeating-conic-gradient(#10141e 0% 25%, #181d2b 0% 50%) 50% / 20px 20px;
+      border: 1px solid #2a3245;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #ui-container {
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .asset-item {
+      display: none;
+    }
+
+    .asset-item.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="controls">
+    <label for="asset-select">Select UI Asset:</label>
+    <select id="asset-select" onchange="switchAsset(this.value)">
+      <optgroup label="Panels & Backgrounds">
+        <option value="ach_bg">ach_bg (Achievements Panel)</option>
+        <option value="adv_bg">adv_bg (Adventure Panel - Wide)</option>
+        <option value="inventory_bg">inventory_bg (Inventory Panel - Compact Sidebar)</option>
+        <option value="leaderboard_bg">leaderboard_bg (Leaderboard Panel - Clean)</option>
+        <option value="quest_bg">quest_bg (Quest List Panel - 3 Quests)</option>
+        <option value="shop_bg">shop_bg (Shop Panel)</option>
+        <option value="top_bg">top_bg (Top 10 Duelist - Vertical)</option>
+        <option value="wanted_bg">wanted_bg (Wanted / Bounty Panel)</option>
+        <option value="stats_card" selected>stats_card (Player Stats Card)</option>
+        <option value="toast_bg">toast_bg (Victory/Defeat Notification Banner)</option>
+        <option value="inspect_bg">inspect_bg (Inspect Player Info Panel)</option>
+      </optgroup>
+      <optgroup label="HUD Config Panel Elements">
+        <option value="hud_settings_bg">hud_settings_bg (HUD Settings Panel Frame)</option>
+        <option value="hud_btn_normal">hud_btn_normal (Button - Normal State)</option>
+        <option value="hud_btn_hover">hud_btn_hover (Button - Hover State)</option>
+        <option value="hud_slider_track">hud_slider_track (Slider Track)</option>
+        <option value="hud_slider_thumb">hud_slider_thumb (Slider Knob)</option>
+      </optgroup>
+      <optgroup label="Profile & XP Panels">
+        <option value="panel_bg">panel_bg (Profile Bar V1)</option>
+        <option value="panel_bg_fill_v1">panel_bg_fill_v1 (XP Fill Bar V1)</option>
+        <option value="panel_bg_v2">panel_bg_v2 (Profile Bar V2 - Heavy Tech)</option>
+        <option value="panel_bg_fill_v2">panel_bg_fill_v2 (XP Fill Bar V2)</option>
+        <option value="panel_bg_v3">panel_bg_v3 (Profile Bar V3 - Minimal Glow)</option>
+        <option value="panel_bg_fill_v3">panel_bg_fill_v3 (XP Fill Bar V3)</option>
+      </optgroup>
+      <optgroup label="Avatars & Frames">
+        <option value="avatar_default">avatar_default (Default Player Avatar)</option>
+        <option value="avatar_frame">avatar_frame (Avatar Border Frame)</option>
+      </optgroup>
+      <optgroup label="Bars & Buttons">
+        <option value="bar_bg">bar_bg (Empty Bar Track)</option>
+        <option value="bar_fill">bar_fill (Filled Bar Indicator)</option>
+        <option value="buy_btn">buy_btn (Buy Action Button)</option>
+        <option value="sell_btn">sell_btn (Sell Action Button)</option>
+        <option value="use_btn">use_btn (Use Action Button)</option>
+      </optgroup>
+      <optgroup label="Custom Mouse Cursor">
+        <option value="rpg_mouse">rpg_mouse (Custom Sci-Fi Mouse Cursor)</option>
+      </optgroup>
+    </select>
+
+    <button onclick="exportCurrentPNG()">Export Selected Asset PNG</button>
+    <button class="batch-all-btn" onclick="exportEverything()">⚡ Batch Export All Assets</button>
+  </div>
+
+  <div class="controls" id="customizer-options" style="display: none; background: #12151d; border: 1px solid #2a3245; border-radius: 8px; padding: 15px 25px; margin-bottom: 25px; max-width: 600px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+    <h3 style="color: #ffb400; margin-bottom: 12px; font-size: 0.95rem; text-transform: uppercase; letter-spacing: 1px; width: 100%;">Customize Live Render Options</h3>
+    
+    <!-- Cursor Customization Options -->
+    <div id="cursor-opts" style="display: none; width: 100%;">
+      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div>
+          <label style="display: block; font-size: 0.75rem; margin-bottom: 6px; color: #8a99ad; font-weight: bold; letter-spacing: 1px;">ACCENT GLOW COLOR</label>
+          <select id="cursor-color" onchange="updateCursorCustomization()" style="padding: 6px 12px; font-size: 0.85rem;">
+            <option value="#00d2ff" selected>Cyan (#00d2ff)</option>
+            <option value="#ff3366">Red (#ff3366)</option>
+            <option value="#39ff14">Green (#39ff14)</option>
+            <option value="#ffaa00">Gold (#ffaa00)</option>
+            <option value="#9d4edd">Purple (#9d4edd)</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.75rem; margin-bottom: 6px; color: #8a99ad; font-weight: bold; letter-spacing: 1px;">VECTOR STYLE</label>
+          <select id="cursor-style" onchange="updateCursorCustomization()" style="padding: 6px 12px; font-size: 0.85rem;">
+            <option value="crosshair" selected>Sci-Fi Crosshair</option>
+            <option value="arrow">Precision Arrow</option>
+            <option value="ring">Targeting Ring</option>
+            <option value="minimal">Tech Dot</option>
+            <option value="stealth">Stealth Fighter</option>
+            <option value="laser">Laser Scope</option>
+            <option value="bio">Tri-Biohazard</option>
+            <option value="orbit">Orbit Ring</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- HUD Configuration Options -->
+    <div id="hud-opts" style="display: none; width: 100%;">
+      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div>
+          <label style="display: block; font-size: 0.75rem; margin-bottom: 6px; color: #8a99ad; font-weight: bold; letter-spacing: 1px;">HUD ELEMENT COLOR</label>
+          <select id="hud-color" onchange="updateHUDCustomization()" style="padding: 6px 12px; font-size: 0.85rem;">
+            <option value="#00d2ff" selected>Cyan (#00d2ff)</option>
+            <option value="#ff3366">Red (#ff3366)</option>
+            <option value="#39ff14">Green (#39ff14)</option>
+            <option value="#ffaa00">Gold (#ffaa00)</option>
+            <option value="#9d4edd">Purple (#9d4edd)</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.75rem; margin-bottom: 6px; color: #8a99ad; font-weight: bold; letter-spacing: 1px;">HUD STYLE</label>
+          <select id="hud-style" onchange="updateHUDCustomization()" style="padding: 6px 12px; font-size: 0.85rem;">
+            <option value="tech" selected>Tech Hex</option>
+            <option value="minimal">Minimalist</option>
+            <option value="industrial">Industrial</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="export-wrapper">
+    <div id="ui-container">
+
+      <!-- ach_bg -->
+      <svg class="asset-item" id="ach_bg" width="360" height="480" viewBox="0 0 360 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 30,10 L 330,10 L 350,30 L 350,450 L 330,470 L 30,470 L 10,450 L 10,30 Z" fill="#080c14" stroke="#ffb400" stroke-width="2"/>
+        <path d="M 25,25 L 335,25 L 342,32 L 342,448 L 335,455 L 25,455 L 18,448 L 18,32 Z" fill="#0b101a" stroke="#00aaff" stroke-width="1.5" stroke-dasharray="10 5"/>
+        <path d="M 40,25 L 320,25 L 330,35 L 330,65 L 320,75 L 40,75 L 30,65 L 30,35 Z" fill="#05080e" stroke="#ffb400" stroke-width="1.5"/>
+        <line x1="30" y1="120" x2="330" y2="120" stroke="#00aaff" stroke-width="1" opacity="0.3"/>
+        <line x1="30" y1="410" x2="330" y2="410" stroke="#00aaff" stroke-width="1" opacity="0.3"/>
+        <path d="M 15,40 L 15,20 L 40,20" stroke="#ffb400" stroke-width="3" fill="none"/>
+        <path d="M 345,40 L 345,20 L 320,20" stroke="#ffb400" stroke-width="3" fill="none"/>
+        <path d="M 15,440 L 15,460 L 40,460" stroke="#ffb400" stroke-width="3" fill="none"/>
+        <path d="M 345,440 L 345,460 L 320,460" stroke="#ffb400" stroke-width="3" fill="none"/>
+      </svg>
+
+      <!-- adv_bg -->
+      <svg class="asset-item" id="adv_bg" width="600" height="320" viewBox="0 0 600 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 25,10 L 575,10 L 590,25 L 590,285 L 560,310 L 40,310 L 10,280 L 10,25 Z" fill="#140707" stroke="#ff3333" stroke-width="2"/>
+        <path d="M 30,22 L 570,22 L 580,32 L 580,280 L 552,300 L 48,300 L 20,272 L 20,32 Z" fill="#1a0a0a" stroke="#ff7700" stroke-width="1" opacity="0.8"/>
+        <line x1="20" y1="48" x2="580" y2="48" stroke="#ff3333" stroke-width="2"/>
+        <path d="M 30,60 L 30,260 L 570,260 M 570,60" stroke="#ff5555" stroke-width="1" stroke-dasharray="6 4" fill="none" opacity="0.4"/>
+        <polygon points="570,10 590,10 590,30" fill="#ff3333"/>
+        <polygon points="10,290 10,310 30,310" fill="#ff3333"/>
+      </svg>
+
+      <!-- inventory_bg -->
+      <svg class="asset-item" id="inventory_bg" width="260" height="380" viewBox="0 0 260 380" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 20,10 L 240,10 L 250,20 L 250,360 L 240,370 L 20,370 L 10,360 L 10,20 Z" fill="#050a10" stroke="#00e5ff" stroke-width="2"/>
+        <path d="M 25,22 L 235,22 L 240,27 L 240,353 L 235,358 L 25,358 L 20,353 L 20,27 Z" fill="#0a121d" stroke="#005b82" stroke-width="1"/>
+        <path d="M 25,22 L 235,22 L 225,52 L 35,52 Z" fill="#04070a" stroke="#00e5ff" stroke-width="1"/>
+        <rect x="25" y="60" width="210" height="290" rx="4" fill="#05090f" stroke="#1c2d3d" stroke-width="1.5"/>
+        <path d="M 10,20 L 25,10 L 10,10" fill="#00e5ff"/>
+        <path d="M 250,20 L 235,10 L 250,10" fill="#00e5ff"/>
+        <path d="M 10,360 L 25,370 L 10,370" fill="#00e5ff"/>
+        <path d="M 250,360 L 235,370 L 250,370" fill="#00e5ff"/>
+      </svg>
+
+      <!-- leaderboard_bg -->
+      <svg class="asset-item" id="leaderboard_bg" width="360" height="480" viewBox="0 0 360 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 30,10 L 330,10 L 350,30 L 350,450 L 330,470 L 30,470 L 10,450 L 10,30 Z" fill="#060910" stroke="#00d2ff" stroke-width="2"/>
+        <path d="M 25,25 L 335,25 L 342,32 L 342,448 L 335,455 L 25,455 L 18,448 L 18,32 Z" fill="#0a101b" stroke="#005580" stroke-width="1"/>
+        <path d="M 40,25 L 320,25 L 330,35 L 330,65 L 320,75 L 40,75 L 30,65 L 30,35 Z" fill="#04060b" stroke="#00d2ff" stroke-width="1.5"/>
+        <line x1="20" y1="90" x2="340" y2="90" stroke="#00d2ff" stroke-width="1" stroke-dasharray="4 4" opacity="0.5"/>
+      </svg>
+
+      <!-- quest_bg -->
+      <svg class="asset-item" id="quest_bg" width="400" height="320" viewBox="0 0 400 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 20,10 L 380,10 L 390,20 L 390,300 L 380,310 L 20,310 L 10,300 L 10,20 Z" fill="#060913" stroke="#48cae4" stroke-width="2"/>
+        <path d="M 25,20 L 375,20 L 382,27 L 382,293 L 375,300 L 25,300 L 18,293 L 18,27 Z" fill="#0b1022" stroke="#5bc0be" stroke-width="1" stroke-dasharray="6 3"/>
+        <path d="M 30,20 L 370,20 L 360,52 L 40,52 Z" fill="#04060c" stroke="#48cae4" stroke-width="1"/>
+        <rect x="25" y="65" width="350" height="65" rx="4" fill="#0a1128" stroke="#48cae4" stroke-width="1"/>
+        <rect x="25" y="140" width="350" height="65" rx="4" fill="#0a1128" stroke="#48cae4" stroke-width="1"/>
+        <rect x="25" y="215" width="350" height="65" rx="4" fill="#0a1128" stroke="#48cae4" stroke-width="1"/>
+      </svg>
+
+      <!-- stats_card -->
+      <svg class="asset-item active" id="stats_card" width="320" height="440" viewBox="0 0 320 440" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 20,10 L 300,10 L 310,20 L 310,420 L 300,430 L 20,430 L 10,420 L 10,20 Z" fill="#05080e" stroke="#00e5ff" stroke-width="2"/>
+        <path d="M 25,20 L 295,20 L 302,27 L 302,413 L 295,420 L 25,420 L 18,413 L 18,27 Z" fill="#080d16" stroke="#005b82" stroke-width="1"/>
+        <path d="M 25,20 L 295,20 L 280,50 L 40,50 Z" fill="#030508" stroke="#00e5ff" stroke-width="1"/>
+        <rect x="30" y="65" width="80" height="80" rx="4" fill="#030508" stroke="#ffb400" stroke-width="1.5"/>
+        <rect x="25" y="155" width="270" height="255" rx="4" fill="#030508" stroke="#00e5ff" stroke-width="1"/>
+        <polygon points="10,10 25,10 10,25" fill="#00e5ff"/>
+        <polygon points="310,10 295,10 310,25" fill="#00e5ff"/>
+        <polygon points="10,430 25,430 10,415" fill="#00e5ff"/>
+        <polygon points="310,430 295,430 310,415" fill="#00e5ff"/>
+      </svg>
+
+      <!-- toast_bg -->
+      <svg class="asset-item" id="toast_bg" width="400" height="120" viewBox="0 0 400 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 15,10 L 385,10 L 395,20 L 395,100 L 385,110 L 15,110 L 5,100 L 5,20 Z" fill="#050a15" stroke="#00e5ff" stroke-width="2"/>
+        <path d="M 20,20 L 380,20 L 388,28 L 388,92 L 380,100 L 20,100 L 12,92 L 12,28 Z" fill="#081020" stroke="#005b82" stroke-width="1"/>
+        <line x1="20" y1="30" x2="20" y2="90" stroke="#00e5ff" stroke-width="3"/>
+        <line x1="380" y1="30" x2="380" y2="90" stroke="#ffb400" stroke-width="3"/>
+      </svg>
+
+      <!-- inspect_bg -->
+      <svg class="asset-item" id="inspect_bg" width="280" height="150" viewBox="0 0 280 150" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 15,5 L 265,5 L 275,15 L 275,135 L 265,145 L 15,145 L 5,135 L 5,15 Z" fill="#04070c" stroke="#ffb400" stroke-width="2"/>
+        <path d="M 20,15 L 260,15 L 268,23 L 268,127 L 260,135 L 20,135 L 12,127 L 12,23 Z" fill="#080c14" stroke="#00aaff" stroke-width="1" stroke-dasharray="6 3"/>
+        <line x1="20" y1="40" x2="260" y2="40" stroke="#ffb400" stroke-width="1.5"/>
+      </svg>
+
+      <!-- panel_bg -->
+      <svg class="asset-item" id="panel_bg" width="500" height="100" viewBox="0 0 500 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 10,10 L 490,10 L 490,90 L 470,90 L 460,80 L 10,80 Z" fill="#0d1117" stroke="#ffb400" stroke-width="2"/>
+        <rect x="20" y="15" width="70" height="70" rx="4" fill="#161b22" stroke="#00aaff" stroke-width="1.5"/>
+        <path d="M 100,20 L 475,20 M 100,45 L 350,45" stroke="#21262d" stroke-width="2"/>
+        <rect x="100" y="52" width="375" height="18" fill="#161b22" stroke="#00aaff" stroke-width="1"/>
+      </svg>
+
+      <!-- panel_bg_fill_v1 -->
+      <svg class="asset-item" id="panel_bg_fill_v1" width="371" height="14" viewBox="0 0 371 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="371" height="14" fill="url(#p_grad1)"/>
+        <defs>
+          <linearGradient id="p_grad1" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#ffb400"/>
+            <stop offset="100%" stop-color="#ffea75"/>
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <!-- panel_bg_v2 -->
+      <svg class="asset-item" id="panel_bg_v2" width="500" height="100" viewBox="0 0 500 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 20,5 L 480,5 L 495,20 L 495,80 L 480,95 L 20,95 L 5,80 L 5,20 Z" fill="#090d14" stroke="#00d2ff" stroke-width="2"/>
+        <polygon points="15,15 90,15 90,85 15,85" fill="#121824" stroke="#00d2ff" stroke-width="1"/>
+        <path d="M 105,55 L 465,55 L 475,75 L 105,75 Z" fill="#121824" stroke="#ffb400" stroke-width="1.5"/>
+        <line x1="105" y1="25" x2="300" y2="25" stroke="#00d2ff" stroke-width="2"/>
+      </svg>
+
+      <!-- panel_bg_fill_v2 -->
+      <svg class="asset-item" id="panel_bg_fill_v2" width="365" height="16" viewBox="0 0 365 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 0,0 L 357,0 L 365,16 L 0,16 Z" fill="url(#p_grad2)"/>
+        <defs>
+          <linearGradient id="p_grad2" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#00d2ff"/>
+            <stop offset="100%" stop-color="#80e5ff"/>
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <!-- panel_bg_v3 -->
+      <svg class="asset-item" id="panel_bg_v3" width="500" height="100" viewBox="0 0 500 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="10" width="480" height="80" rx="12" fill="#0d131d" stroke="#ff4500" stroke-width="2"/>
+        <circle cx="50" cy="50" r="32" fill="#18202c" stroke="#ff4500" stroke-width="2"/>
+        <rect x="95" y="55" width="370" height="14" rx="7" fill="#18202c" stroke="#ff4500" stroke-width="1"/>
+        <line x1="95" y1="30" x2="250" y2="30" stroke="#ff4500" stroke-width="2"/>
+      </svg>
+
+      <!-- panel_bg_fill_v3 -->
+      <svg class="asset-item" id="panel_bg_fill_v3" width="366" height="10" viewBox="0 0 366 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="366" height="10" rx="5" fill="url(#p_grad3)"/>
+        <defs>
+          <linearGradient id="p_grad3" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#ff4500"/>
+            <stop offset="100%" stop-color="#ff8c00"/>
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <!-- shop_bg -->
+      <svg class="asset-item" id="shop_bg" width="360" height="480" viewBox="0 0 360 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 20,10 L 340,10 L 350,20 L 350,460 L 340,470 L 20,470 L 10,460 L 10,20 Z" fill="#0b0804" stroke="#ffb400" stroke-width="2"/>
+        <path d="M 25,22 L 335,22 L 340,27 L 340,453 L 335,458 L 25,458 L 20,453 L 20,27 Z" fill="#130e07" stroke="#664400" stroke-width="1"/>
+        <path d="M 40,22 L 320,22 L 310,50 L 50,50 Z" fill="#060402" stroke="#ffb400" stroke-width="1"/>
+        <rect x="20" y="58" width="320" height="395" rx="4" fill="#080603" stroke="#ffb400" stroke-width="1" stroke-dasharray="4 2" opacity="0.6"/>
+      </svg>
+
+      <!-- top_bg -->
+      <svg class="asset-item" id="top_bg" width="360" height="560" viewBox="0 0 360 560" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 20,10 L 340,10 L 350,20 L 350,540 L 340,550 L 20,550 L 10,540 L 10,20 Z" fill="#05080f" stroke="#00aaff" stroke-width="2"/>
+        <path d="M 25,20 L 335,20 L 340,25 L 340,70 L 20,70 L 20,25 Z" fill="#0a101f" stroke="#ffb400" stroke-width="1"/>
+        <rect x="20" y="80" width="320" height="460" fill="#04060b" stroke="#00aaff" stroke-width="1" stroke-dasharray="4 4"/>
+      </svg>
+
+      <!-- wanted_bg -->
+      <svg class="asset-item" id="wanted_bg" width="360" height="480" viewBox="0 0 360 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="10" y="10" width="340" height="460" fill="#140600" stroke="#ff4500" stroke-width="3"/>
+        <rect x="20" y="20" width="320" height="440" fill="#1f0900" stroke="#8b0000" stroke-width="1"/>
+        <path d="M 10,10 L 50,10 L 10,50 Z M 350,10 L 310,10 L 350,50 Z M 10,470 L 50,470 L 10,430 Z M 350,470 L 310,470 L 350,430 Z" fill="#ff4500"/>
+        <line x1="30" y1="80" x2="330" y2="80" stroke="#ff4500" stroke-width="2" stroke-dasharray="10 5"/>
+      </svg>
+
+      <!-- avatar_default -->
+      <svg class="asset-item" id="avatar_default" width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="120" height="120" fill="#10141e"/>
+        <circle cx="60" cy="45" r="22" fill="#2a354d" stroke="#00aaff" stroke-width="1.5"/>
+        <path d="M 20,105 C 20,75 40,70 60,70 C 80,70 100,75 100,105 Z" fill="#2a354d" stroke="#00aaff" stroke-width="1.5"/>
+      </svg>
+
+      <!-- avatar_frame -->
+      <svg class="asset-item" id="avatar_frame" width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="5" y="5" width="110" height="110" rx="6" fill="none" stroke="#ffb400" stroke-width="3"/>
+        <rect x="10" y="10" width="100" height="100" rx="3" fill="none" stroke="#00aaff" stroke-width="1"/>
+        <path d="M 0,15 L 15,0 M 120,15 L 105,0 M 0,105 L 15,120 M 120,105 L 105,120" stroke="#ffb400" stroke-width="3"/>
+        <polygon points="60,2 66,8 54,8" fill="#ffb400"/>
+        <polygon points="60,118 66,112 54,112" fill="#ffb400"/>
+      </svg>
+
+      <!-- bar_bg -->
+      <svg class="asset-item" id="bar_bg" width="300" height="30" viewBox="0 0 300 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 0,0 L 290,0 L 300,15 L 290,30 L 0,30 Z" fill="#0e121a" stroke="#2a354d" stroke-width="2"/>
+        <path d="M 5,5 L 283,5 L 290,15 L 283,25 L 5,25 Z" fill="#161d2a"/>
+      </svg>
+
+      <!-- bar_fill -->
+      <svg class="asset-item" id="bar_fill" width="300" height="30" viewBox="0 0 300 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 5,5 L 200,5 L 207,15 L 200,25 L 5,25 Z" fill="url(#fill_grad)"/>
+        <defs>
+          <linearGradient id="fill_grad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#0088ff"/>
+            <stop offset="100%" stop-color="#00e5ff"/>
+          </linearGradient>
+        </defs>
+      </svg>
+
+      <!-- buy_btn -->
+      <svg class="asset-item" id="buy_btn" width="160" height="50" viewBox="0 0 160 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 10,0 L 150,0 L 160,10 L 160,40 L 150,50 L 10,50 L 0,40 L 0,10 Z" fill="#006622" stroke="#00ff66" stroke-width="2"/>
+        <path d="M 12,5 L 148,5 L 155,12 L 155,38 L 148,45 L 12,45 L 5,38 L 5,12 Z" fill="#00802b"/>
+      </svg>
+
+      <!-- sell_btn -->
+      <svg class="asset-item" id="sell_btn" width="160" height="50" viewBox="0 0 160 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 10,0 L 150,0 L 160,10 L 160,40 L 150,50 L 10,50 L 0,40 L 0,10 Z" fill="#730c0c" stroke="#ff4444" stroke-width="2"/>
+        <path d="M 12,5 L 148,5 L 155,12 L 155,38 L 148,45 L 12,45 L 5,38 L 5,12 Z" fill="#991111"/>
+      </svg>
+
+      <!-- use_btn -->
+      <svg class="asset-item" id="use_btn" width="160" height="50" viewBox="0 0 160 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 10,0 L 150,0 L 160,10 L 160,40 L 150,50 L 10,50 L 0,40 L 0,10 Z" fill="#0a592c" stroke="#00ff66" stroke-width="2"/>
+        <path d="M 12,5 L 148,5 L 155,12 L 155,38 L 148,45 L 12,45 L 5,38 L 5,12 Z" fill="#0d7339"/>
+      </svg>
+
+      <!-- rpg_mouse -->
+      <svg class="asset-item" id="rpg_mouse" width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #00d2ff;">
+        <defs>
+          <filter id="mouse-glow-filter" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        
+        <!-- CROSSHAIR STYLE -->
+        <g id="cursor-style-crosshair" class="cursor-style-group" filter="url(#mouse-glow-filter)">
+          <path d="M 12,12 L 40,24 L 28,28 L 24,40 Z" fill="currentColor" opacity="0.3"/>
+          <path d="M 12,12 L 40,24 L 28,28 L 24,40 Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+          <line x1="28" y1="28" x2="44" y2="44" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="2" fill="#ffffff" />
+          <path d="M 8,16 L 8,24" stroke="currentColor" stroke-width="1" opacity="0.8"/>
+          <path d="M 16,8 L 24,8" stroke="currentColor" stroke-width="1" opacity="0.8"/>
+        </g>
+
+        <!-- ARROW STYLE -->
+        <g id="cursor-style-arrow" class="cursor-style-group" style="display:none;" filter="url(#mouse-glow-filter)">
+          <path d="M 32,16 L 46,42 L 35,38 L 32,48 L 29,38 L 18,42 Z" fill="currentColor" opacity="0.3"/>
+          <path d="M 32,16 L 46,42 L 35,38 L 32,48 L 29,38 L 18,42 Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+          <circle cx="32" cy="16" r="2.5" fill="#ffffff" />
+        </g>
+
+        <!-- RING STYLE -->
+        <g id="cursor-style-ring" class="cursor-style-group" style="display:none;" filter="url(#mouse-glow-filter)">
+          <circle cx="32" cy="32" r="16" stroke="currentColor" stroke-width="2"/>
+          <circle cx="32" cy="32" r="8" stroke="currentColor" stroke-width="1" stroke-dasharray="3 2"/>
+          <circle cx="32" cy="32" r="3" fill="#ffffff"/>
+        </g>
+
+        <!-- MINIMAL STYLE -->
+        <g id="cursor-style-minimal" class="cursor-style-group" style="display:none;" filter="url(#mouse-glow-filter)">
+          <circle cx="32" cy="32" r="5" fill="currentColor"/>
+          <circle cx="32" cy="32" r="12" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 2"/>
+        </g>
+
+        <!-- STEALTH STYLE -->
+        <g id="cursor-style-stealth" class="cursor-style-group" style="display:none;" filter="url(#mouse-glow-filter)">
+          <path d="M 32,12 L 46,38 L 32,32 L 18,38 Z" fill="currentColor" opacity="0.3"/>
+          <path d="M 32,12 L 46,38 L 32,32 L 18,38 Z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+          <line x1="32" y1="32" x2="32" y2="48" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </g>
+
+        <!-- LASER STYLE -->
+        <g id="cursor-style-laser" class="cursor-style-group" style="display:none;" filter="url(#mouse-glow-filter)">
+          <circle cx="32" cy="32" r="4" fill="#ffffff"/>
+          <circle cx="32" cy="32" r="8" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="16" y1="32" x2="48" y2="32" stroke="currentColor" stroke-width="1.5"/>
+          <line x1="32" y1="16" x2="32" y2="48" stroke="currentColor" stroke-width="1.5"/>
+        </g>
+
+        <!-- BIO STYLE -->
+        <g id="cursor-style-bio" class="cursor-style-group" style="display:none;" filter="url(#mouse-glow-filter)">
+          <circle cx="32" cy="32" r="3" fill="currentColor"/>
+          <path d="M 22,22 A 14 14 0 0 1 42,22" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M 44,28 A 14 14 0 0 1 32,46" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M 20,28 A 14 14 0 0 0 32,46" stroke="currentColor" stroke-width="2" fill="none"/>
+        </g>
+
+        <!-- ORBIT STYLE -->
+        <g id="cursor-style-orbit" class="cursor-style-group" style="display:none;" filter="url(#mouse-glow-filter)">
+          <circle cx="32" cy="32" r="5" fill="#ffffff" stroke="currentColor" stroke-width="1.5"/>
+          <ellipse cx="32" cy="32" rx="16" ry="6" stroke="currentColor" stroke-width="1.5" fill="none" transform="rotate(-30 32 32)"/>
+          <circle cx="44" cy="25" r="2.5" fill="currentColor"/>
+        </g>
+      </svg>
+
+      <!-- hud_settings_bg -->
+      <svg class="asset-item" id="hud_settings_bg" width="480" height="360" viewBox="0 0 480 360" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #00d2ff;">
+        <defs>
+          <filter id="panel-glow-filter" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="6" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        <!-- TECH HEX STYLE -->
+        <g id="hud-style-tech" class="hud-style-group">
+          <path d="M 40,10 L 440,10 L 470,40 L 470,320 L 440,350 L 40,350 L 10,320 L 10,40 Z" fill="#050a15" stroke="currentColor" stroke-width="2.5" filter="url(#panel-glow-filter)"/>
+          <path d="M 42,15 L 438,15 L 465,42 L 465,318 L 438,345 L 42,345 L 15,318 L 15,42 Z" fill="#081022" stroke="currentColor" stroke-width="1" opacity="0.3"/>
+        </g>
+
+        <!-- MINIMAL STYLE -->
+        <g id="hud-style-minimal" class="hud-style-group" style="display:none;">
+          <rect x="15" y="15" width="450" height="330" fill="#040810" stroke="currentColor" stroke-width="2" rx="4" filter="url(#panel-glow-filter)"/>
+          <rect x="22" y="22" width="436" height="316" fill="none" stroke="currentColor" stroke-width="1" opacity="0.25" rx="2"/>
+        </g>
+
+        <!-- INDUSTRIAL STYLE -->
+        <g id="hud-style-industrial" class="hud-style-group" style="display:none;">
+          <path d="M 10,30 L 30,10 L 450,10 L 470,30 L 470,330 L 450,350 L 30,350 L 10,330 Z" fill="#0a0a0f" stroke="currentColor" stroke-width="3.5" filter="url(#panel-glow-filter)"/>
+          <path d="M 16,33 L 33,16 L 447,16 L 464,33 L 464,327 L 447,344 L 33,344 L 16,327 Z" fill="#14141c" stroke="currentColor" stroke-width="1" opacity="0.4"/>
+          <circle cx="35" cy="35" r="3" fill="currentColor"/>
+          <circle cx="445" cy="35" r="3" fill="currentColor"/>
+          <circle cx="445" cy="325" r="3" fill="currentColor"/>
+          <circle cx="35" cy="325" r="3" fill="currentColor"/>
+        </g>
+      </svg>
+
+      <!-- hud_btn_normal -->
+      <svg class="asset-item" id="hud_btn_normal" width="160" height="40" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #00d2ff;">
+        <!-- Sleek high-tech button background with chamfered corners and NO text -->
+        <path d="M 8,0 L 152,0 L 160,8 L 160,32 L 152,40 L 8,40 L 0,32 L 0,8 Z" fill="#070e1b" stroke="#005b82" stroke-width="2"/>
+        <line x1="6" y1="8" x2="6" y2="32" stroke="currentColor" stroke-width="2"/>
+      </svg>
+
+      <!-- hud_btn_hover -->
+      <svg class="asset-item" id="hud_btn_hover" width="160" height="40" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #00d2ff;">
+        <defs>
+          <filter id="btn-glow-filter" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="4" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        <!-- Brighter active glowing state button background with NO text -->
+        <path d="M 8,0 L 152,0 L 160,8 L 160,32 L 152,40 L 8,40 L 0,32 L 0,8 Z" fill="rgba(0, 210, 255, 0.12)" stroke="currentColor" stroke-width="2.5" filter="url(#btn-glow-filter)"/>
+        <line x1="6" y1="8" x2="6" y2="32" stroke="#ffffff" stroke-width="2.5"/>
+      </svg>
+
+      <!-- hud_slider_track -->
+      <svg class="asset-item" id="hud_slider_track" width="200" height="12" viewBox="0 0 200 12" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #00d2ff;">
+        <!-- Tech bar slider track background, chamfered ends, no text -->
+        <path d="M 6,0 L 194,0 L 200,6 L 194,12 L 6,12 L 0,6 Z" fill="#020408" stroke="#005b82" stroke-width="1.5"/>
+      </svg>
+
+      <!-- hud_slider_thumb -->
+      <svg class="asset-item" id="hud_slider_thumb" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #00d2ff;">
+        <defs>
+          <filter id="thumb-glow-filter" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+        <!-- Glowing sci-fi slider knob handle -->
+        <path d="M 6,0 L 14,0 L 20,6 L 20,14 L 14,20 L 6,20 L 0,14 L 0,6 Z" fill="#ffffff" stroke="currentColor" stroke-width="2.5" filter="url(#thumb-glow-filter)"/>
+      </svg>
+
+    </div>
+  </div>
+
+  <script>
+    const ALL_ASSETS = [
+      'ach_bg', 'adv_bg', 'inventory_bg', 'leaderboard_bg', 'quest_bg', 'stats_card',
+      'toast_bg', 'inspect_bg', 'panel_bg', 'panel_bg_fill_v1', 'panel_bg_v2',
+      'panel_bg_fill_v2', 'panel_bg_v3', 'panel_bg_fill_v3', 'shop_bg', 'top_bg',
+      'wanted_bg', 'avatar_default', 'avatar_frame', 'bar_bg', 'bar_fill',
+      'buy_btn', 'sell_btn', 'use_btn', 'rpg_mouse',
+      'hud_settings_bg', 'hud_btn_normal', 'hud_btn_hover', 'hud_slider_track', 'hud_slider_thumb'
+    ];
+
+    function switchAsset(assetId) {
+      const items = document.querySelectorAll('.asset-item');
+      items.forEach(item => item.classList.remove('active'));
+      
+      const activeItem = document.getElementById(assetId);
+      if (activeItem) {
+        activeItem.classList.add('active');
+      }
+
+      // Show customizer options panels based on selection
+      const customPanel = document.getElementById('customizer-options');
+      const cursorOpts = document.getElementById('cursor-opts');
+      const hudOpts = document.getElementById('hud-opts');
+
+      if (assetId === 'rpg_mouse') {
+        customPanel.style.display = 'block';
+        cursorOpts.style.display = 'block';
+        hudOpts.style.display = 'none';
+        updateCursorCustomization();
+      } else if (assetId.startsWith('hud_')) {
+        customPanel.style.display = 'block';
+        cursorOpts.style.display = 'none';
+        hudOpts.style.display = 'block';
+        updateHUDCustomization();
+      } else {
+        customPanel.style.display = 'none';
+      }
+    }
+
+    function updateCursorCustomization() {
+      const color = document.getElementById('cursor-color').value;
+      const style = document.getElementById('cursor-style').value;
+      
+      const mouseSvg = document.getElementById('rpg_mouse');
+      mouseSvg.style.color = color;
+      
+      // Toggle visibility of specific vector paths inside SVG
+      const groups = mouseSvg.querySelectorAll('.cursor-style-group');
+      groups.forEach(g => g.style.display = 'none');
+      
+      const targetGroup = document.getElementById(`cursor-style-${style}`);
+      if (targetGroup) {
+        targetGroup.style.display = 'block';
+      }
+    }
+
+    function updateHUDCustomization() {
+      const color = document.getElementById('hud-color').value;
+      const style = document.getElementById('hud-style').value;
+      const selectedId = document.getElementById('asset-select').value;
+      
+      const hudSvg = document.getElementById(selectedId);
+      if (hudSvg) {
+        hudSvg.style.color = color;
+        
+        // Dynamic preview style switching for hud_settings_bg SVG
+        if (selectedId === 'hud_settings_bg') {
+          const groups = hudSvg.querySelectorAll('.hud-style-group');
+          groups.forEach(g => g.style.display = 'none');
+          
+          const targetGroup = document.getElementById(`hud-style-${style}`);
+          if (targetGroup) {
+            targetGroup.style.display = 'block';
+          }
+        }
+      }
+    }
+
+    function exportSVGToPNG(svgElement, fileName) {
+      return new Promise((resolve) => {
+        const scale = 2; // High-resolution output factor
+        const width = svgElement.getAttribute('width') * scale;
+        const height = svgElement.getAttribute('height') * scale;
+
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(svgElement);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const URL = window.URL || window.webkitURL || window;
+        const blobURL = URL.createObjectURL(svgBlob);
+
+        const image = new Image();
+        image.onload = function() {
+          ctx.drawImage(image, 0, 0, width, height);
+          const pngUrl = canvas.toDataURL('image/png');
+
+          const link = document.createElement('a');
+          link.href = pngUrl;
+          link.download = `${fileName}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(blobURL);
+          resolve();
+        };
+
+        image.src = blobURL;
+      });
+    }
+
+    function exportCurrentPNG() {
+      const selectedId = document.getElementById('asset-select').value;
+      const svgElement = document.getElementById(selectedId);
+      exportSVGToPNG(svgElement, selectedId);
+    }
+
+    async function exportEverything() {
+      for (const assetId of ALL_ASSETS) {
+        const svgElement = document.getElementById(assetId);
+        if (svgElement) {
+          await exportSVGToPNG(svgElement, assetId);
+          // Small delay to ensure browser sequential downloads trigger cleanly
+          await new Promise(r => setTimeout(r, 250));
+        }
+      }
+    }
+  </script>
+</body>
+</html>

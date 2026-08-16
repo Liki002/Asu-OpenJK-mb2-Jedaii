@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG HUD Customizer & Cursor Designer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #050a18;
+            --panel-bg: rgba(8, 16, 40, 0.65);
+            --panel-border: rgba(0, 191, 255, 0.25);
+            --accent-cyan: #00d2ff;
+            --accent-purple: #9d4edd;
+            --accent-gold: #ffaa00;
+            --text-color: #e2e8f0;
+            --text-dim: #94a3b8;
+            --danger-red: #ff3366;
+            --active-glow: 0 0 15px rgba(0, 210, 255, 0.4);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(13, 27, 42, 0.8) 0, transparent 50%),
+                radial-gradient(at 50% 0%, rgba(9, 38, 53, 0.6) 0, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(15, 76, 129, 0.3) 0, transparent 50%);
+            color: var(--text-color);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            padding: 40px 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        @media (max-width: 900px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Glassmorphic Panel Design */
+        .glass-panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(16px);
+            padding: 30px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, #ffffff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 span {
+            color: var(--accent-cyan);
+            -webkit-text-fill-color: initial;
+            text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+        }
+
+        .section-desc {
+            font-size: 0.95rem;
+            color: var(--text-dim);
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        /* Forms & Interactive Items */
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+
+        /* Button Grid Custom styles */
+        .grid-select {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .btn-option {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            color: var(--text-color);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.95rem;
+            font-weight: 600;
+            padding: 14px;
+            text-align: center;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .btn-option:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .btn-option.active {
+            background: rgba(0, 210, 255, 0.12);
+            border-color: var(--accent-cyan);
+            box-shadow: var(--active-glow);
+            color: #ffffff;
+        }
+
+        .btn-option.active::after {
+            content: '●';
+            color: var(--accent-cyan);
+            font-size: 8px;
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            text-shadow: 0 0 8px var(--accent-cyan);
+        }
+
+        /* Sliders */
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .slider {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            outline: none;
+            cursor: pointer;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transition: transform 0.1s;
+        }
+
+        .slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .slider-val {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            width: 50px;
+            text-align: right;
+        }
+
+        /* Primary Action Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), #0088cc);
+            border: none;
+            border-radius: 12px;
+            color: #ffffff;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            padding: 16px;
+            text-transform: uppercase;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 6px 20px rgba(0, 210, 255, 0.5);
+            transform: translateY(-2px);
+            filter: brightness(1.1);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        /* Color Presets Picker */
+        .color-presets {
+            display: flex;
+            gap: 12px;
+        }
+
+        .color-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: transform 0.2s, border-color 0.2s;
+            position: relative;
+        }
+
+        .color-dot:hover {
+            transform: scale(1.15);
+        }
+
+        .color-dot.active {
+            border-color: #ffffff;
+            box-shadow: 0 0 12px currentColor;
+        }
+
+        /* Designer Canvas Areas */
+        .designer-canvas-box {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px dashed rgba(0, 191, 255, 0.15);
+            border-radius: 14px;
+            height: 180px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .designer-canvas-box::after {
+            content: 'Interactive Vector Preview';
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.2);
+            position: absolute;
+            bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        canvas {
+            image-rendering: pixelated;
+        }
+
+        /* Mockup HUD Preview Box */
+        .hud-preview {
+            background: #02050c;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            height: 90px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hud-preview-text {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.15);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .mockup-bar {
+            position: absolute;
+            bottom: 12px;
+            left: 20px;
+            width: 140px;
+            height: 14px;
+            border: 1px solid var(--accent-cyan);
+            border-radius: 4px;
+            background: rgba(0, 210, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .mockup-fill {
+            height: 100%;
+            width: 65%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 8px var(--accent-cyan);
+            transition: all 0.3s;
+        }
+
+        .mockup-stats {
+            position: absolute;
+            bottom: 30px;
+            left: 20px;
+            font-weight: 800;
+            font-size: 1.1rem;
+            color: #ffffff;
+            transition: all 0.3s;
+        }
+
+        .mockup-avatar {
+            position: absolute;
+            right: 20px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            background: rgba(255, 255, 255, 0.05);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mockup-avatar::after {
+            content: '👤';
+            font-size: 1.5rem;
+        }
+
+        /* Info boxes */
+        .info-alert {
+            background: rgba(255, 170, 0, 0.08);
+            border: 1px solid rgba(255, 170, 0, 0.2);
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #ffd880;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .info-alert span {
+            font-size: 1.1rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div style="text-align: center; margin-bottom: 40px;">
+        <h1 style="font-weight: 800; font-size: 2.5rem; letter-spacing: 2px; text-transform: uppercase;">
+            Custom HUD & Mouse UI Setup
+        </h1>
+        <p style="color: var(--text-dim); margin-top: 10px; font-size: 1.1rem;">
+            Export assets and choose styling configurations for the in-game display overlay
+        </p>
+    </div>
+
+    <div class="container">
+
+        <!-- PANEL 1: CURSOR DESIGNER -->
+        <div class="glass-panel">
+            <h2><span>01</span> Cursor Designer</h2>
+            <p class="section-desc">
+                Design a custom high-performance game cursor to replace the standard pointer. Export directly to a transparent PNG ready for game PK3 inclusion.
+            </p>
+
+            <div class="designer-canvas-box">
+                <canvas id="cursorCanvas" width="64" height="64"></canvas>
+            </div>
+
+            <div class="control-group">
+                <label>Cursor Style</label>
+                <div class="grid-select" id="cursorStyleSelect">
+                    <button class="btn-option active" data-style="crosshair">Sci-Fi Crosshair</button>
+                    <button class="btn-option" data-style="arrow">Precision Arrow</button>
+                    <button class="btn-option" data-style="ring">Targeting Ring</button>
+                    <button class="btn-option" data-style="minimal">Tech Dot</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Cursor Accent Color</label>
+                <div class="color-presets" id="cursorColorSelect">
+                    <div class="color-dot active" style="background-color: #00d2ff; color: #00d2ff;" data-color="#00d2ff"></div>
+                    <div class="color-dot" style="background-color: #ff3366; color: #ff3366;" data-color="#ff3366"></div>
+                    <div class="color-dot" style="background-color: #39ff14; color: #39ff14;" data-color="#39ff14"></div>
+                    <div class="color-dot" style="background-color: #ffaa00; color: #ffaa00;" data-color="#ffaa00"></div>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Pointer Scale</label>
+                <div class="slider-container">
+                    <input type="range" class="slider" id="cursorScale" min="0.8" max="1.5" step="0.05" value="1.0">
+                    <span class="slider-val" id="cursorScaleVal">1.0x</span>
+                </div>
+            </div>
+
+            <button class="btn-primary" id="btnExportCursor" style="margin-top: 10px;">
+                <span>💾</span> Export Cursor PNG (64x64)
+            </button>
+        </div>
+
+        <!-- PANEL 2: HUD STYLE & POSITIONING UTILITY -->
+        <div class="glass-panel">
+            <h2><span>02</span> HUD Manager</h2>
+            <p class="section-desc">
+                Mockup UI configuration for editing HUD positions and styling themes. Once you approve, this dashboard will map to the new client commands.
+            </p>
+
+            <div class="hud-preview" style="margin-bottom: 24px;">
+                <div class="hud-preview-text">Live Mockup Preview</div>
+                <div class="mockup-stats" id="mockupStats">100 HP</div>
+                <div class="mockup-bar"><div class="mockup-fill" id="mockupFill"></div></div>
+                <div class="mockup-avatar" id="mockupAvatar"></div>
+            </div>
+
+            <div class="control-group">
+                <label>HUD Overlay Style</label>
+                <div class="grid-select" id="hudStyleSelect">
+                    <button class="btn-option active" data-style="0">Style 0 (Default)</button>
+                    <button class="btn-option" data-style="1">Style 1 (Minimal)</button>
+                    <button class="btn-option" data-style="2">Style 2 (Dark)</button>
+                    <button class="btn-option" data-style="3">Style 3 (Neon Circle)</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>Vertical Position Offset</label>
+                <div class="slider-container">
+                    <input type="range" class="slider" id="hudYOffset" min="-50" max="50" value="0">
+                    <span class="slider-val" id="hudYOffsetVal">0px</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>HUD Scaling Factor</label>
+                <div class="slider-container">
+                    <input type="range" class="slider" id="hudScale" min="0.7" max="1.3" step="0.05" value="1.0">
+                    <span class="slider-val" id="hudScaleVal">1.0x</span>
+                </div>
+            </div>
+
+            <div class="info-alert" style="margin-bottom: 20px;">
+                <span>⚠️</span>
+                <div>
+                    <strong>Action Required:</strong> Click the "Export Cursor" button to save your mouse icon. Send me your approved design files and styles, and I will code the UI command integration!
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Elements
+        const canvas = document.getElementById('cursorCanvas');
+        const ctx = canvas.getContext('2d');
+        const btnExport = document.getElementById('btnExportCursor');
+        
+        // Settings
+        let currentStyle = 'crosshair';
+        let currentColor = '#00d2ff';
+        let currentScale = 1.0;
+
+        // Draw Cursor Logic
+        function drawCursor() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            ctx.scale(currentScale, currentScale);
+
+            ctx.strokeStyle = currentColor;
+            ctx.fillStyle = currentColor;
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.shadowBlur = 8;
+            ctx.shadowColor = currentColor;
+
+            if (currentStyle === 'crosshair') {
+                // Outer ring notches
+                ctx.beginPath();
+                ctx.arc(0, 0, 16, 0.15 * Math.PI, 0.85 * Math.PI);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(0, 0, 16, 1.15 * Math.PI, 1.85 * Math.PI);
+                ctx.stroke();
+                
+                // Crosshairs
+                ctx.lineWidth = 2.0;
+                ctx.beginPath();
+                ctx.moveTo(-10, 0); ctx.lineTo(-4, 0);
+                ctx.moveTo(4, 0); ctx.lineTo(10, 0);
+                ctx.moveTo(0, -10); ctx.lineTo(0, -4);
+                ctx.moveTo(0, 4); ctx.lineTo(0, 10);
+                ctx.stroke();
+
+                // Inner core dot
+                ctx.beginPath();
+                ctx.arc(0, 0, 2.5, 0, 2 * Math.PI);
+                ctx.fill();
+            } 
+            else if (currentStyle === 'arrow') {
+                // Precision Arrow Pointer
+                ctx.shadowBlur = 6;
+                ctx.beginPath();
+                ctx.moveTo(0, -16); // Top point
+                ctx.lineTo(12, 10); // Right barb
+                ctx.lineTo(3, 6);   // Inner notch
+                ctx.lineTo(0, 16);  // Tail end
+                ctx.lineTo(-3, 6);  // Inner notch left
+                ctx.lineTo(-12, 10); // Left barb
+                ctx.closePath();
+                ctx.fill();
+            } 
+            else if (currentStyle === 'ring') {
+                // Double Ring HUD Pointer
+                ctx.beginPath();
+                ctx.arc(0, 0, 15, 0, 2 * Math.PI);
+                ctx.stroke();
+
+                ctx.lineWidth = 1.0;
+                ctx.beginPath();
+                ctx.arc(0, 0, 8, 0, 2 * Math.PI);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.arc(0, 0, 3, 0, 2 * Math.PI);
+                ctx.fill();
+            } 
+            else if (currentStyle === 'minimal') {
+                // Minimalist Point-Dot
+                ctx.beginPath();
+                ctx.arc(0, 0, 5, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(0, 0, 12, 0, 2 * Math.PI);
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // Export PNG Event Handler
+        btnExport.addEventListener('click', () => {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = 64;
+            tempCanvas.height = 64;
+            const tempCtx = tempCanvas.getContext('2d');
+
+            // Render exact cursor with no visual background onto temporary export canvas
+            tempCtx.save();
+            tempCtx.translate(32, 32);
+            tempCtx.scale(currentScale, currentScale);
+            tempCtx.strokeStyle = currentColor;
+            tempCtx.fillStyle = currentColor;
+            tempCtx.lineWidth = 3.0; // slightly thicker for clean engine scaling
+            tempCtx.lineCap = 'round';
+
+            if (currentStyle === 'crosshair') {
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 16, 0.15 * Math.PI, 0.85 * Math.PI);
+                tempCtx.stroke();
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 16, 1.15 * Math.PI, 1.85 * Math.PI);
+                tempCtx.stroke();
+                
+                tempCtx.beginPath();
+                tempCtx.moveTo(-10, 0); tempCtx.lineTo(-4, 0);
+                tempCtx.moveTo(4, 0); tempCtx.lineTo(10, 0);
+                tempCtx.moveTo(0, -10); tempCtx.lineTo(0, -4);
+                tempCtx.moveTo(0, 4); tempCtx.lineTo(0, 10);
+                tempCtx.stroke();
+
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 3, 0, 2 * Math.PI);
+                tempCtx.fill();
+            } 
+            else if (currentStyle === 'arrow') {
+                tempCtx.beginPath();
+                tempCtx.moveTo(0, -18);
+                tempCtx.lineTo(13, 11);
+                tempCtx.lineTo(3, 7);
+                tempCtx.lineTo(0, 18);
+                tempCtx.lineTo(-3, 7);
+                tempCtx.lineTo(-13, 11);
+                tempCtx.closePath();
+                tempCtx.fill();
+            } 
+            else if (currentStyle === 'ring') {
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 15, 0, 2 * Math.PI);
+                tempCtx.stroke();
+                tempCtx.lineWidth = 1.5;
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 8, 0, 2 * Math.PI);
+                tempCtx.stroke();
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 3.5, 0, 2 * Math.PI);
+                tempCtx.fill();
+            } 
+            else if (currentStyle === 'minimal') {
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 5, 0, 2 * Math.PI);
+                tempCtx.fill();
+                tempCtx.beginPath();
+                tempCtx.arc(0, 0, 13, 0, 2 * Math.PI);
+                tempCtx.stroke();
+            }
+            tempCtx.restore();
+
+            // Force download of PNG
+            const link = document.createElement('a');
+            link.download = `rpg_mouse.png`;
+            link.href = tempCanvas.toDataURL("image/png");
+            link.click();
+        });
+
+        // Setup Selectors (Cursor Style)
+        const styleButtons = document.querySelectorAll('#cursorStyleSelect .btn-option');
+        styleButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                styleButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentStyle = btn.dataset.style;
+                drawCursor();
+            });
+        });
+
+        // Setup Color Dot Presets
+        const colorDots = document.querySelectorAll('#cursorColorSelect .color-dot');
+        colorDots.forEach(dot => {
+            dot.addEventListener('click', () => {
+                colorDots.forEach(d => d.classList.remove('active'));
+                dot.classList.add('active');
+                currentColor = dot.dataset.color;
+                
+                // Update live mockup variables
+                document.documentElement.style.setProperty('--accent-cyan', currentColor);
+                drawCursor();
+            });
+        });
+
+        // Cursor Scale Slider
+        const sliderScale = document.getElementById('cursorScale');
+        const scaleVal = document.getElementById('cursorScaleVal');
+        sliderScale.addEventListener('input', (e) => {
+            currentScale = parseFloat(e.target.value);
+            scaleVal.textContent = `${currentScale.toFixed(2)}x`;
+            drawCursor();
+        });
+
+        // HUD Styles Selector (Updates Live Mockup)
+        const hudStyleButtons = document.querySelectorAll('#hudStyleSelect .btn-option');
+        const mockupFill = document.getElementById('mockupFill');
+        const mockupAvatar = document.getElementById('mockupAvatar');
+        const mockupStats = document.getElementById('mockupStats');
+
+        hudStyleButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                hudStyleButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const style = btn.dataset.style;
+                if (style === '0') {
+                    mockupAvatar.style.borderRadius = '50%';
+                    mockupAvatar.style.border = '2px solid var(--accent-cyan)';
+                    mockupStats.style.fontSize = '1.1rem';
+                } else if (style === '1') {
+                    mockupAvatar.style.borderRadius = '8px';
+                    mockupAvatar.style.border = '1px solid var(--accent-cyan)';
+                    mockupStats.style.fontSize = '0.95rem';
+                } else if (style === '2') {
+                    mockupAvatar.style.borderRadius = '0';
+                    mockupAvatar.style.border = '2px solid #555555';
+                } else if (style === '3') {
+                    mockupAvatar.style.borderRadius = '50%';
+                    mockupAvatar.style.border = '3px double var(--accent-cyan)';
+                }
+            });
+        });
+
+        // HUD Position sliders
+        const sliderY = document.getElementById('hudYOffset');
+        const valY = document.getElementById('hudYOffsetVal');
+        sliderY.addEventListener('input', (e) => {
+            valY.textContent = `${e.target.value}px`;
+        });
+
+        const sliderHScale = document.getElementById('hudScale');
+        const valHScale = document.getElementById('hudScaleVal');
+        sliderHScale.addEventListener('input', (e) => {
+            valHScale.textContent = `${parseFloat(e.target.value).toFixed(2)}x`;
+        });
+
+        // Initial Draw
+        drawCursor();
+    </script>
+</body>
+</html>

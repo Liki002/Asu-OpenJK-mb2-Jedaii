@@ -719,6 +719,7 @@ void CL_ClearState (void) {
 
 //	S_StopAllSounds();
 	Com_Memset( &cl, 0, sizeof( cl ) );
+	CL_ResetRPGOverlays();
 }
 
 /*
@@ -2272,7 +2273,7 @@ static void CL_ShutdownRef( qboolean restarting ) {
 
 	re = NULL;
 
-	if ( rendererLib != NULL ) {
+	if ( rendererLib != NULL && !restarting ) {
 		Sys_UnloadDll (rendererLib);
 		rendererLib = NULL;
 	}
@@ -2374,13 +2375,15 @@ void CL_InitRef( void ) {
 
 	Com_sprintf( dllName, sizeof( dllName ), "%s_" ARCH_STRING DLL_EXT, cl_renderer->string );
 
-	if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( cl_renderer->string, cl_renderer->resetString ) )
-	{
-		Com_Printf( "failed: trying to load fallback renderer\n" );
-		Cvar_ForceReset( "cl_renderer" );
+	if ( !rendererLib ) {
+		if( !(rendererLib = Sys_LoadDll( dllName, qfalse )) && strcmp( cl_renderer->string, cl_renderer->resetString ) )
+		{
+			Com_Printf( "failed: trying to load fallback renderer\n" );
+			Cvar_ForceReset( "cl_renderer" );
 
-		Com_sprintf( dllName, sizeof( dllName ), DEFAULT_RENDER_LIBRARY "_" ARCH_STRING DLL_EXT );
-		rendererLib = Sys_LoadDll( dllName, qfalse );
+			Com_sprintf( dllName, sizeof( dllName ), DEFAULT_RENDER_LIBRARY "_" ARCH_STRING DLL_EXT );
+			rendererLib = Sys_LoadDll( dllName, qfalse );
+		}
 	}
 
 	if ( !rendererLib ) {
@@ -2486,6 +2489,8 @@ void CL_InitRef( void ) {
 	}
 
 	re = ret;
+
+	CL_ResetShaderHandles();
 
 	// unpause so the cgame definately gets a snapshot and renders a frame
 	Cvar_Set( "cl_paused", "0" );

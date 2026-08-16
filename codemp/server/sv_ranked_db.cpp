@@ -29,22 +29,16 @@ typedef struct shopItem_s {
 } shopItem_t;
 
 static const shopItem_t sv_shopItems[] = {
-    {"xp_boost", "^5XP Boost         ^7(+50% XP for 1 round)", 500, 200},
-    {"cr_boost", "^5Credit Boost      ^7(+50% credits for 1 round)", 400, 150},
-    {"lucky_charm", "^5Lucky Charm       ^7(+10% roll luck)", 300, 100},
-    {"yoda_scroll", "^2Yoda's Scroll     ^7(wisdom from Master Yoda)", 800,
-     200},
-    {"jedi_holocron", "^6Jedi Holocron     ^7(secrets of the Light Side)", 600,
-     150},
-    {"sith_holocron", "^1Sith Holocron     ^7(secrets of the Dark Side)", 600,
-     150},
-    {"jedi_manual", "^3Jedi Manual       ^7(combat training insight)", 400,
-     100},
-    {"elo_boost", "^5Elo Boost         ^7(+15% FR for next duel win)", 1200,
-     500},
-    {"jedaii_secret", "^5Jedaii Secret     ^7(forbidden knowledge...)", 1000000,
-     0},
-    {"win_msg", "^5Custom Win Msg    ^7(Unlock !setwinmsg)", 20000, 0},
+    {"xp_boost", "^5XP Boost ^7(+50% XP for 1 round)", 500, 200},
+    {"cr_boost", "^5Credit Boost ^7(+50% credits for 1 round)", 400, 150},
+    {"lucky_charm", "^5Lucky Charm ^7(+10% roll luck)", 300, 100},
+    {"yoda_scroll", "^2Yoda's Scroll ^7(Wisdom from Master Yoda)", 800, 200},
+    {"jedi_holocron", "^6Jedi Holocron ^7(Secrets of the Light Side)", 600, 150},
+    {"sith_holocron", "^1Sith Holocron ^7(Secrets of the Dark Side)", 600, 150},
+    {"jedi_manual", "^3Jedi Manual ^7(Combat training insight)", 400, 100},
+    {"elo_boost", "^5Elo Boost ^7(+15% Elo for next duel win)", 1200, 500},
+    {"jedaii_secret", "^5Jedaii Secret ^7(Forbidden knowledge...)", 1000000, 0},
+    {"win_msg", "^5Custom Win Msg ^7(Unlock !setwinmsg)", 20000, 0},
     {NULL, NULL, 0, 0}};
 
 cJSON *accountsDB = NULL; // exported (referenced by sv_ranked_logic/cmds)
@@ -783,6 +777,7 @@ void SV_Ranked_ClientConnect(client_t *cl) {
   r->loggedIn = qfalse;
   r->isTemp = qtrue;
   r->tempElo = 1000;
+  r->rankedEnabled = qtrue;
   r->duelOpponent = -1;
   r->currentBetTarget = -1;
   r->adventureNodeIdx = -1;
@@ -1208,19 +1203,15 @@ const char *SV_Ranked_GetTitle(int fr, cJSON *acc) {
   }
 
   // Hard fallback (keeps server functional if config is invalid/missing)
-  if (fr < 600)
+  if (fr < 1500)
     return "^3Youngling";
-  if (fr < 800)
+  if (fr < 2000)
     return "^2Padawan";
-  if (fr < 1000)
-    return "^7Jedi";
-  if (fr < 1200)
+  if (fr < 2500)
     return "^5Jedi Knight";
-  if (fr < 1400)
+  if (fr < 3000)
     return "^6Jedi Master";
-  if (fr < 1600)
-    return "^3Council Member";
-  return "^1Legend";
+  return "^1Grand Master";
 }
 
 // -----------------------------------------------------------------------------
@@ -1552,7 +1543,7 @@ void SV_Ranked_ShowStats(client_t *cl) {
                        displayName);
   SV_SendServerCommand(cl, "print \"^2MODE: ^7%s\n\"", upperMode);
   SV_SendServerCommand(cl, "print \"^3Level: ^7%d ^3(%d XP)\n\"", level, xp);
-  SV_SendServerCommand(cl, "print \"^5Rank: %s ^5(^7%d Force Rating^5)\n\"",
+  SV_SendServerCommand(cl, "print \"^5Rank: %s ^5(^7%d Elo^5)\n\"",
                        title, elo);
   SV_SendServerCommand(cl, "print \"^6Credits: ^7%d\n\"", credits);
   SV_SendServerCommand(cl, "print \"^3Trivia Wins: ^7%d\n\"", triviaWins);
@@ -1774,7 +1765,7 @@ void SV_Ranked_ShowStatsTarget(client_t *cl, const char *targetName) {
   } else {
     SV_SendServerCommand(
         cl,
-        "chat \"^7[STATS] ^5%s ^7| ^3Lv %d ^7| %s ^7| ^2FR: ^7%d | ^3W/L: "
+        "chat \"^7[STATS] ^5%s ^7| ^3Lv %d ^7| %s ^7| ^2Elo: ^7%d | ^3W/L: "
         "^7%d/%d ^5(%.2f) ^7| ^2K/D: ^7%d/%d ^5(Console)\n\"",
         displayName, level, title, elo, wins, losses, wlRatio, kills, deaths);
   }
@@ -1783,7 +1774,7 @@ void SV_Ranked_ShowStatsTarget(client_t *cl, const char *targetName) {
                        displayName);
   SV_SendServerCommand(cl, "print \"^2MODE: ^7%s\n\"", upperMode);
   SV_SendServerCommand(cl, "print \"^3Level: ^7%d ^3(%d XP)\n\"", level, xp);
-  SV_SendServerCommand(cl, "print \"^5Rank: %s ^5(^7%d Force Rating^5)\n\"",
+  SV_SendServerCommand(cl, "print \"^5Rank: %s ^5(^7%d Elo^5)\n\"",
                        title, elo);
   SV_SendServerCommand(cl, "print \"^3Trivia Wins: ^7%d\n\"", triviaWins);
   SV_SendServerCommand(cl, "print \"^1Main Rival: ^7%s ^5(%d duels)\n\"", topRivalName, topRivalCount);
@@ -1913,7 +1904,7 @@ void SV_Ranked_ShowTop(client_t *cl) {
 
   SV_SendServerCommand(cl, "print \"\n^5--- ^7TOP 10 PLAYERS (^3%s^7) ^5---\n\"",
                        mode);
-  SV_SendServerCommand(cl, "print \"^2#  Name                             FR     W/L      Ratio   Rank\n\"");
+  SV_SendServerCommand(cl, "print \"^2#  Name                             Elo    W/L      Ratio   Rank\n\"");
   SV_SendServerCommand(cl, "print \"^2-- ---------------------------- ------ -------- ------- -----------\n\"");
 
   // Send UI Leaderboard Sync command to client popup overlay
@@ -1998,7 +1989,7 @@ void SV_Ranked_ShowRank(client_t *cl) {
   const char *title = SV_Ranked_GetTitle(elo, acc);
 
   SV_SendServerCommand(
-      NULL, "chat \"^5[RANK] ^7%s ^7| ^3Lv %d ^7| %s ^7| ^5%d FR ^7(%s)\"",
+      NULL, "chat \"^5[RANK] ^7%s ^7| ^3Lv %d ^7| %s ^7| ^5%d Elo ^7(%s)\"",
       displayName, level, title, elo, currentMode);
 }
 
@@ -2022,7 +2013,7 @@ void SV_Ranked_ShowRankThresholds(client_t *cl) {
         cJSON *title = cJSON_GetArrayItem(titles, i);
         cJSON *th = cJSON_GetArrayItem(thresh, i);
         if (title && cJSON_IsString(title) && title->valuestring && th && cJSON_IsNumber(th)) {
-          SV_SendServerCommand(cl, va("print \"  %-20s ^5- ^2%d FR+\n\"", title->valuestring, th->valueint));
+          SV_SendServerCommand(cl, va("print \"  %-20s ^5- ^2%d Elo+\n\"", title->valuestring, th->valueint));
         }
       }
       SV_SendServerCommand(cl, "print \"^5=============================\n\n\"");
@@ -2031,13 +2022,11 @@ void SV_Ranked_ShowRankThresholds(client_t *cl) {
   }
 
   // Fallback if config is missing or invalid
-  SV_SendServerCommand(cl, "print \"  ^3Youngling            ^5- ^20 FR+\n\"");
-  SV_SendServerCommand(cl, "print \"  ^2Padawan              ^5- ^2600 FR+\n\"");
-  SV_SendServerCommand(cl, "print \"  ^7Jedi                 ^5- ^2800 FR+\n\"");
-  SV_SendServerCommand(cl, "print \"  ^5Jedi Knight          ^5- ^21000 FR+\n\"");
-  SV_SendServerCommand(cl, "print \"  ^6Jedi Master          ^5- ^21200 FR+\n\"");
-  SV_SendServerCommand(cl, "print \"  ^3Council Member       ^5- ^21400 FR+\n\"");
-  SV_SendServerCommand(cl, "print \"  ^1Legend               ^5- ^21600 FR+\n\"");
+  SV_SendServerCommand(cl, "print \"  ^3Youngling            ^5- ^20 Elo+\n\"");
+  SV_SendServerCommand(cl, "print \"  ^2Padawan              ^5- ^21500 Elo+\n\"");
+  SV_SendServerCommand(cl, "print \"  ^5Jedi Knight          ^5- ^22000 Elo+\n\"");
+  SV_SendServerCommand(cl, "print \"  ^6Jedi Master          ^5- ^22500 Elo+\n\"");
+  SV_SendServerCommand(cl, "print \"  ^1Grand Master         ^5- ^23000 Elo+\n\"");
   SV_SendServerCommand(cl, "print \"^5=============================\n\n\"");
 }
 
@@ -2182,6 +2171,11 @@ static const shopItem_t *FindShopItem(const char *key) {
       return &sv_shopItems[i];
   }
   return NULL;
+}
+
+const char *SV_Ranked_GetItemDisplayName(const char *key) {
+  const shopItem_t *item = FindShopItem(key);
+  return item ? item->display : key;
 }
 
 // ===========================================================================
@@ -2390,7 +2384,7 @@ void SV_Ranked_ProgressQuest(const char *username, const char *statKey,
 
       if (cl) {
         SV_SendServerCommand(
-            cl, "print \"^2QUEST COMPLETE! ^7%s ^5(+%d CR, +%d FR)\n\"", desc,
+            cl, "print \"^2QUEST COMPLETE! ^7%s ^5(+%d CR, +%d Elo)\n\"", desc,
             cr, fr);
         SV_SendServerCommand(cl, "cp \"^3QUEST DONE!\n^7%s\"", desc);
       }
@@ -2491,7 +2485,7 @@ void SV_Ranked_ShowQuests(client_t *cl) {
     } else {
       SV_SendServerCommand(cl,
                            "print \"^3%d. ^7%s  ^5[^3%d^7/^3%d^5]  ^7+^5%d cr "
-                           "^7+^5%d fr  ^6[%s]\n\"",
+                           "^7+^5%d elo  ^6[%s]\n\"",
                            qnum, desc, prog, goal, cr, fr, mode);
     }
     SV_SendServerCommand(cl, va("quest_entry %d %d %d %d %d %d \"%s\" \"%s\"",
@@ -2823,8 +2817,8 @@ void SV_Ranked_ShowShop(client_t *cl) {
                          "print \"^3%-17s ^7%s ^5%d cr^7 (sell: ^3%d^7)\n\"",
                          sv_shopItems[i].key, sv_shopItems[i].display,
                          price, sellBack);
-    SV_SendServerCommand(cl, va("shop_entry %d %d \"%s\" \"%s\"",
-                         price, sellBack, sv_shopItems[i].key, sv_shopItems[i].display));
+    SV_SendServerCommand(cl, "shop_entry %d %d \"%s\" \"%s\"",
+                         price, sellBack, sv_shopItems[i].key, sv_shopItems[i].display);
   }
   SV_SendServerCommand(cl, "print \"\n^5Commands: ^7!buy <key>  !sell "
                            "<key>  !use <key>  !inventory\n\"");
@@ -2898,6 +2892,13 @@ void SV_Ranked_ShopBuy(client_t *cl, const char *itemName) {
   if (!Q_stricmpn(item->key, "wp_", 3)) {
     SV_Ranked_GiveWeapon(cl, item->key, qtrue);
   }
+
+  // Sync client credits and level/xp HUD
+  cJSON *newCredPtr = cJSON_GetObjectItemCaseSensitive(acc, "credits");
+  int newCredits = newCredPtr ? newCredPtr->valueint : 0;
+  SV_SendServerCommand(cl, va("shop_open %d", newCredits));
+  extern void SV_Ranked_SyncClientRPG(client_t *cl);
+  SV_Ranked_SyncClientRPG(cl);
 }
 
 /*
@@ -2940,6 +2941,13 @@ void SV_Ranked_ShopSell(client_t *cl, const char *itemName) {
   SV_Ranked_SaveAccounts();
   SV_SendServerCommand(cl, "chat \"^2Sold ^5%s^7 for ^5%d Credits^7.\"",
                        item->display, sellBack);
+
+  // Sync client credits and level/xp HUD
+  cJSON *newCredPtr = cJSON_GetObjectItemCaseSensitive(acc, "credits");
+  int newCredits = newCredPtr ? newCredPtr->valueint : 0;
+  SV_SendServerCommand(cl, va("shop_open %d", newCredits));
+  extern void SV_Ranked_SyncClientRPG(client_t *cl);
+  SV_Ranked_SyncClientRPG(cl);
 }
 
 /*
@@ -3041,13 +3049,17 @@ void SV_Ranked_ShopUse(client_t *cl, const char *itemName) {
             "million credits. The real secret? There is no secret. ^1XD\"");
   } else if (!Q_stricmp(item->key, "elo_boost")) {
     r->activeEloBoost = 1;
-    SV_SendServerCommand(cl, "chat \"^5Elo Boost activated! ^7+15%% FR "
+    SV_SendServerCommand(cl, "chat \"^5Elo Boost activated! ^7+15%% Elo "
                              "for your next duel win.\"");
   } else if (!Q_stricmpn(item->key, "wp_", 3)) {
     SV_Ranked_GiveWeapon(cl, item->key, qtrue);
   } else {
     SV_SendServerCommand(cl, "chat \"^3Item used.\"");
   }
+
+  // Sync client inventory display immediately
+  extern void SV_Ranked_Cmd_Inventory(client_t *cl);
+  SV_Ranked_Cmd_Inventory(cl);
 }
 
 /*

@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const repoDir = 'c:\\Users\\GæstPC\\Desktop\\Jedaii Servers\\scratch\\Asu-OpenJK-mb2-Jedaii';
-const outDir = path.join(repoDir, 'tools', 'gfx', 'hud');
+const repoDir = process.cwd();
+const outDir = path.join(repoDir, 'pk3_ranked_rpg', 'gfx', 'rpg_hud');
 fs.mkdirSync(outDir, { recursive: true });
 
 // Helper to create 32-bit uncompressed TGA buffer (RGBA)
