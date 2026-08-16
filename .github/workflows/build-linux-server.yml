@@ -8,51 +8,40 @@ on:
 jobs:
   build-server:
     runs-on: ubuntu-latest
-    container:
-      image: i386/debian:bullseye
 
     steps:
-      - name: Install dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential \
-            cmake \
-            ninja-build \
-            git \
-            zlib1g-dev
-
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure CMake
+      - name: Build openjkded.i386 in 32-bit Debian Container
         run: |
-          mkdir -p build-linux
-          cd build-linux
-          cmake -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_SYSTEM_NAME=Linux \
-            -DCMAKE_SYSTEM_PROCESSOR=i386 \
-            -DCMAKE_C_COMPILER="/usr/bin/gcc" \
-            -DCMAKE_CXX_COMPILER="/usr/bin/g++" \
-            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
-            -DBuildMPDed=ON \
-            -DBuildMPGame=OFF \
-            -DBuildMPCGame=OFF \
-            -DBuildMPEngine=OFF \
-            -DBuildMPRdVanilla=OFF \
-            -DBuildMPUI=OFF \
-            -DBuildSPEngine=OFF \
-            -DBuildSPGame=OFF \
-            -DBuildSPRdVanilla=OFF \
-            -DBuildMPRend2=OFF \
-            ..
-
-      - name: Build openjkded.i386
-        run: |
-          cd build-linux
-          ninja openjkded.i386
-          ls -la openjkded.i386
+          docker run --rm -v "${{ github.workspace }}:/src" -w /src i386/debian:bullseye bash -c "
+            set -e
+            apt-get update && apt-get install -y --no-install-recommends \
+              build-essential cmake ninja-build git zlib1g-dev
+            mkdir -p build-linux && cd build-linux
+            cmake -G Ninja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_SYSTEM_NAME=Linux \
+              -DCMAKE_SYSTEM_PROCESSOR=i386 \
+              -DCMAKE_C_COMPILER='/usr/bin/gcc' \
+              -DCMAKE_CXX_COMPILER='/usr/bin/g++' \
+              -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
+              -DBuildMPDed=ON \
+              -DBuildMPGame=OFF \
+              -DBuildMPCGame=OFF \
+              -DBuildMPEngine=OFF \
+              -DBuildMPRdVanilla=OFF \
+              -DBuildMPUI=OFF \
+              -DBuildSPEngine=OFF \
+              -DBuildSPGame=OFF \
+              -DBuildSPRdVanilla=OFF \
+              -DBuildMPRend2=OFF \
+              ..
+            ninja openjkded.i386
+            chmod 777 openjkded.i386
+          "
+          ls -la build-linux/openjkded.i386
 
       - name: Upload Server Binary
         uses: actions/upload-artifact@v4
