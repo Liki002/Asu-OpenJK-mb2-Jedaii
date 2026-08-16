@@ -1650,6 +1650,7 @@ Fades in when data is fresh and fades out after 2.5s of no data.
 #define INSPECT_FADEOUT_MS 100
 
 static int s_inspectLastPollMs = 0;
+static int s_lastInspectedPlayer = -1;
 
 void SCR_DrawInspectOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) return;
@@ -1662,11 +1663,13 @@ void SCR_DrawInspectOverlay( void ) {
 
 	// Poll server periodically if looking at a valid player
 	if ( crosshairNum >= 0 && crosshairNum < 64 ) {
-		if ( cls.realtime - s_inspectLastPollMs >= INSPECT_POLL_MS ) {
+		if ( crosshairNum != s_lastInspectedPlayer || (cls.realtime - s_inspectLastPollMs >= 3000) ) {
 			s_inspectLastPollMs = cls.realtime;
+			s_lastInspectedPlayer = crosshairNum;
 			CL_AddReliableCommand( va( "inspect %d", crosshairNum ), qfalse );
 		}
 	} else {
+		s_lastInspectedPlayer = -1;
 		// If we look away, shorten the expiration time immediately so it starts a fast fade-out
 		if ( g_rpgInspect.active ) {
 			int elapsed = cls.realtime - g_rpgInspect.lastUpdateMs;

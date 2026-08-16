@@ -1817,7 +1817,8 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
   }
 
   // Intercept Ranked Chat Commands (Reconstruct full command string to handle spaces/quotes)
-  if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team") || !Q_stricmp(Cmd_Argv(0), "tell")) {
+  if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team") || !Q_stricmp(Cmd_Argv(0), "tell") ||
+      !Q_stricmp(Cmd_Argv(0), "say_party") || !Q_stricmp(Cmd_Argv(0), "p")) {
     char fullChatText[MAX_STRING_CHARS] = {0};
     int startArg = (!Q_stricmp(Cmd_Argv(0), "tell")) ? 2 : 1; // "tell <clientNum> <msg>" starts at index 2
     for ( int i = startArg; i < Cmd_Argc(); i++ ) {
@@ -1825,6 +1826,18 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
       if ( i != Cmd_Argc() - 1 ) {
         Q_strcat( fullChatText, sizeof(fullChatText), " " );
       }
+    }
+
+    // Party Chat command: say_party <msg>, /p <msg>, or "!p <msg>"
+    if (!Q_stricmp(Cmd_Argv(0), "say_party") || !Q_stricmp(Cmd_Argv(0), "p") ||
+        !Q_strncmp(fullChatText, "!p ", 3) || !Q_strncmp(fullChatText, "!pc ", 4) || !Q_strncmp(fullChatText, "!partychat ", 11)) {
+      const char *partyMsg = fullChatText;
+      if (!Q_strncmp(fullChatText, "!p ", 3)) partyMsg += 3;
+      else if (!Q_strncmp(fullChatText, "!pc ", 4)) partyMsg += 4;
+      else if (!Q_strncmp(fullChatText, "!partychat ", 11)) partyMsg += 11;
+      extern void SV_Ranked_PartyChat(client_t *cl, const char *msg);
+      SV_Ranked_PartyChat(cl, partyMsg);
+      return;
     }
 
     if (fullChatText[0] == '!' || fullChatText[0] == '#') {
@@ -1969,10 +1982,14 @@ static qboolean SV_ClientCommand(client_t *cl, msg_t *msg) {
   // but not other people
   // We don't do this when the client hasn't been active yet since its
   // normal to spam a lot of commands when downloading
+  qboolean isTelemetryCmd = (qboolean)(!Q_strncmp(s, "inspect ", 8) || !Q_strncmp(s, "my_bp ", 6) ||
+                                       !Q_strncmp(s, "duel_bp ", 8) || !Q_strncmp(s, "victim_bp ", 10) ||
+                                       !Q_strncmp(s, "combat_report", 13));
+
   if (!com_cl_running->integer && cl->state >= CS_ACTIVE &&
-      sv_floodProtect->integer) {
+      sv_floodProtect->integer && !isTelemetryCmd) {
     const int floodTime =
-        (sv_floodProtect->integer == 1) ? 1000 : sv_floodProtect->integer;
+        (sv_floodProtect->integer == 1) ? 400 : sv_floodProtect->integer;
     if (svs.time < (cl->lastReliableTime + floodTime)) {
       // ignore any other text messages from this client but let them keep
       // playing TTimo - moved the ignored verbose to the actual processing in

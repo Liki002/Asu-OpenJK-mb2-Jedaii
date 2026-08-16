@@ -408,17 +408,6 @@ qboolean CL_GetServerCommand( int serverCommandNumber ) {
 
 	Com_DPrintf( "serverCommand: %i : %s\n", serverCommandNumber, s );
 
-	// Parse last chat sender client ID
-	if ( strstr( s, "chat" ) ) {
-		const char *lastSpace = strrchr( s, ' ' );
-		if ( lastSpace ) {
-			int senderNum = atoi( lastSpace + 1 );
-			if ( senderNum >= 0 && senderNum < 32 ) {
-				extern int cl_lastChatPlayerNum;
-				cl_lastChatPlayerNum = senderNum;
-			}
-		}
-	}
 
 rescan:
 	Cmd_TokenizeString( s );

@@ -58,6 +58,7 @@ extern field_t		historyEditLines[COMMAND_HISTORY];
 // chat
 extern field_t		chatField;
 extern qboolean		chat_team;
+extern qboolean		chat_party;
 extern int			chat_playerNum;
 extern int			cl_lastChatPlayerNum;
 

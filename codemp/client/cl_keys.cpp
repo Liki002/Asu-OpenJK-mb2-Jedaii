@@ -41,6 +41,7 @@ field_t		historyEditLines[COMMAND_HISTORY];
 // chat
 field_t		chatField;
 qboolean	chat_team;
+qboolean	chat_party;
 int			chat_playerNum;
 int			cl_lastChatPlayerNum = -1;
 
@@ -802,11 +803,12 @@ In game talk message
 ================
 */
 void Message_Key( int key ) {
-	char buffer[MAX_STRING_CHARS];
-
 	if ( key == A_ESCAPE ) {
 		Key_SetCatcher( Key_GetCatcher() & ~KEYCATCH_MESSAGE );
 		Field_Clear( &chatField );
+		chat_party = qfalse;
+		chat_team = qfalse;
+		chat_playerNum = -1;
 		return;
 	}
 
@@ -814,11 +816,16 @@ void Message_Key( int key ) {
 		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
 			if ( chat_playerNum != -1 )
 				Cbuf_AddText( va( "tell %i \"%s\"\n", chat_playerNum, chatField.buffer ) );
+			else if ( chat_party )
+				Cbuf_AddText( va( "say_party \"%s\"\n", chatField.buffer ) );
 			else if ( chat_team )
 				Cbuf_AddText( va( "say_team \"%s\"\n", chatField.buffer ) );
 			else
 				Cbuf_AddText( va( "say \"%s\"\n", chatField.buffer ) );
 		}
+		chat_party = qfalse;
+		chat_team = qfalse;
+		chat_playerNum = -1;
 		Key_SetCatcher( Key_GetCatcher() & ~KEYCATCH_MESSAGE );
 		Field_Clear( &chatField );
 		return;

@@ -81,6 +81,7 @@ Con_MessageMode_f
 void Con_MessageMode_f (void) {	//yell
 	chat_playerNum = -1;
 	chat_team = qfalse;
+	chat_party = qfalse;
 	Field_Clear( &chatField );
 	chatField.widthInChars = 34;
 
@@ -95,9 +96,37 @@ Con_MessageMode2_f
 void Con_MessageMode2_f (void) {	//team chat
 	chat_playerNum = -1;
 	chat_team = qtrue;
+	chat_party = qfalse;
 	Field_Clear( &chatField );
 	chatField.widthInChars = 29;
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
+}
+
+/*
+================
+Con_MessageModeParty_f
+================
+*/
+void Con_MessageModeParty_f (void) {	//party chat
+	chat_playerNum = -1;
+	chat_team = qfalse;
+	chat_party = qtrue;
+	Field_Clear( &chatField );
+	chatField.widthInChars = 28;
+	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
+}
+
+/*
+================
+Con_SayParty_f
+================
+*/
+void Con_SayParty_f (void) {
+	if ( Cmd_Argc() < 2 ) {
+		Con_MessageModeParty_f();
+		return;
+	}
+	CL_AddReliableCommand( va( "say_party \"%s\"", Cmd_Args() ), qfalse );
 }
 
 /*
@@ -113,12 +142,14 @@ void Con_MessageMode3_f (void)
 		return;
 	}
 
+	chat_team = qfalse;
+	chat_party = qfalse;
 	chat_playerNum = CGVM_CrosshairPlayer();
 	if ( chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS ) {
-		extern int cl_lastChatPlayerNum;
-		chat_playerNum = cl_lastChatPlayerNum;
+		chat_playerNum = -1;
+		Com_Printf( "^3[TELL] Point your crosshair at a player to whisper them.\n" );
+		return;
 	}
-	chat_team = qfalse;
 	Field_Clear( &chatField );
 	chatField.widthInChars = 34;
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
@@ -137,12 +168,13 @@ void Con_MessageMode4_f (void)
 		return;
 	}
 
+	chat_team = qfalse;
+	chat_party = qfalse;
 	chat_playerNum = CGVM_LastAttacker();
 	if ( chat_playerNum < 0 || chat_playerNum >= MAX_CLIENTS ) {
 		chat_playerNum = -1;
 		return;
 	}
-	chat_team = qfalse;
 	Field_Clear( &chatField );
 	chatField.widthInChars = 34;
 	Key_SetCatcher( Key_GetCatcher( ) ^ KEYCATCH_MESSAGE );
@@ -378,6 +410,9 @@ void Con_Init (void) {
 	Cmd_AddCommand( "messagemode2", Con_MessageMode2_f, "Team Chat" );
 	Cmd_AddCommand( "messagemode3", Con_MessageMode3_f, "Private Chat with Target Player" );
 	Cmd_AddCommand( "messagemode4", Con_MessageMode4_f, "Private Chat with Last Attacker" );
+	Cmd_AddCommand( "messagemode_party", Con_MessageModeParty_f, "Party Chat" );
+	Cmd_AddCommand( "say_party", Con_SayParty_f, "Send Party Message" );
+	Cmd_AddCommand( "p", Con_SayParty_f, "Send Party Message" );
 	Cmd_AddCommand( "clear", Con_Clear_f, "Clear console text" );
 	Cmd_AddCommand( "condump", Con_Dump_f, "Dump console text to file" );
 	Cmd_SetCommandCompletionFunc( "condump", Cmd_CompleteTxtName );
@@ -713,6 +748,10 @@ void Con_DrawNotify (void)
 			} else {
 				chattext = "^3Tell: ";
 			}
+		}
+		else if (chat_party)
+		{
+			chattext = "^5say_party: ";
 		}
 		else if (chat_team)
 		{

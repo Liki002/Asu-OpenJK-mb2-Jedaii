@@ -1576,6 +1576,49 @@ static void SV_Ranked_Cmd_ChangeUsername(client_t *cl, const char *chatText) {
   SV_Ranked_Log("RENAME: client %d renamed to '%s'", clientNum, newKey);
 }
 
+rankedParty_t *SV_Ranked_GetPlayerParty(int clientNum, int *outLeaderId) {
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    rankedParty_t *p = &sv_rankedParties[i];
+    if (p->active) {
+      for (int j = 0; j < p->memberCount; j++) {
+        if (p->clientNums[j] == clientNum) {
+          if (outLeaderId) *outLeaderId = i;
+          return p;
+        }
+      }
+    }
+  }
+  return NULL;
+}
+
+void SV_Ranked_PartyChat(client_t *cl, const char *msg) {
+  if (!cl || !msg) return;
+  int clientNum = (int)(cl - svs.clients);
+  int leaderId = -1;
+  rankedParty_t *p = SV_Ranked_GetPlayerParty(clientNum, &leaderId);
+  if (!p || !p->active) {
+    SV_SendServerCommand(cl, "chat \"^1You are not in a party! Type ^3!party ^1to create or join one.\"");
+    return;
+  }
+
+  while (*msg == ' ' || *msg == '\"') msg++;
+  if (!*msg) return;
+
+  const char *colorCodes[8] = { "^4", "^1", "^2", "^3", "^5", "^6", "^0", "^7" };
+  const char *col = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorCodes[p->teamColorIdx] : "^5";
+
+  char formattedMsg[MAX_STRING_CHARS];
+  Com_sprintf(formattedMsg, sizeof(formattedMsg), "%s[PARTY: %s] ^7%s%s: ^7%s", col, p->teamName, col, cl->name, msg);
+
+  for (int j = 0; j < p->memberCount; j++) {
+    int memberId = p->clientNums[j];
+    if (memberId >= 0 && memberId < sv_maxclients->integer && svs.clients[memberId].state >= CS_ACTIVE) {
+      SV_SendServerCommand(svs.clients + memberId, va("chat \"%s\"", formattedMsg));
+    }
+  }
+  SV_Ranked_Log("PARTY_CHAT: [%s] %s: %s", p->teamName, cl->name, msg);
+}
+
 void SV_Ranked_ShowPartyStudio(client_t *cl) {
   int activeCount = 0;
   SV_SendServerCommand(cl, "party_list_clear");
@@ -1915,6 +1958,15 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "chat \"^1Admin only.\"");
     } else {
       SV_SendServerCommand(cl, "adminmenu_open");
+    }
+    return qtrue;
+
+  } else if (!Q_stricmp(cmdSpace, "!p") || !Q_stricmp(cmdSpace, "!pc") || !Q_stricmp(cmdSpace, "!partychat")) {
+    const char *arg = strchr(chatText, ' ');
+    if (arg && *(arg + 1) != '\0') {
+      SV_Ranked_PartyChat(cl, arg + 1);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^3Usage: ^5!p <message> ^7(Party-only chat)\"");
     }
     return qtrue;
 

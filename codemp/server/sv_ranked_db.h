@@ -148,6 +148,8 @@ void SV_Ranked_ShowTopCredits(client_t *cl);
 void SV_Ranked_ShowTopPotato(client_t *cl);
 void SV_Ranked_ShowQuests(client_t *cl);
 void SV_Ranked_ShowPartyStudio(client_t *cl);
+void SV_Ranked_PartyChat(client_t *cl, const char *msg);
+rankedParty_t *SV_Ranked_GetPlayerParty(int clientNum, int *outLeaderId);
 void SV_Ranked_ShowAchievements(client_t *cl);
 void SV_Ranked_SetBounty(client_t *cl, const char *targetName, int amount);
 void SV_Ranked_ShowBountyList(client_t *cl);
