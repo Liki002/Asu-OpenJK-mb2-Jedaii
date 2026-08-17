@@ -950,20 +950,6 @@ void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier) {
 
 
 
-/*
-==================
-SV_Ranked_Cmd_Lives
-Shows remaining lives to self.
-==================
-*/
-void SV_Ranked_Cmd_Lives(client_t *cl) {
-  int clientNum = cl - svs.clients;
-  if (!sv_rankedPlayers[clientNum].livesActive) {
-    SV_SendServerCommand(cl, "chat \"^5Lives system is not active for you (unlimited respawns).\"");
-  } else {
-    SV_SendServerCommand(cl, va("chat \"^2You have ^5%d ^2lives remaining.\"", sv_rankedPlayers[clientNum].remainingLives));
-  }
-}
 
 
 // Parse `!wanted` — show top 5 players by duel win streak + live bounty
@@ -1855,9 +1841,6 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "chat \"^1Usage: !goto <player>\"");
     }
     return qtrue;
-  } else if (!Q_stricmp(cmdSpace, "!lives") || !Q_stricmp(cmdSpace, "!mylives")) {
-    SV_Ranked_Cmd_Lives(cl);
-    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!details") || !Q_stricmp(cmdSpace, "!myinfo")) {
     SV_Ranked_Cmd_Details(cl);
     return qtrue;
@@ -2251,6 +2234,18 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
 
     SV_SendServerCommand(cl, "print \"\n^5====== RANKED COMMANDS ======\n\"");
 
+    // -- Menus & HUD --
+    SV_SendServerCommand(cl, "print \"\n^5[Menus & Overlays]\n\"");
+    SV_SendServerCommand(cl, "print \"^3!rpgmenu / !menu / !rpg ^7Master Hub & HUD Settings\n\"");
+    SV_SendServerCommand(cl, "print \"^3!party / !partymenu     ^7Party Studio UI\n\"");
+    SV_SendServerCommand(cl, "print \"^3!shop / !sh             ^7Credit Shop UI\n\"");
+    SV_SendServerCommand(cl, "print \"^3!inventory / !inv / !i  ^7Item Inventory UI\n\"");
+    SV_SendServerCommand(cl, "print \"^3!quests                 ^7Daily Quests Tracker\n\"");
+    SV_SendServerCommand(cl, "print \"^3!achievements / !ach    ^7Achievements Tracker\n\"");
+    if (isAdmin) {
+      SV_SendServerCommand(cl, "print \"^1!admin / !adminmenu     ^7Admin Control Panel UI\n\"");
+    }
+
     // -- Account --
     SV_SendServerCommand(cl, "print \"\n^5[Account]\n\"");
     SV_SendServerCommand(cl, "print \"^2/login <user> <pass>    ^7Register or log in\n\"");
@@ -2262,59 +2257,68 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     // -- Stats / Leaderboards --
     SV_SendServerCommand(cl, "print \"\n^5[Stats & Leaderboards]\n\"");
     SV_SendServerCommand(cl, "print \"^3!stats [name] / !info   ^7View ranked stats\n\"");
-    SV_SendServerCommand(cl, "print \"^3!rank / !r              ^7View your rank title\n\"");
-    SV_SendServerCommand(cl, "print \"^3!ranks                 ^7View all rank thresholds\n\"");
-    SV_SendServerCommand(cl, "print \"^3!top / !t               ^7Top 5 by Elo\n\"");
-    SV_SendServerCommand(cl, "print \"^3!topcredits / !topcr    ^7Top 5 Wealthiest\n\"");
-    SV_SendServerCommand(cl, "print \"^3!toppotato              ^7Top 5 Hot Potato\n\"");
-    SV_SendServerCommand(cl, "print \"^3!wanted / !w            ^7Top 5 by duel streak\n\"");
+    SV_SendServerCommand(cl, "print \"^3!ranked / !unranked     ^7Enable/Disable Elo Duels\n\"");
+    SV_SendServerCommand(cl, "print \"^3!toggleranked / !tr     ^7Toggle Ranked/Casual mode\n\"");
+    SV_SendServerCommand(cl, "print \"^3!rank / !r              ^7View rank & XP progress\n\"");
+    SV_SendServerCommand(cl, "print \"^3!ranks                 ^7View all rank tiers\n\"");
+    SV_SendServerCommand(cl, "print \"^3!top / !t               ^7Top Elo Duelists\n\"");
+    SV_SendServerCommand(cl, "print \"^3!topcredits / !topcr    ^7Top Wealthiest\n\"");
+    SV_SendServerCommand(cl, "print \"^3!toppotato              ^7Top Hot Potato\n\"");
+    SV_SendServerCommand(cl, "print \"^3!wanted / !w            ^7Most Wanted Bounty Targets\n\"");
 
-    // -- Quests & Achievements --
-    SV_SendServerCommand(cl, "print \"\n^5[Quests & Achievements]\n\"");
-    SV_SendServerCommand(cl, "print \"^3!quests                 ^7View daily quests\n\"");
-    SV_SendServerCommand(cl, "print \"^5!achievements / !ach    ^7View achievements\n\"");
+    // -- Party & Team System --
+    SV_SendServerCommand(cl, "print \"\n^5[Party & Team Chat]\n\"");
+    SV_SendServerCommand(cl, "print \"^5!p <msg> / !partychat   ^7Send message to party only\n\"");
+    SV_SendServerCommand(cl, "print \"^5!party / !parties       ^7Open Party Studio UI\n\"");
+    SV_SendServerCommand(cl, "print \"^5!party <name> [color]   ^7Create a new team party\n\"");
+    SV_SendServerCommand(cl, "print \"^5!inviteparty <ID> / !ip  ^7Invite player to party\n\"");
+    SV_SendServerCommand(cl, "print \"^5!acceptparty / !ap      ^7Accept party invite\n\"");
+    SV_SendServerCommand(cl, "print \"^5!joinparty <leader> /!rp ^7Request to join party\n\"");
+    SV_SendServerCommand(cl, "print \"^5!acceptjoin [ID] / !aj  ^7Accept join request\n\"");
+    SV_SendServerCommand(cl, "print \"^5!leaveparty / !lp       ^7Leave current party\n\"");
+    SV_SendServerCommand(cl, "print \"^5!disbandparty / !dp     ^7Disband your party\n\"");
+    SV_SendServerCommand(cl, "print \"^5!partycolor <color>     ^7Change party shield color\n\"");
 
     // -- Economy --
-    SV_SendServerCommand(cl, "print \"\n^5[Economy]\n\"");
+    SV_SendServerCommand(cl, "print \"\n^5[Economy & Gambling]\n\"");
     SV_SendServerCommand(cl, "print \"^6!credits / !cr          ^7Credits balance\n\"");
     SV_SendServerCommand(cl, "print \"^6!send <name> <amt> / !s ^7Send credits to player\n\"");
-    SV_SendServerCommand(cl, "print \"^6!shop / !sh             ^7Credits shop\n\"");
-    SV_SendServerCommand(cl, "print \"^6!inventory / !inv / !i  ^7Your item inventory\n\"");
     SV_SendServerCommand(cl, "print \"^6!buy <item>             ^7Buy from shop\n\"");
     SV_SendServerCommand(cl, "print \"^6!sell <item> / !sl      ^7Sell an item\n\"");
     SV_SendServerCommand(cl, "print \"^6!use <item> / !u        ^7Use an item\n\"");
-    SV_SendServerCommand(cl, "print \"^6!setwinmsg <msg>        ^7Set custom win msg\n\"");
-
-    // -- Bounty / Bet / Roll --
-    SV_SendServerCommand(cl, "print \"\n^5[Bounties & Betting]\n\"");
-    SV_SendServerCommand(cl, "print \"^1!bounty <name> <amt>    ^7Place a bounty\n\"");
+    SV_SendServerCommand(cl, "print \"^6!roll / !rl             ^7Tiered roll gamble\n\"");
+    SV_SendServerCommand(cl, "print \"^6!bet <name> <amt> / !b  ^7Bet on an active duel\n\"");
+    SV_SendServerCommand(cl, "print \"^6!setwinmsg <msg>        ^7Set custom win message\n\"");
+    SV_SendServerCommand(cl, "print \"^1!bounty <name> <amt>    ^7Place a credit bounty\n\"");
     SV_SendServerCommand(cl, "print \"^1!bountylist / !bounties ^7All active bounties\n\"");
-    SV_SendServerCommand(cl, "print \"^6!bet <name> <amt> / !b  ^7Bet on a duel\n\"");
-    SV_SendServerCommand(cl, "print \"^6!roll / !rl             ^7Tiered Gamble (60s cd)\n\"");
 
     // -- Activities --
-    SV_SendServerCommand(cl, "print \"\n^5[Activities]\n\"");
-    SV_SendServerCommand(cl, "print \"^2!adventure / !adv       ^7Start a random adventure\n\"");
-    SV_SendServerCommand(cl, "print \"^2!choose <n> / !c <n>    ^7Pick an adventure choice\n\"");
-    SV_SendServerCommand(cl, "print \"^3#<answer>               ^7Answer active trivia question\n\"");
-    SV_SendServerCommand(cl, "print \"^7!vote hotpotato/yes/no  ^7Start/Vote on Hot Potato Mode\n\"");
+    SV_SendServerCommand(cl, "print \"\n^5[Activities & Minigames]\n\"");
+    SV_SendServerCommand(cl, "print \"^2!adventure / !adv       ^7Start text adventure\n\"");
+    SV_SendServerCommand(cl, "print \"^2!choose <1|2|3> / !c    ^7Pick adventure choice\n\"");
+    SV_SendServerCommand(cl, "print \"^3#<answer>               ^7Answer active trivia\n\"");
+    SV_SendServerCommand(cl, "print \"^7!vote <1|2>             ^7Vote on server polls\n\"");
+
     // -- Admin --
     if (isAdmin) {
-      SV_SendServerCommand(cl, "print \"\n^1[ADMIN_COMMANDS]\n\"");
+      SV_SendServerCommand(cl, "print \"\n^1[ADMIN COMMANDS]\n\"");
+      SV_SendServerCommand(cl, "print \"^1!admin / !adminmenu     ^7Admin Control Panel UI\n\"");
       SV_SendServerCommand(cl, "print \"^1!cp all <msg>           ^7Centerprint broadcast\n\"");
       SV_SendServerCommand(cl, "print \"^1!cp <name/id> <msg>    ^7Centerprint to target\n\"");
-      SV_SendServerCommand(cl, "print \"^1!forcepotato            ^7Force-start Hot Potato\n\"");
-      SV_SendServerCommand(cl, "print \"^1!stoppotato             ^7Stop Hot Potato\n\"");
-      SV_SendServerCommand(cl, "print \"^1!givecredits <name> <n> ^7Grant credits  (alias !gc)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!givecredits <name> <n> ^7Grant credits (alias !gc)\n\"");
       SV_SendServerCommand(cl, "print \"^1!setelo <name> <n>      ^7Set player Elo\n\"");
       SV_SendServerCommand(cl, "print \"^1!setrank <name> <rank>  ^7Set player rank title\n\"");
-      SV_SendServerCommand(cl, "print \"^1!bring <name>           ^7Teleport player in front of you (Level 1 Admin)\n\"");
-      SV_SendServerCommand(cl, "print \"^1!goto <name>            ^7Teleport to player (Level 1 Admin)\n\"");
-      SV_SendServerCommand(cl, "print \"^1!jail <name> <min>      ^7Put on probation\n\"");
-      SV_SendServerCommand(cl, "print \"^1!unjail <name>          ^7Clear probation\n\"");
+      SV_SendServerCommand(cl, "print \"^1!freeze / !unfreeze <n> ^7Freeze / Unfreeze player\n\"");
+      SV_SendServerCommand(cl, "print \"^1!bring <name>           ^7Teleport player to you\n\"");
+      SV_SendServerCommand(cl, "print \"^1!goto <name>            ^7Teleport to player\n\"");
+      SV_SendServerCommand(cl, "print \"^1!jail <name> <min>      ^7Jail/mute player\n\"");
+      SV_SendServerCommand(cl, "print \"^1!unjail <name>          ^7Clear jail/probation\n\"");
+      SV_SendServerCommand(cl, "print \"^1!forcepotato/!stoppotato^7Start/Stop Hot Potato\n\"");
+      SV_SendServerCommand(cl, "print \"^1!startevent / !event    ^7Start 3v3v3 Pit Battle\n\"");
     }
 
     SV_SendServerCommand(cl, "print \"^5=============================\n\n\"");
+    return qtrue;
     return qtrue;
   }
 
