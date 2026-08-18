@@ -35,16 +35,50 @@ jobs:
           echo "Zip created:"
           ls -lh JedaiiClient_Full.zip
 
-      - name: Get short commit SHA for tag
+      - name: Get short commit SHA
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-      - name: Delete existing 'latest-ranked-clean' release (if any)
+      - name: Delete existing latest-ranked-clean release (if any)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete latest-ranked-clean --yes 2>/dev/null || true
           git push origin --delete refs/tags/latest-ranked-clean 2>/dev/null || true
+
+      - name: Build release notes from CHANGELOG
+        id: notes
+        run: |
+          BUILT="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          SHA="${{ steps.vars.outputs.sha_short }}"
+
+          CHANGELOG_BODY=""
+          if [ -f "CHANGELOG_JEDAII.md" ]; then
+            CHANGELOG_BODY=$(awk '/^## Added Features/,0' CHANGELOG_JEDAII.md | tail -n +2 | head -n 120)
+          fi
+
+          {
+            echo "**Auto-generated release from the \`ranked-clean\` branch.**"
+            echo ""
+            echo "> **Commit:** \`${SHA}\` | **Built:** ${BUILT}"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Install Instructions"
+            echo "1. Unzip \`JedaiiClient_Full.zip\`"
+            echo "2. Place \`mbii.x86.exe\` into your **Movie Battles II** install folder"
+            echo "3. Copy \`zzz_rpg_hud.pk3\` into \`GameData/MBII/\`"
+            echo "4. Launch the game through the **normal MBII launcher** as usual"
+            echo "5. Connect to the Jedaii Ranked server — the PK3 loads automatically"
+            echo ""
+            echo "---"
+            echo ""
+            echo "### Changelog"
+            echo ""
+            echo "${CHANGELOG_BODY}"
+          } > /tmp/release_notes.md
+
+          echo "notes_file=/tmp/release_notes.md" >> $GITHUB_OUTPUT
 
       - name: Create new GitHub Release
         env:
@@ -53,17 +87,6 @@ jobs:
           gh release create latest-ranked-clean \
             JedaiiClient_Full.zip \
             --title "Jedaii Ranked Client (latest)" \
-            --notes "**Auto-generated release from the \`ranked-clean\` branch.**
-
-          This package contains the Jedaii custom OpenJK client and the ranked RPG PK3.
-
-          **Commit:** \`${{ steps.vars.outputs.sha_short }}\`
-          **Built:** $(date -u '+%Y-%m-%d %H:%M UTC')
-
-          ### Install Instructions
-          1. Unzip \`JedaiiClient_Full.zip\`
-          2. Copy all DLL files and \`.exe\` into your Jedi Academy folder
-          3. Copy \`zzz_rpg_hud.pk3\` into \`GameData/base/\`
-          4. Launch \`mbii.x86.exe\` and connect to the Jedaii server" \
+            --notes-file "${{ steps.notes.outputs.notes_file }}" \
             --latest \
             --repo ${{ github.repository }}
