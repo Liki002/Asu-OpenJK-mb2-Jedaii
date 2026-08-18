@@ -1815,6 +1815,25 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
     SV_Ranked_Log("VICTIM_BP_REPORT: Client %d (%s) reported victim BP:%d", cNum, cl->name, vBP);
     return;
   }
+  if (!Q_stricmp(Cmd_Argv(0), "rpg_gameresult")) {
+    // Format: rpg_gameresult <gameId> <betPaid> <winAwarded>
+    int cNum = (int)(cl - svs.clients);
+    rankedMatchState_t *r = &sv_rankedPlayers[cNum];
+    if (r->loggedIn && r->username[0]) {
+      int betPaid = atoi(Cmd_Argv(2));
+      int winAwarded = atoi(Cmd_Argv(3));
+      if (betPaid > 0) {
+        UpdateAccountCredits(r->username, -betPaid);
+      }
+      if (winAwarded > 0) {
+        UpdateAccountCredits(r->username, winAwarded);
+        SV_Ranked_ProgressQuest(r->username, "casino_wins", 1, cl);
+      }
+      SV_Ranked_SaveAccounts();
+      SV_Ranked_SyncClientRPG(cl);
+    }
+    return;
+  }
 
   // Intercept Ranked Chat Commands (Reconstruct full command string to handle spaces/quotes)
   if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team") || !Q_stricmp(Cmd_Argv(0), "tell") ||

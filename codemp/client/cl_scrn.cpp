@@ -602,6 +602,9 @@ static void SCR_AdminMenu_f( void ) {
 	Com_Printf( "^2Admin Control Panel %s\n", g_rpgAdmin.active ? "OPENED" : "CLOSED" );
 }
 
+void SCR_Games_f( void );
+void SCR_Blackjack_f( void );
+
 void SCR_Init( void ) {
 	cl_timegraph = Cvar_Get ("timegraph", "0", CVAR_CHEAT);
 	cl_debuggraph = Cvar_Get ("debuggraph", "0", CVAR_CHEAT);
@@ -644,6 +647,11 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "adminmenu", SCR_AdminMenu_f, "Toggle Admin Control Panel overlay" );
 	Cmd_AddCommand( "admin", SCR_AdminMenu_f, "Toggle Admin Control Panel overlay" );
 	Cmd_AddCommand( "adminpanel", SCR_AdminMenu_f, "Toggle Admin Control Panel overlay" );
+	Cmd_AddCommand( "games", SCR_Games_f, "Toggle Galactic Cantina Games Hub overlay" );
+	Cmd_AddCommand( "gamesmenu", SCR_Games_f, "Toggle Galactic Cantina Games Hub overlay" );
+	Cmd_AddCommand( "blackjack", SCR_Blackjack_f, "Open Canto Bight Blackjack 21 table" );
+	Cmd_AddCommand( "casino", SCR_Blackjack_f, "Open Canto Bight Blackjack 21 table" );
+	Cmd_AddCommand( "pazaak", SCR_Games_f, "Open Star Wars Pazaak games table" );
 
 	scr_initialized = qtrue;
 }
@@ -3748,8 +3756,404 @@ void SCR_DrawPartyOverheadIcons( void ) {
 
 //=======================================================
 
+/*
+=============================================================================
+CANTO BIGHT BLACKJACK 21 & CANTINA GAMES HUB (!games / !blackjack)
+=============================================================================
+*/
+cantinaGames_t g_cantinaGames = { qfalse, 0, {}, 0, {}, 0, {}, 0, 50, qfalse, qfalse, "Place your bet and press DEAL [Space]!", 0 };
 
+static void SCR_Blackjack_Shuffle( void ) {
+	int idx = 0;
+	for ( int s = 0; s < 4; s++ ) {
+		for ( int v = 1; v <= 13; v++ ) {
+			g_cantinaGames.deck[idx].suit = s;
+			g_cantinaGames.deck[idx].val = v;
+			idx++;
+		}
+	}
+	for ( int i = 51; i > 0; i-- ) {
+		int j = rand() % (i + 1);
+		bjCard_t temp = g_cantinaGames.deck[i];
+		g_cantinaGames.deck[i] = g_cantinaGames.deck[j];
+		g_cantinaGames.deck[j] = temp;
+	}
+	g_cantinaGames.deckTop = 0;
+}
 
+static bjCard_t SCR_Blackjack_DrawCard( void ) {
+	if ( g_cantinaGames.deckTop >= 52 ) {
+		SCR_Blackjack_Shuffle();
+	}
+	return g_cantinaGames.deck[g_cantinaGames.deckTop++];
+}
+
+static int SCR_Blackjack_Score( bjCard_t *hand, int count, qboolean hideFirst ) {
+	int score = 0;
+	int aces = 0;
+	int start = hideFirst ? 1 : 0;
+	for ( int i = start; i < count; i++ ) {
+		int v = hand[i].val;
+		if ( v >= 10 ) score += 10;
+		else if ( v == 1 ) { score += 11; aces++; }
+		else score += v;
+	}
+	while ( score > 21 && aces > 0 ) {
+		score -= 10;
+		aces--;
+	}
+	return score;
+}
+
+void SCR_Blackjack_Deal( void ) {
+	if ( g_cantinaGames.inRound ) return;
+	int credits = g_rpgStats.credits > 0 ? g_rpgStats.credits : g_rpgShop.credits;
+	if ( g_cantinaGames.currentBet <= 0 ) g_cantinaGames.currentBet = 10;
+	if ( g_cantinaGames.currentBet > credits ) {
+		Q_strncpyz( g_cantinaGames.statusMsg, "^1Not enough Credits to place bet!", sizeof( g_cantinaGames.statusMsg ) );
+		return;
+	}
+
+	SCR_Blackjack_Shuffle();
+	g_cantinaGames.playerCardCount = 0;
+	g_cantinaGames.dealerCardCount = 0;
+	g_cantinaGames.inRound = qtrue;
+	g_cantinaGames.dealerRevealed = qfalse;
+	g_cantinaGames.lastOutcome = 0;
+
+	if ( g_rpgStats.credits >= g_cantinaGames.currentBet ) {
+		g_rpgStats.credits -= g_cantinaGames.currentBet;
+	}
+	CL_AddReliableCommand( va( "rpg_gameresult 1 %d 0", g_cantinaGames.currentBet ), qfalse );
+
+	g_cantinaGames.playerHand[g_cantinaGames.playerCardCount++] = SCR_Blackjack_DrawCard();
+	g_cantinaGames.dealerHand[g_cantinaGames.dealerCardCount++] = SCR_Blackjack_DrawCard();
+	g_cantinaGames.playerHand[g_cantinaGames.playerCardCount++] = SCR_Blackjack_DrawCard();
+	g_cantinaGames.dealerHand[g_cantinaGames.dealerCardCount++] = SCR_Blackjack_DrawCard();
+
+	int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
+	if ( pScore == 21 ) {
+		g_cantinaGames.dealerRevealed = qtrue;
+		g_cantinaGames.inRound = qfalse;
+		g_cantinaGames.lastOutcome = 4;
+		int winAmt = (int)(g_cantinaGames.currentBet * 2.5f);
+		g_rpgStats.credits += winAmt;
+		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", winAmt ), qfalse );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^3⭐ NATURAL BLACKJACK! ^2Won +%d CR!^7", winAmt );
+	} else {
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^7Your total is ^2%d^7. [1] Hit or [2] Stand?", pScore );
+	}
+}
+
+void SCR_Blackjack_Stand( void ) {
+	if ( !g_cantinaGames.inRound ) return;
+	g_cantinaGames.dealerRevealed = qtrue;
+	g_cantinaGames.inRound = qfalse;
+
+	int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
+	int dScore = SCR_Blackjack_Score( g_cantinaGames.dealerHand, g_cantinaGames.dealerCardCount, qfalse );
+
+	while ( dScore < 17 && g_cantinaGames.dealerCardCount < 10 ) {
+		g_cantinaGames.dealerHand[g_cantinaGames.dealerCardCount++] = SCR_Blackjack_DrawCard();
+		dScore = SCR_Blackjack_Score( g_cantinaGames.dealerHand, g_cantinaGames.dealerCardCount, qfalse );
+	}
+
+	if ( dScore > 21 ) {
+		g_cantinaGames.lastOutcome = 1;
+		int winAmt = g_cantinaGames.currentBet * 2;
+		g_rpgStats.credits += winAmt;
+		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", winAmt ), qfalse );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^2🎉 DEALER BUST (%d)! ^7Won ^2+%d CR^7!", dScore, winAmt );
+	} else if ( pScore > dScore ) {
+		g_cantinaGames.lastOutcome = 1;
+		int winAmt = g_cantinaGames.currentBet * 2;
+		g_rpgStats.credits += winAmt;
+		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", winAmt ), qfalse );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^2🎉 YOU WIN (%d vs %d)! ^7Won ^2+%d CR^7!", pScore, dScore, winAmt );
+	} else if ( dScore > pScore ) {
+		g_cantinaGames.lastOutcome = 2;
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1❌ DEALER WINS (%d vs %d). ^7Lost %d CR.", dScore, pScore, g_cantinaGames.currentBet );
+	} else {
+		g_cantinaGames.lastOutcome = 3;
+		g_rpgStats.credits += g_cantinaGames.currentBet;
+		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", g_cantinaGames.currentBet ), qfalse );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^3🤝 PUSH (%d vs %d). ^7Bet returned.", pScore, dScore );
+	}
+}
+
+void SCR_Blackjack_Hit( void ) {
+	if ( !g_cantinaGames.inRound ) return;
+	if ( g_cantinaGames.playerCardCount < 10 ) {
+		g_cantinaGames.playerHand[g_cantinaGames.playerCardCount++] = SCR_Blackjack_DrawCard();
+	}
+	int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
+	if ( pScore > 21 ) {
+		g_cantinaGames.dealerRevealed = qtrue;
+		g_cantinaGames.inRound = qfalse;
+		g_cantinaGames.lastOutcome = 5;
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1💀 BUST (%d)! ^7Lost %d Credits.", pScore, g_cantinaGames.currentBet );
+	} else if ( pScore == 21 ) {
+		SCR_Blackjack_Stand();
+	} else {
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^7Your total is ^2%d^7. [1] Hit or [2] Stand?", pScore );
+	}
+}
+
+void SCR_Blackjack_DoubleDown( void ) {
+	if ( !g_cantinaGames.inRound ) return;
+	int credits = g_rpgStats.credits > 0 ? g_rpgStats.credits : g_rpgShop.credits;
+	if ( credits < g_cantinaGames.currentBet ) {
+		Q_strncpyz( g_cantinaGames.statusMsg, "^1Not enough Credits to Double Down!", sizeof( g_cantinaGames.statusMsg ) );
+		return;
+	}
+	g_rpgStats.credits -= g_cantinaGames.currentBet;
+	CL_AddReliableCommand( va( "rpg_gameresult 1 %d 0", g_cantinaGames.currentBet ), qfalse );
+	g_cantinaGames.currentBet *= 2;
+
+	if ( g_cantinaGames.playerCardCount < 10 ) {
+		g_cantinaGames.playerHand[g_cantinaGames.playerCardCount++] = SCR_Blackjack_DrawCard();
+	}
+	int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
+	if ( pScore > 21 ) {
+		g_cantinaGames.dealerRevealed = qtrue;
+		g_cantinaGames.inRound = qfalse;
+		g_cantinaGames.lastOutcome = 5;
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1💀 BUST (%d)! ^7Lost %d Credits.", pScore, g_cantinaGames.currentBet );
+	} else {
+		SCR_Blackjack_Stand();
+	}
+}
+
+static void SCR_DrawBlackjackCard( float x, float y, int val, int suit, qboolean isHidden ) {
+	float w = 38.0f;
+	float h = 54.0f;
+
+	if ( isHidden ) {
+		vec4_t backBg = { 0.08f, 0.18f, 0.38f, 0.96f };
+		vec4_t backBorder = { 0.25f, 0.60f, 0.95f, 1.0f };
+		SCR_DrawRoundedGlassPanel( x, y, w, h, 3.0f, backBg, backBorder );
+		SCR_DrawVirtualString( x + 12.0f, y + 20.0f, 6.0f, "^5?", NULL );
+		return;
+	}
+
+	vec4_t cardBg = { 0.96f, 0.96f, 0.98f, 0.98f };
+	vec4_t cardBorder = { 0.70f, 0.75f, 0.85f, 1.0f };
+	SCR_DrawRoundedGlassPanel( x, y, w, h, 3.0f, cardBg, cardBorder );
+
+	qboolean isRed = (suit == 1 || suit == 2) ? qtrue : qfalse;
+	const char *colorCode = isRed ? "^1" : "^0";
+
+	const char *valStr;
+	if ( val == 1 ) valStr = "A";
+	else if ( val == 11 ) valStr = "J";
+	else if ( val == 12 ) valStr = "Q";
+	else if ( val == 13 ) valStr = "K";
+	else valStr = va( "%d", val );
+
+	const char *suitStr;
+	if ( suit == 0 ) suitStr = "S";
+	else if ( suit == 1 ) suitStr = "H";
+	else if ( suit == 2 ) suitStr = "D";
+	else suitStr = "C";
+
+	SCR_DrawVirtualString( x + 3.0f, y + 2.0f, 3.2f, va( "%s%s", colorCode, valStr ), NULL );
+	SCR_DrawVirtualString( x + 3.0f, y + 10.0f, 2.6f, va( "%s%s", colorCode, suitStr ), NULL );
+	SCR_DrawVirtualString( x + 13.0f, y + 20.0f, 5.2f, va( "%s%s", colorCode, suitStr ), NULL );
+	SCR_DrawVirtualString( x + w - 11.0f, y + h - 12.0f, 3.2f, va( "%s%s", colorCode, valStr ), NULL );
+}
+
+/*
+==================
+SCR_DrawCantinaGamesOverlay
+
+Main Cantina Games Hub and Canto Bight Blackjack 21 overlay
+==================
+*/
+void SCR_DrawCantinaGamesOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !g_cantinaGames.active ) return;
+
+	float mx = (float)g_rpgMouseX;
+	float my = (float)g_rpgMouseY;
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t cyanColor = { 0.10f, 0.80f, 1.00f, 1.0f };
+	int credits = g_rpgStats.credits > 0 ? g_rpgStats.credits : g_rpgShop.credits;
+
+	// ========================================================
+	// VIEW 0: CANTINA GAMES HUB SELECTOR
+	// ========================================================
+	if ( g_cantinaGames.activeGame == 0 ) {
+		float winW = 500.0f;
+		float winH = 340.0f;
+		float winX = 320.0f - winW * 0.5f;
+		float winY = 240.0f - winH * 0.5f;
+
+		vec4_t hubBg = { 0.04f, 0.08f, 0.16f, 0.95f };
+		vec4_t hubBorder = { 0.10f, 0.75f, 0.95f, 0.90f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 8.0f, hubBg, hubBorder );
+
+		float titleW = SCR_GetStringWidth( "GALACTIC CANTINA GAMES HUB", 7.5f );
+		SCR_DrawVirtualString( winX + (winW - titleW) * 0.5f, winY + 16.0f, 7.5f, "^3GALACTIC CANTINA GAMES HUB", yellowCol );
+		SCR_DrawVirtualString( winX + winW - 35.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
+		SCR_DrawVirtualString( winX + 20.0f, winY + 38.0f, 4.4f, va( "^7Your Bankroll: ^5%d Credits", credits ), cyanColor );
+
+		// Card 1: Canto Bight Blackjack 21
+		float c1X = winX + 25.0f;
+		float c1Y = winY + 65.0f;
+		float c1W = winW - 50.0f;
+		float c1H = 110.0f;
+
+		qboolean c1Hover = (mx >= c1X && mx <= c1X + c1W && my >= c1Y && my <= c1Y + c1H) ? qtrue : qfalse;
+		vec4_t c1Bg = { 0.03f, 0.18f, 0.12f, c1Hover ? 0.95f : 0.75f };
+		vec4_t c1Border = { 0.95f, 0.75f, 0.10f, c1Hover ? 1.0f : 0.60f };
+		SCR_DrawRoundedGlassPanel( c1X, c1Y, c1W, c1H, 6.0f, c1Bg, c1Border );
+
+		SCR_DrawVirtualString( c1X + 16.0f, c1Y + 14.0f, 6.0f, "^31. CANTO BIGHT BLACKJACK 21", yellowCol );
+		SCR_DrawVirtualString( c1X + 16.0f, c1Y + 34.0f, 3.8f, "^7Classic casino table vs Croupier Droid. Natural Blackjack pays 3:2!", whiteColor );
+		SCR_DrawVirtualString( c1X + 16.0f, c1Y + 48.0f, 3.8f, "^7Wager from ^310 ^7to ^3500 Credits^7 per hand. Double Down on strong totals!", whiteColor );
+		
+		vec4_t btnBg = { 0.10f, 0.65f, 0.30f, c1Hover ? 1.0f : 0.80f };
+		SCR_DrawRoundedGlassPanel( c1X + c1W - 120.0f, c1Y + 70.0f, 105.0f, 26.0f, 4.0f, btnBg, c1Border );
+		SCR_DrawVirtualString( c1X + c1W - 105.0f, c1Y + 76.0f, 4.4f, "^7PLAY TABLE", whiteColor );
+
+		// Card 2: Star Wars Pazaak (Coming Soon)
+		float c2X = winX + 25.0f;
+		float c2Y = winY + 190.0f;
+		float c2W = winW - 50.0f;
+		float c2H = 110.0f;
+
+		qboolean c2Hover = (mx >= c2X && mx <= c2X + c2W && my >= c2Y && my <= c2Y + c2H) ? qtrue : qfalse;
+		vec4_t c2Bg = { 0.05f, 0.12f, 0.22f, c2Hover ? 0.95f : 0.75f };
+		vec4_t c2Border = { 0.20f, 0.70f, 0.95f, c2Hover ? 1.0f : 0.60f };
+		SCR_DrawRoundedGlassPanel( c2X, c2Y, c2W, c2H, 6.0f, c2Bg, c2Border );
+
+		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 14.0f, 6.0f, "^52. STAR WARS PAZAAK 20", cyanColor );
+		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 34.0f, 3.8f, "^7Iconic Star Wars cantina duel. 3x3 main deck grid & 4-card modifier hand.", whiteColor );
+		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 48.0f, 3.8f, "^7Best-of-3 set matches against AI Astromechs or Online players.", whiteColor );
+
+		vec4_t pzBtnBg = { 0.10f, 0.35f, 0.60f, c2Hover ? 1.0f : 0.80f };
+		SCR_DrawRoundedGlassPanel( c2X + c2W - 120.0f, c2Y + 70.0f, 105.0f, 26.0f, 4.0f, pzBtnBg, c2Border );
+		SCR_DrawVirtualString( c2X + c2W - 105.0f, c2Y + 76.0f, 4.4f, "^7PAZAAK", whiteColor );
+		return;
+	}
+
+	// ========================================================
+	// VIEW 1: CANTO BIGHT BLACKJACK 21 TABLE
+	// ========================================================
+	float winW = 560.0f;
+	float winH = 400.0f;
+	float winX = 320.0f - winW * 0.5f;
+	float winY = 240.0f - winH * 0.5f;
+
+	vec4_t feltBg = { 0.02f, 0.16f, 0.10f, 0.96f };
+	vec4_t feltBorder = { 0.95f, 0.75f, 0.15f, 0.95f };
+	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 12.0f, feltBg, feltBorder );
+
+	float titleW = SCR_GetStringWidth( "CANTO BIGHT BLACKJACK 21", 7.0f );
+	SCR_DrawVirtualString( winX + (winW - titleW) * 0.5f, winY + 12.0f, 7.0f, "^3CANTO BIGHT BLACKJACK 21", yellowCol );
+	SCR_DrawVirtualString( winX + 16.0f, winY + 12.0f, 4.2f, "< ^5[BACK]", cyanColor );
+	SCR_DrawVirtualString( winX + winW - 35.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	SCR_DrawVirtualString( winX + 20.0f, winY + 30.0f, 3.8f, "^7DEALER STANDS ON 17 • BLACKJACK PAYS 3:2", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 150.0f, winY + 30.0f, 4.4f, va( "^7Bankroll: ^5%d CR", credits ), cyanColor );
+
+	// Dealer Area
+	qboolean hideDealerHole = (!g_cantinaGames.dealerRevealed && g_cantinaGames.inRound) ? qtrue : qfalse;
+	int dScore = SCR_Blackjack_Score( g_cantinaGames.dealerHand, g_cantinaGames.dealerCardCount, hideDealerHole );
+	SCR_DrawVirtualString( winX + 30.0f, winY + 52.0f, 4.4f, va( "^7Croupier Droid Score: ^3%d", dScore ), whiteColor );
+
+	float dCardX = winX + 30.0f;
+	float dCardY = winY + 68.0f;
+	for ( int i = 0; i < g_cantinaGames.dealerCardCount; i++ ) {
+		qboolean hideHole = (i == 0 && !g_cantinaGames.dealerRevealed && g_cantinaGames.inRound) ? qtrue : qfalse;
+		SCR_DrawBlackjackCard( dCardX + i * 44.0f, dCardY, g_cantinaGames.dealerHand[i].val, g_cantinaGames.dealerHand[i].suit, hideHole );
+	}
+
+	// Table Middle: Status Banner
+	float midY = winY + 140.0f;
+	vec4_t bannerBg = { 0.01f, 0.05f, 0.08f, 0.70f };
+	SCR_DrawRoundedGlassPanel( winX + 20.0f, midY, winW - 40.0f, 34.0f, 6.0f, bannerBg, feltBorder );
+
+	float msgW = SCR_GetStringWidth( g_cantinaGames.statusMsg, 4.4f );
+	SCR_DrawVirtualString( winX + (winW - msgW) * 0.5f, midY + 10.0f, 4.4f, g_cantinaGames.statusMsg, whiteColor );
+
+	// Player Area
+	int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
+	SCR_DrawVirtualString( winX + 30.0f, winY + 188.0f, 4.4f, va( "^7Your Hand Score: ^2%d", pScore ), whiteColor );
+
+	float pCardX = winX + 30.0f;
+	float pCardY = winY + 204.0f;
+	for ( int i = 0; i < g_cantinaGames.playerCardCount; i++ ) {
+		SCR_DrawBlackjackCard( pCardX + i * 44.0f, pCardY, g_cantinaGames.playerHand[i].val, g_cantinaGames.playerHand[i].suit, qfalse );
+	}
+
+	// Chip Selector
+	float chipY = winY + 276.0f;
+	SCR_DrawVirtualString( winX + 30.0f, chipY + 6.0f, 4.2f, va( "^7Bet: ^3%d CR", g_cantinaGames.currentBet ), yellowCol );
+
+	const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
+	vec4_t chipCols[5] = {
+		{ 0.15f, 0.40f, 0.85f, 0.9f },
+		{ 0.10f, 0.70f, 0.35f, 0.9f },
+		{ 0.85f, 0.20f, 0.20f, 0.9f },
+		{ 0.10f, 0.12f, 0.18f, 0.9f },
+		{ 0.55f, 0.20f, 0.85f, 0.9f }
+	};
+
+	float chipStartX = winX + 130.0f;
+	for ( int c = 0; c < 5; c++ ) {
+		float cx = chipStartX + c * 52.0f;
+		qboolean chipHover = (!g_cantinaGames.inRound && mx >= cx && mx <= cx + 46.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
+		SCR_DrawRoundedGlassPanel( cx, chipY, 46.0f, 24.0f, 4.0f, chipCols[c], chipHover ? yellowCol : feltBorder );
+		SCR_DrawVirtualString( cx + 6.0f, chipY + 6.0f, 3.8f, chipLabels[c], whiteColor );
+	}
+
+	// Clear Bet Button
+	qboolean clrHover = (!g_cantinaGames.inRound && mx >= winX + winW - 120.0f && mx <= winX + winW - 30.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
+	vec4_t clrBg = { 0.25f, 0.10f, 0.10f, clrHover ? 0.9f : 0.6f };
+	SCR_DrawRoundedGlassPanel( winX + winW - 120.0f, chipY, 90.0f, 24.0f, 4.0f, clrBg, feltBorder );
+	SCR_DrawVirtualString( winX + winW - 110.0f, chipY + 6.0f, 3.8f, "CLEAR BET", whiteColor );
+
+	// Action Buttons
+	float btnY = winY + 325.0f;
+	float btnW = 105.0f;
+	float btnH = 34.0f;
+
+	// DEAL
+	qboolean dealHover = (!g_cantinaGames.inRound && mx >= winX + 30.0f && mx <= winX + 30.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+	vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.inRound ? 0.3f : (dealHover ? 1.0f : 0.8f) };
+	SCR_DrawRoundedGlassPanel( winX + 30.0f, btnY, btnW, btnH, 6.0f, dealBg, feltBorder );
+	SCR_DrawVirtualString( winX + 45.0f, btnY + 10.0f, 5.0f, "DEAL [Spc]", whiteColor );
+
+	// HIT
+	qboolean hitHover = (g_cantinaGames.inRound && mx >= winX + 150.0f && mx <= winX + 150.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+	vec4_t hitBg = { 0.15f, 0.40f, 0.80f, !g_cantinaGames.inRound ? 0.3f : (hitHover ? 1.0f : 0.8f) };
+	SCR_DrawRoundedGlassPanel( winX + 150.0f, btnY, btnW, btnH, 6.0f, hitBg, feltBorder );
+	SCR_DrawVirtualString( winX + 172.0f, btnY + 10.0f, 5.0f, "HIT [1]", whiteColor );
+
+	// STAND
+	qboolean standHover = (g_cantinaGames.inRound && mx >= winX + 270.0f && mx <= winX + 270.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+	vec4_t standBg = { 0.80f, 0.50f, 0.10f, !g_cantinaGames.inRound ? 0.3f : (standHover ? 1.0f : 0.8f) };
+	SCR_DrawRoundedGlassPanel( winX + 270.0f, btnY, btnW, btnH, 6.0f, standBg, feltBorder );
+	SCR_DrawVirtualString( winX + 285.0f, btnY + 10.0f, 5.0f, "STAND [2]", whiteColor );
+
+	// DOUBLE
+	qboolean dblHover = (g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 390.0f && mx <= winX + 390.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+	vec4_t dblBg = { 0.55f, 0.20f, 0.75f, (!g_cantinaGames.inRound || g_cantinaGames.playerCardCount != 2) ? 0.3f : (dblHover ? 1.0f : 0.8f) };
+	SCR_DrawRoundedGlassPanel( winX + 390.0f, btnY, btnW, btnH, 6.0f, dblBg, feltBorder );
+	SCR_DrawVirtualString( winX + 400.0f, btnY + 10.0f, 4.4f, "DOUBLE [3]", whiteColor );
+}
+
+void SCR_Games_f( void ) {
+	g_cantinaGames.active = (!g_cantinaGames.active) ? qtrue : qfalse;
+	g_cantinaGames.activeGame = 0;
+}
+
+void SCR_Blackjack_f( void ) {
+	g_cantinaGames.active = qtrue;
+	g_cantinaGames.activeGame = 1;
+}
 
 /*
 ==================
@@ -3873,9 +4277,10 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 					SCR_DrawRPGMenuOverlay();
 					SCR_DrawPartyStudioOverlay();
 					SCR_DrawAdminOverlay();
+					SCR_DrawCantinaGamesOverlay();
 
-					// Draw dynamic virtual mouse cursor ONLY on active interactive menus (Shop, Inventory, Adventure, RPG Menu, Party Studio, Admin)
-					if ( g_rpgShop.active || g_rpgInventory.active || g_rpgAdv.active || g_rpgMenu.active || g_rpgPartyStudio.active || g_rpgAdmin.active ) {
+					// Draw dynamic virtual mouse cursor ONLY on active interactive menus (Shop, Inventory, Adventure, RPG Menu, Party Studio, Admin, Games)
+					if ( g_rpgShop.active || g_rpgInventory.active || g_rpgAdv.active || g_rpgMenu.active || g_rpgPartyStudio.active || g_rpgAdmin.active || g_cantinaGames.active ) {
 						if ( s_hGlobalCursor <= 0 && re && re->RegisterShader ) {
 							s_hGlobalCursor = re->RegisterShader( "gfx/rpg_hud/rpg_mouse" );
 							if ( s_hGlobalCursor <= 0 ) s_hGlobalCursor = re->RegisterShader( "ui/assets/selectcursor.tga" );
@@ -4022,6 +4427,7 @@ void CL_ResetRPGOverlays( void ) {
 	g_rpgPartyStudio.active = qfalse;
 	g_rpgAdmin.active = qfalse;
 	g_rpgSettings.active = qfalse;
+	g_cantinaGames.active = qfalse;
 	g_rpgStats.xp = 0; // Just in case, reset stats too
 	Cvar_Set( "cg_drawShop", "0" );
 	Cvar_Set( "cg_drawQuest", "0" );

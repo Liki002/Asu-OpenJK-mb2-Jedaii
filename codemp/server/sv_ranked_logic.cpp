@@ -489,6 +489,7 @@ static void UpdateAccountStats(const char *username, const char *displayName,
   }
 
   SV_Ranked_SaveAccounts();
+  SV_Ranked_SyncClientRPGByName(username);
 }
 
 /*

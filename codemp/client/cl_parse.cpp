@@ -880,7 +880,10 @@ void CL_ParseCommandString( msg_t *msg ) {
 			// Also update HUD cvars for real-time styles syncing
 			Cvar_Set( "cg_rpg_level", va( "%d", lvl ) );
 			Cvar_Set( "cg_rpg_fr", va( "%d", fr ) );
-			Cvar_Set( "cg_rpg_xp", va( "%d", xp ) );
+			int curXpInLevel = xp % 1000;
+			if ( curXpInLevel < 0 ) curXpInLevel = 0;
+			Cvar_Set( "cg_rpg_xp", va( "%d", curXpInLevel ) );
+			Cvar_Set( "cg_rpg_xp_max", "1000" );
 			if ( rankBuf[0] ) Cvar_Set( "cg_rpg_rank", rankBuf );
 			if ( nameBuf[0] ) Cvar_Set( "cg_rpg_name", nameBuf );
 		}
@@ -1257,6 +1260,19 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgAdmin.active = qfalse;
 	} else if ( !Q_strncmp( s, "adminmenu_toggle", 16 ) || !Q_strncmp( s, "admin_toggle", 12 ) || !Q_strncmp( s, "adminpanel_toggle", 17 ) ) {
 		g_rpgAdmin.active = (qboolean)(!g_rpgAdmin.active);
+	} else if ( !Q_strncmp( s, "games_open", 10 ) || !Q_strncmp( s, "games", 5 ) ) {
+		g_cantinaGames.active = qtrue;
+		g_cantinaGames.activeGame = 0;
+	} else if ( !Q_strncmp( s, "games_close", 11 ) ) {
+		g_cantinaGames.active = qfalse;
+	} else if ( !Q_strncmp( s, "games_toggle", 12 ) ) {
+		g_cantinaGames.active = (!g_cantinaGames.active) ? qtrue : qfalse;
+		g_cantinaGames.activeGame = 0;
+	} else if ( !Q_strncmp( s, "blackjack_open", 14 ) || !Q_strncmp( s, "blackjack", 9 ) || !Q_strncmp( s, "casino_open", 11 ) ) {
+		g_cantinaGames.active = qtrue;
+		g_cantinaGames.activeGame = 1;
+	} else if ( !Q_strncmp( s, "blackjack_close", 15 ) ) {
+		g_cantinaGames.active = qfalse;
 	}
 }
 

@@ -1903,6 +1903,14 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
   } else if (!Q_stricmp(cmdSpace, "!adventure") || !Q_stricmp(cmdSpace, "!adv")) {
     SV_Ranked_Adventure_Start(cl);
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!games") || !Q_stricmp(cmdSpace, "!casino") ||
+             !Q_stricmp(cmdSpace, "!blackjack") || !Q_stricmp(cmdSpace, "!pazaak")) {
+    if (!Q_stricmp(cmdSpace, "!blackjack") || !Q_stricmp(cmdSpace, "!casino")) {
+      SV_SendServerCommand(cl, "blackjack_open");
+    } else {
+      SV_SendServerCommand(cl, "games_open");
+    }
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!choose") || !Q_stricmp(cmdSpace, "!c")) {
     const char *arg = strchr(chatText, ' ');
     if (arg && *(arg + 1) != '\0') {

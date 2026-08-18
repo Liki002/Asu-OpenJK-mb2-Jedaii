@@ -678,6 +678,34 @@ typedef struct {
 
 extern rpgToastNotif_t g_rpgToast;
 
+// --- Cantina Games Hub & Canto Bight Blackjack 21 ---
+typedef struct {
+	int suit; // 0=Spades, 1=Hearts, 2=Diamonds, 3=Clubs
+	int val;  // 1=Ace, 2..10, 11=Jack, 12=Queen, 13=King
+} bjCard_t;
+
+typedef struct {
+	qboolean active;
+	int      activeGame; // 0 = Games Hub Selector, 1 = Blackjack 21, 2 = Pazaak
+	
+	// Blackjack State
+	bjCard_t deck[52];
+	int      deckTop;
+	bjCard_t playerHand[10];
+	int      playerCardCount;
+	bjCard_t dealerHand[10];
+	int      dealerCardCount;
+	
+	int      currentBet;
+	qboolean inRound;
+	qboolean dealerRevealed;
+	char     statusMsg[128];
+	int      lastOutcome; // 0=none, 1=player_win, 2=dealer_win, 3=push, 4=blackjack, 5=bust
+} cantinaGames_t;
+
+extern cantinaGames_t g_cantinaGames;
+void SCR_DrawCantinaGamesOverlay( void );
+
 extern int g_liveCombatBP;
 extern int g_lastParsedKillerHP;
 extern int g_lastParsedKillerBP;

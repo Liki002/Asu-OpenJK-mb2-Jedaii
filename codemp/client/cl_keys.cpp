@@ -2166,6 +2166,148 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 	}
 
+	// Cantina Games Hub & Canto Bight Blackjack 21 Input Handling
+	if ( g_cantinaGames.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		float mx = (float)g_rpgMouseX;
+		float my = (float)g_rpgMouseY;
+		int credits = g_rpgStats.credits > 0 ? g_rpgStats.credits : g_rpgShop.credits;
+
+		// 1. GAMES HUB SELECTOR (View 0)
+		if ( g_cantinaGames.activeGame == 0 ) {
+			float winW = 500.0f;
+			float winH = 340.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 240.0f - winH * 0.5f;
+
+			if ( key == A_MOUSE1 ) {
+				if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+					g_cantinaGames.active = qfalse;
+					return;
+				}
+
+				float c1X = winX + 25.0f;
+				float c1Y = winY + 65.0f;
+				float c1W = winW - 50.0f;
+				float c1H = 110.0f;
+				if ( mx >= c1X && mx <= c1X + c1W && my >= c1Y && my <= c1Y + c1H ) {
+					g_cantinaGames.activeGame = 1;
+					return;
+				}
+
+				float c2X = winX + 25.0f;
+				float c2Y = winY + 190.0f;
+				float c2W = winW - 50.0f;
+				float c2H = 110.0f;
+				if ( mx >= c2X && mx <= c2X + c2W && my >= c2Y && my <= c2Y + c2H ) {
+					Q_strncpyz( g_cantinaGames.statusMsg, "^3Pazaak table is being set up by the Cantina droid! Try Blackjack 21!", sizeof( g_cantinaGames.statusMsg ) );
+					return;
+				}
+			}
+
+			if ( key == '1' ) {
+				g_cantinaGames.activeGame = 1;
+				return;
+			}
+			if ( key == A_ESCAPE ) {
+				g_cantinaGames.active = qfalse;
+				return;
+			}
+		}
+
+		// 2. BLACKJACK 21 TABLE (View 1)
+		else if ( g_cantinaGames.activeGame == 1 ) {
+			float winW = 560.0f;
+			float winH = 400.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 240.0f - winH * 0.5f;
+
+			extern void SCR_Blackjack_Deal( void );
+			extern void SCR_Blackjack_Hit( void );
+			extern void SCR_Blackjack_Stand( void );
+			extern void SCR_Blackjack_DoubleDown( void );
+
+			if ( key == A_MOUSE1 ) {
+				if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+					g_cantinaGames.active = qfalse;
+					return;
+				}
+				if ( mx >= winX + 10.0f && mx <= winX + 70.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+					g_cantinaGames.activeGame = 0;
+					return;
+				}
+
+				float chipY = winY + 276.0f;
+				float chipStartX = winX + 130.0f;
+				int chipAdd[5] = { 10, 25, 50, 100, 500 };
+				if ( !g_cantinaGames.inRound ) {
+					for ( int c = 0; c < 5; c++ ) {
+						float cx = chipStartX + c * 52.0f;
+						if ( mx >= cx && mx <= cx + 46.0f && my >= chipY && my <= chipY + 24.0f ) {
+							if ( g_cantinaGames.currentBet + chipAdd[c] <= credits ) {
+								g_cantinaGames.currentBet += chipAdd[c];
+							}
+							return;
+						}
+					}
+					if ( mx >= winX + winW - 120.0f && mx <= winX + winW - 30.0f && my >= chipY && my <= chipY + 24.0f ) {
+						g_cantinaGames.currentBet = 10;
+						return;
+					}
+				}
+
+				float btnY = winY + 325.0f;
+				float btnW = 105.0f;
+				float btnH = 34.0f;
+
+				if ( !g_cantinaGames.inRound && mx >= winX + 30.0f && mx <= winX + 30.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					SCR_Blackjack_Deal();
+					return;
+				}
+				if ( g_cantinaGames.inRound && mx >= winX + 150.0f && mx <= winX + 150.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					SCR_Blackjack_Hit();
+					return;
+				}
+				if ( g_cantinaGames.inRound && mx >= winX + 270.0f && mx <= winX + 270.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					SCR_Blackjack_Stand();
+					return;
+				}
+				if ( g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 390.0f && mx <= winX + 390.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					SCR_Blackjack_DoubleDown();
+					return;
+				}
+			}
+
+			if ( key == A_SPACE || key == A_ENTER ) {
+				if ( !g_cantinaGames.inRound ) {
+					SCR_Blackjack_Deal();
+					return;
+				}
+			}
+			if ( key == '1' || key == 'h' || key == 'H' ) {
+				if ( g_cantinaGames.inRound ) {
+					SCR_Blackjack_Hit();
+					return;
+				}
+			}
+			if ( key == '2' || key == 's' || key == 'S' ) {
+				if ( g_cantinaGames.inRound ) {
+					SCR_Blackjack_Stand();
+					return;
+				}
+			}
+			if ( key == '3' || key == 'd' || key == 'D' ) {
+				if ( g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet ) {
+					SCR_Blackjack_DoubleDown();
+					return;
+				}
+			}
+			if ( key == A_ESCAPE ) {
+				g_cantinaGames.active = qfalse;
+				return;
+			}
+		}
+	}
+
 	// Quest UI Modal Input Handling
 	if ( g_rpgQuest.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
 		if ( key == A_MOUSE1 ) {
