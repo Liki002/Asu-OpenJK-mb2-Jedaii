@@ -199,3 +199,7 @@ cmake-build-*
 #############
 ranked/
 *.log
+
+# Allow specific release binaries for GitHub Actions
+!build/Release/mbii.x86.exe
+!build/Release/zzz_rpg_hud.pk3
