@@ -1,0 +1,69 @@
+name: Release Ranked Clean
+
+on:
+  push:
+    branches: [ranked-clean]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-release:
+    name: Package Client & PK3 → GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout ranked-clean
+        uses: actions/checkout@v4
+
+      - name: Verify Release folder exists
+        run: |
+          if [ ! -d "build/Release" ]; then
+            echo "ERROR: build/Release directory not found!"
+            ls -la build/ || echo "build/ directory missing too"
+            exit 1
+          fi
+          echo "Contents of build/Release:"
+          ls -lh build/Release/
+
+      - name: Create JedaiiClient_Full.zip
+        run: |
+          cd build/Release
+          zip -r ../../JedaiiClient_Full.zip .
+          cd ../..
+          echo "Zip created:"
+          ls -lh JedaiiClient_Full.zip
+
+      - name: Get short commit SHA for tag
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Delete existing 'latest-ranked-clean' release (if any)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete latest-ranked-clean --yes 2>/dev/null || true
+          git push origin --delete refs/tags/latest-ranked-clean 2>/dev/null || true
+
+      - name: Create new GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create latest-ranked-clean \
+            JedaiiClient_Full.zip \
+            --title "Jedaii Ranked Client (latest)" \
+            --notes "**Auto-generated release from the \`ranked-clean\` branch.**
+
+          This package contains the Jedaii custom OpenJK client and the ranked RPG PK3.
+
+          **Commit:** \`${{ steps.vars.outputs.sha_short }}\`
+          **Built:** $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          ### Install Instructions
+          1. Unzip \`JedaiiClient_Full.zip\`
+          2. Copy all DLL files and \`.exe\` into your Jedi Academy folder
+          3. Copy \`zzz_rpg_hud.pk3\` into \`GameData/base/\`
+          4. Launch \`mbii.x86.exe\` and connect to the Jedaii server" \
+            --latest \
+            --repo ${{ github.repository }}
