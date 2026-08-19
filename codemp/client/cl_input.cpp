@@ -1165,7 +1165,7 @@ void CL_MouseMove( usercmd_t *cmd ) {
 	}
 
 	// Disable camera viewangle movement when interactive RPG modal UIs are active
-	if ( g_rpgShop.active || g_rpgInventory.active || g_rpgAdv.active || g_rpgSettings.active || g_rpgMenu.active || g_rpgPartyStudio.active || g_rpgAdmin.active || g_rpgQuest.active || g_rpgAch.active || g_rpgTopCredits.active || g_rpgTopPotato.active ) {
+	if ( g_rpgShop.active || g_rpgInventory.active || g_rpgAdv.active || g_rpgSettings.active || g_rpgMenu.active || g_rpgPartyStudio.active || g_rpgAdmin.active || g_rpgQuest.active || g_rpgAch.active || g_rpgTopCredits.active || g_rpgTopPotato.active || g_cantinaGames.active ) {
 		return;
 	}
 

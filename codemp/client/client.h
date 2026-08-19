@@ -678,15 +678,21 @@ typedef struct {
 
 extern rpgToastNotif_t g_rpgToast;
 
-// --- Cantina Games Hub & Canto Bight Blackjack 21 ---
+// --- Cantina Games Hub & Canto Bight Blackjack 21 & Pazaak 20 ---
 typedef struct {
 	int suit; // 0=Spades, 1=Hearts, 2=Diamonds, 3=Clubs
 	int val;  // 1=Ace, 2..10, 11=Jack, 12=Queen, 13=King
 } bjCard_t;
 
 typedef struct {
+	int      val;     // e.g. +3, -2, +5, -4
+	qboolean used;    // already played this match
+	qboolean isFlip;  // +/- flip modifier
+} pzHandCard_t;
+
+typedef struct {
 	qboolean active;
-	int      activeGame; // 0 = Games Hub Selector, 1 = Blackjack 21, 2 = Pazaak
+	int      activeGame; // 0 = Games Hub Selector, 1 = Blackjack 21, 2 = Pazaak 20
 	
 	// Blackjack State
 	bjCard_t deck[52];
@@ -701,6 +707,26 @@ typedef struct {
 	qboolean dealerRevealed;
 	char     statusMsg[128];
 	int      lastOutcome; // 0=none, 1=player_win, 2=dealer_win, 3=push, 4=blackjack, 5=bust
+
+	// Pazaak 20 State
+	qboolean pzInMatch;
+	int      pzBet;
+	int      pzPlayerScore;
+	int      pzOppScore;
+	int      pzPlayerSetsWon;
+	int      pzOppSetsWon;
+	int      pzPlayerBoard[9];
+	int      pzPlayerBoardCount;
+	int      pzOppBoard[9];
+	int      pzOppBoardCount;
+	pzHandCard_t pzPlayerHand[4];
+	pzHandCard_t pzOppHand[4];
+	qboolean pzPlayerStood;
+	qboolean pzOppStood;
+	qboolean pzIsPlayerTurn;
+	qboolean pzCardPlayedThisTurn;
+	char     pzStatusMsg[128];
+	char     pzOpponentName[64];
 } cantinaGames_t;
 
 extern cantinaGames_t g_cantinaGames;

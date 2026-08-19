@@ -1907,6 +1907,8 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
              !Q_stricmp(cmdSpace, "!blackjack") || !Q_stricmp(cmdSpace, "!pazaak")) {
     if (!Q_stricmp(cmdSpace, "!blackjack") || !Q_stricmp(cmdSpace, "!casino")) {
       SV_SendServerCommand(cl, "blackjack_open");
+    } else if (!Q_stricmp(cmdSpace, "!pazaak")) {
+      SV_SendServerCommand(cl, "pazaak_open");
     } else {
       SV_SendServerCommand(cl, "games_open");
     }

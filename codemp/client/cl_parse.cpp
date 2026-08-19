@@ -1273,6 +1273,18 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_cantinaGames.activeGame = 1;
 	} else if ( !Q_strncmp( s, "blackjack_close", 15 ) ) {
 		g_cantinaGames.active = qfalse;
+	} else if ( !Q_strncmp( s, "pazaak_open", 11 ) || !Q_strncmp( s, "pazaak", 6 ) ) {
+		extern void SCR_Pazaak_InitMatch( void );
+		g_cantinaGames.active = qtrue;
+		g_cantinaGames.activeGame = 2;
+		SCR_Pazaak_InitMatch();
+	} else if ( !Q_strncmp( s, "pazaak_close", 12 ) ) {
+		g_cantinaGames.active = qfalse;
+	} else if ( !Q_strncmp( s, "pazaak_toggle", 13 ) ) {
+		extern void SCR_Pazaak_InitMatch( void );
+		g_cantinaGames.active = (!g_cantinaGames.active) ? qtrue : qfalse;
+		g_cantinaGames.activeGame = 2;
+		if ( g_cantinaGames.active ) SCR_Pazaak_InitMatch();
 	}
 }
 

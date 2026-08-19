@@ -2199,13 +2199,25 @@ void CL_KeyDownEvent( int key, unsigned time )
 				float c2W = winW - 50.0f;
 				float c2H = 110.0f;
 				if ( mx >= c2X && mx <= c2X + c2W && my >= c2Y && my <= c2Y + c2H ) {
-					Q_strncpyz( g_cantinaGames.statusMsg, "^3Pazaak table is being set up by the Cantina droid! Try Blackjack 21!", sizeof( g_cantinaGames.statusMsg ) );
+					extern void SCR_Pazaak_InitMatch( void );
+					g_cantinaGames.activeGame = 2;
+					if ( !g_cantinaGames.pzInMatch ) {
+						SCR_Pazaak_InitMatch();
+					}
 					return;
 				}
 			}
 
 			if ( key == '1' ) {
 				g_cantinaGames.activeGame = 1;
+				return;
+			}
+			if ( key == '2' ) {
+				extern void SCR_Pazaak_InitMatch( void );
+				g_cantinaGames.activeGame = 2;
+				if ( !g_cantinaGames.pzInMatch ) {
+					SCR_Pazaak_InitMatch();
+				}
 				return;
 			}
 			if ( key == A_ESCAPE ) {
@@ -2300,6 +2312,135 @@ void CL_KeyDownEvent( int key, unsigned time )
 					SCR_Blackjack_DoubleDown();
 					return;
 				}
+			}
+			if ( key == A_ESCAPE ) {
+				g_cantinaGames.active = qfalse;
+				return;
+			}
+		}
+
+		// 3. STAR WARS PAZAAK 20 TABLE (View 2)
+		else if ( g_cantinaGames.activeGame == 2 ) {
+			float winW = 580.0f;
+			float winH = 430.0f;
+			float winX = 320.0f - winW * 0.5f;
+			float winY = 240.0f - winH * 0.5f;
+
+			extern void SCR_Pazaak_InitMatch( void );
+			extern void SCR_Pazaak_PlayCard( int cardIdx );
+			extern void SCR_Pazaak_FlipHandCard( int cardIdx );
+			extern void SCR_Pazaak_Stand( void );
+			extern void SCR_Pazaak_EndTurn( void );
+
+			if ( key == A_MOUSE1 || key == A_MOUSE2 ) {
+				// Close
+				if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+					g_cantinaGames.active = qfalse;
+					return;
+				}
+				// Back to Hub
+				if ( mx >= winX + 10.0f && mx <= winX + 70.0f && my >= winY + 8.0f && my <= winY + 28.0f ) {
+					g_cantinaGames.activeGame = 0;
+					return;
+				}
+
+				// Player Hand Cards
+				float handY = winY + 225.0f;
+				float handStartX = winX + 25.0f;
+				for ( int h = 0; h < 4; h++ ) {
+					float hx = handStartX + h * 90.0f;
+					float hy = handY + 18.0f;
+					if ( mx >= hx && mx <= hx + 80.0f && my >= hy && my <= hy + 46.0f ) {
+						if ( key == A_MOUSE2 || (mx >= hx + 45.0f && my >= hy + 20.0f && g_cantinaGames.pzPlayerHand[h].isFlip) ) {
+							SCR_Pazaak_FlipHandCard( h );
+						} else {
+							SCR_Pazaak_PlayCard( h );
+						}
+						return;
+					}
+				}
+
+				// Chip Wager Selector
+				float chipY = winY + 300.0f;
+				float chipStartX = winX + 175.0f;
+				int chipAdd[5] = { 10, 25, 50, 100, 500 };
+				if ( !g_cantinaGames.pzInMatch ) {
+					for ( int c = 0; c < 5; c++ ) {
+						float cx = chipStartX + c * 50.0f;
+						if ( mx >= cx && mx <= cx + 44.0f && my >= chipY && my <= chipY + 22.0f ) {
+							if ( g_cantinaGames.pzBet + chipAdd[c] <= credits ) {
+								g_cantinaGames.pzBet += chipAdd[c];
+							}
+							return;
+						}
+					}
+				}
+
+				// Action Buttons
+				float btnY = winY + 348.0f;
+				float btnW = 120.0f;
+				float btnH = 34.0f;
+
+				// DEAL
+				if ( !g_cantinaGames.pzInMatch && mx >= winX + 25.0f && mx <= winX + 25.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					SCR_Pazaak_InitMatch();
+					return;
+				}
+				// END TURN
+				if ( g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 160.0f && mx <= winX + 160.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					SCR_Pazaak_EndTurn();
+					return;
+				}
+				// STAND
+				if ( g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 295.0f && mx <= winX + 295.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					SCR_Pazaak_Stand();
+					return;
+				}
+				// FORFEIT
+				if ( g_cantinaGames.pzInMatch && mx >= winX + 430.0f && mx <= winX + 430.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+					g_cantinaGames.pzInMatch = qfalse;
+					Q_strncpyz( g_cantinaGames.pzStatusMsg, "^1Match forfeited. Press DEAL MATCH to play again.", sizeof( g_cantinaGames.pzStatusMsg ) );
+					return;
+				}
+			}
+
+			if ( key == A_SPACE || key == A_ENTER ) {
+				if ( !g_cantinaGames.pzInMatch ) {
+					SCR_Pazaak_InitMatch();
+				} else if ( g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood ) {
+					SCR_Pazaak_EndTurn();
+				}
+				return;
+			}
+			if ( key == '1' || key == 's' || key == 'S' ) {
+				if ( g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood ) {
+					SCR_Pazaak_Stand();
+					return;
+				}
+			}
+			if ( key == '2' || key == 'a' || key == 'A' ) {
+				SCR_Pazaak_PlayCard( 0 );
+				return;
+			}
+			if ( key == '3' || key == 'b' || key == 'B' ) {
+				SCR_Pazaak_PlayCard( 1 );
+				return;
+			}
+			if ( key == '4' || key == 'c' || key == 'C' ) {
+				SCR_Pazaak_PlayCard( 2 );
+				return;
+			}
+			if ( key == '5' || key == 'd' || key == 'D' ) {
+				SCR_Pazaak_PlayCard( 3 );
+				return;
+			}
+			if ( key == 'f' || key == 'F' ) {
+				for ( int h = 0; h < 4; h++ ) {
+					if ( !g_cantinaGames.pzPlayerHand[h].used && g_cantinaGames.pzPlayerHand[h].isFlip ) {
+						SCR_Pazaak_FlipHandCard( h );
+					}
+				}
+				return;
 			}
 			if ( key == A_ESCAPE ) {
 				g_cantinaGames.active = qfalse;
@@ -2581,6 +2722,10 @@ void CL_KeyDownEvent( int key, unsigned time )
 			}
 			if ( g_rpgAdmin.active ) {
 				g_rpgAdmin.active = qfalse;
+				return;
+			}
+			if ( g_cantinaGames.active ) {
+				g_cantinaGames.active = qfalse;
 				return;
 			}
 

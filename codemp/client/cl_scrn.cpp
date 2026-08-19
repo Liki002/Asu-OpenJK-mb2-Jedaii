@@ -604,6 +604,7 @@ static void SCR_AdminMenu_f( void ) {
 
 void SCR_Games_f( void );
 void SCR_Blackjack_f( void );
+void SCR_Pazaak_f( void );
 
 void SCR_Init( void ) {
 	cl_timegraph = Cvar_Get ("timegraph", "0", CVAR_CHEAT);
@@ -651,7 +652,7 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "gamesmenu", SCR_Games_f, "Toggle Galactic Cantina Games Hub overlay" );
 	Cmd_AddCommand( "blackjack", SCR_Blackjack_f, "Open Canto Bight Blackjack 21 table" );
 	Cmd_AddCommand( "casino", SCR_Blackjack_f, "Open Canto Bight Blackjack 21 table" );
-	Cmd_AddCommand( "pazaak", SCR_Games_f, "Open Star Wars Pazaak games table" );
+	Cmd_AddCommand( "pazaak", SCR_Pazaak_f, "Open Star Wars Pazaak games table" );
 
 	scr_initialized = qtrue;
 }
@@ -1303,13 +1304,18 @@ void SCR_DrawLeaderboardOverlay( void ) {
 	float winX = 320.0f - winW * 0.5f;
 	float winY = 40.0f;
 
-	static qhandle_t s_hLeaderboardBg = 0;
-	if ( s_hLeaderboardBg <= 0 && re && re->RegisterShader ) {
-		s_hLeaderboardBg = re->RegisterShader( "gfx/rpg_hud/top_bg" );
+	if ( s_hTopBg <= 0 && re && re->RegisterShaderNoMip ) {
+		s_hTopBg = re->RegisterShaderNoMip( "gfx/rpg_hud/top_bg" );
+		if ( s_hTopBg <= 0 && re->RegisterShader ) {
+			s_hTopBg = re->RegisterShader( "gfx/rpg_hud/top_bg" );
+		}
+		if ( s_hTopBg <= 0 && re->RegisterShaderNoMip ) {
+			s_hTopBg = re->RegisterShaderNoMip( "gfx/rpg_hud/leaderboard_bg" );
+		}
 	}
 
-	if ( s_hLeaderboardBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hLeaderboardBg );
+	if ( s_hTopBg > 0 ) {
+		SCR_DrawPic( winX, winY, winW, winH, s_hTopBg );
 	} else {
 		vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.88f };
 		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
@@ -3758,10 +3764,20 @@ void SCR_DrawPartyOverheadIcons( void ) {
 
 /*
 =============================================================================
-CANTO BIGHT BLACKJACK 21 & CANTINA GAMES HUB (!games / !blackjack)
+CANTO BIGHT BLACKJACK 21 & STAR WARS PAZAAK 20 (!games / !blackjack / !pazaak)
 =============================================================================
 */
-cantinaGames_t g_cantinaGames = { qfalse, 0, {}, 0, {}, 0, {}, 0, 50, qfalse, qfalse, "Place your bet and press DEAL [Space]!", 0 };
+cantinaGames_t g_cantinaGames = {
+	qfalse, 0,
+	{}, 0, {}, 0, {}, 0,
+	50, qfalse, qfalse, "Place your bet and press DEAL [Space]!", 0,
+	qfalse, 50, 0, 0, 0, 0,
+	{}, 0, {}, 0,
+	{}, {},
+	qfalse, qfalse, qtrue, qfalse,
+	"Welcome to Star Wars Pazaak! Place your wager and press DEAL MATCH [Space].",
+	"Astromech C-7"
+};
 
 static void SCR_Blackjack_Shuffle( void ) {
 	int idx = 0;
@@ -3928,12 +3944,35 @@ static void SCR_DrawBlackjackCard( float x, float y, int val, int suit, qboolean
 	float w = 38.0f;
 	float h = 54.0f;
 
+	static qhandle_t s_hCardDeck[4][14] = {0};
+	static qhandle_t s_hCardBack = 0;
+
 	if ( isHidden ) {
+		if ( s_hCardBack <= 0 && re && re->RegisterShaderNoMip ) {
+			s_hCardBack = re->RegisterShaderNoMip( "gfx/rpg_hud/cards/card_back" );
+		}
+		if ( s_hCardBack > 0 ) {
+			SCR_DrawPic( x, y, w, h, s_hCardBack );
+			return;
+		}
+
 		vec4_t backBg = { 0.08f, 0.18f, 0.38f, 0.96f };
 		vec4_t backBorder = { 0.25f, 0.60f, 0.95f, 1.0f };
 		SCR_DrawRoundedGlassPanel( x, y, w, h, 3.0f, backBg, backBorder );
 		SCR_DrawVirtualString( x + 12.0f, y + 20.0f, 6.0f, "^5?", NULL );
 		return;
+	}
+
+	if ( suit >= 0 && suit < 4 && val >= 1 && val <= 13 ) {
+		if ( s_hCardDeck[suit][val] <= 0 && re && re->RegisterShaderNoMip ) {
+			const char *sName = (suit == 0) ? "spades" : (suit == 1) ? "hearts" : (suit == 2) ? "diamonds" : "clubs";
+			const char *vName = (val == 1) ? "A" : (val == 11) ? "J" : (val == 12) ? "Q" : (val == 13) ? "K" : va( "%d", val );
+			s_hCardDeck[suit][val] = re->RegisterShaderNoMip( va( "gfx/rpg_hud/cards/card_%s_%s", sName, vName ) );
+		}
+		if ( s_hCardDeck[suit][val] > 0 ) {
+			SCR_DrawPic( x, y, w, h, s_hCardDeck[suit][val] );
+			return;
+		}
 	}
 
 	vec4_t cardBg = { 0.96f, 0.96f, 0.98f, 0.98f };
@@ -3962,11 +4001,294 @@ static void SCR_DrawBlackjackCard( float x, float y, int val, int suit, qboolean
 	SCR_DrawVirtualString( x + w - 11.0f, y + h - 12.0f, 3.2f, va( "%s%s", colorCode, valStr ), NULL );
 }
 
+// =============================================================================
+// STAR WARS PAZAAK 20 GAME ENGINE
+// =============================================================================
+
+static void SCR_Pazaak_StartNewSet( void );
+static void SCR_Pazaak_CheckMatchOver( void );
+static void SCR_Pazaak_ResolveSet( void );
+static void SCR_Pazaak_OpponentTurn( void );
+static void SCR_Pazaak_DealPlayerTurn( void );
+
+void SCR_Pazaak_InitMatch( void ) {
+	int credits = g_rpgStats.credits > 0 ? g_rpgStats.credits : g_rpgShop.credits;
+	if ( g_cantinaGames.pzBet <= 0 ) g_cantinaGames.pzBet = 50;
+	if ( credits < g_cantinaGames.pzBet ) {
+		Q_strncpyz( g_cantinaGames.pzStatusMsg, "^1Not enough Credits to start Pazaak match!", sizeof( g_cantinaGames.pzStatusMsg ) );
+		return;
+	}
+
+	g_rpgStats.credits -= g_cantinaGames.pzBet;
+	CL_AddReliableCommand( va( "rpg_gameresult 2 %d 0", g_cantinaGames.pzBet ), qfalse );
+
+	g_cantinaGames.pzInMatch = qtrue;
+	g_cantinaGames.pzPlayerSetsWon = 0;
+	g_cantinaGames.pzOppSetsWon = 0;
+	Q_strncpyz( g_cantinaGames.pzOpponentName, "Astromech C-7", sizeof( g_cantinaGames.pzOpponentName ) );
+
+	// Player Hand (4 side cards: combination of +, -, or ± flip cards)
+	int sidePool[8] = { 1, 2, 3, 4, 5, 6, -2, -3 };
+	for ( int i = 0; i < 4; i++ ) {
+		int r = rand() % 8;
+		int val = sidePool[r];
+		if ( i == 3 && (rand() % 2 == 0) ) {
+			g_cantinaGames.pzPlayerHand[i].val = (rand() % 3) + 1;
+			g_cantinaGames.pzPlayerHand[i].isFlip = qtrue;
+		} else {
+			g_cantinaGames.pzPlayerHand[i].val = val;
+			g_cantinaGames.pzPlayerHand[i].isFlip = qfalse;
+		}
+		g_cantinaGames.pzPlayerHand[i].used = qfalse;
+	}
+
+	// Opponent Hand
+	for ( int i = 0; i < 4; i++ ) {
+		int r = rand() % 8;
+		g_cantinaGames.pzOppHand[i].val = sidePool[r];
+		g_cantinaGames.pzOppHand[i].isFlip = (rand() % 4 == 0) ? qtrue : qfalse;
+		g_cantinaGames.pzOppHand[i].used = qfalse;
+	}
+
+	SCR_Pazaak_StartNewSet();
+}
+
+static void SCR_Pazaak_StartNewSet( void ) {
+	g_cantinaGames.pzPlayerBoardCount = 0;
+	g_cantinaGames.pzOppBoardCount = 0;
+	g_cantinaGames.pzPlayerScore = 0;
+	g_cantinaGames.pzOppScore = 0;
+	g_cantinaGames.pzPlayerStood = qfalse;
+	g_cantinaGames.pzOppStood = qfalse;
+	g_cantinaGames.pzCardPlayedThisTurn = qfalse;
+	g_cantinaGames.pzIsPlayerTurn = qtrue;
+
+	int c = (rand() % 10) + 1;
+	g_cantinaGames.pzPlayerBoard[g_cantinaGames.pzPlayerBoardCount++] = c;
+	g_cantinaGames.pzPlayerScore = c;
+	Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^7Drew ^2%d^7 (Score: ^2%d^7). Play card [1-4], [Space] End Turn, [S] Stand.", c, c );
+}
+
+void SCR_Pazaak_PlayCard( int cardIdx ) {
+	if ( !g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood || g_cantinaGames.pzCardPlayedThisTurn ) return;
+	if ( cardIdx < 0 || cardIdx >= 4 || g_cantinaGames.pzPlayerHand[cardIdx].used ) return;
+
+	pzHandCard_t *c = &g_cantinaGames.pzPlayerHand[cardIdx];
+	g_cantinaGames.pzPlayerScore += c->val;
+	c->used = qtrue;
+	g_cantinaGames.pzCardPlayedThisTurn = qtrue;
+
+	if ( g_cantinaGames.pzPlayerScore > 20 ) {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1Score is %d (BUST)! ^7End turn or play another card.", g_cantinaGames.pzPlayerScore );
+	} else if ( g_cantinaGames.pzPlayerScore == 20 ) {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2⭐ 20 POINTS! ^7Press [S] or [1] to Stand!" );
+	} else {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^7Played %s%d (Score: ^2%d^7). Press [Space] End Turn or [S] Stand.", c->val >= 0 ? "+" : "", c->val, g_cantinaGames.pzPlayerScore );
+	}
+}
+
+void SCR_Pazaak_FlipHandCard( int cardIdx ) {
+	if ( cardIdx < 0 || cardIdx >= 4 ) return;
+	pzHandCard_t *c = &g_cantinaGames.pzPlayerHand[cardIdx];
+	if ( !c->used && c->isFlip ) {
+		c->val = -c->val;
+	}
+}
+
+void SCR_Pazaak_Stand( void ) {
+	if ( !g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood ) return;
+	g_cantinaGames.pzPlayerStood = qtrue;
+	g_cantinaGames.pzIsPlayerTurn = qfalse;
+
+	if ( g_cantinaGames.pzOppStood ) {
+		SCR_Pazaak_ResolveSet();
+	} else {
+		SCR_Pazaak_OpponentTurn();
+	}
+}
+
+void SCR_Pazaak_EndTurn( void ) {
+	if ( !g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood ) return;
+
+	if ( g_cantinaGames.pzPlayerScore > 20 ) {
+		g_cantinaGames.pzOppSetsWon++;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1💀 BUST (%d)! ^7%s takes the set!", g_cantinaGames.pzPlayerScore, g_cantinaGames.pzOpponentName );
+		SCR_Pazaak_CheckMatchOver();
+		return;
+	}
+
+	g_cantinaGames.pzIsPlayerTurn = qfalse;
+	if ( !g_cantinaGames.pzOppStood ) {
+		SCR_Pazaak_OpponentTurn();
+	} else {
+		SCR_Pazaak_DealPlayerTurn();
+	}
+}
+
+static void SCR_Pazaak_DealPlayerTurn( void ) {
+	if ( g_cantinaGames.pzPlayerStood ) {
+		if ( g_cantinaGames.pzOppStood ) SCR_Pazaak_ResolveSet();
+		else SCR_Pazaak_OpponentTurn();
+		return;
+	}
+
+	g_cantinaGames.pzIsPlayerTurn = qtrue;
+	g_cantinaGames.pzCardPlayedThisTurn = qfalse;
+
+	if ( g_cantinaGames.pzPlayerBoardCount >= 9 ) {
+		SCR_Pazaak_ResolveSet();
+		return;
+	}
+
+	int c = (rand() % 10) + 1;
+	g_cantinaGames.pzPlayerBoard[g_cantinaGames.pzPlayerBoardCount++] = c;
+	g_cantinaGames.pzPlayerScore += c;
+
+	if ( g_cantinaGames.pzPlayerBoardCount == 9 && g_cantinaGames.pzPlayerScore <= 20 ) {
+		g_cantinaGames.pzPlayerSetsWon++;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3⭐ 9-CARD FULL GRID AUTO-WIN! ^2Won the set!^7" );
+		SCR_Pazaak_CheckMatchOver();
+		return;
+	}
+
+	if ( g_cantinaGames.pzPlayerScore > 20 ) {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1Total is %d (BUST)! ^7Play a minus side card [1-4] or forfeit set.", g_cantinaGames.pzPlayerScore );
+	} else if ( g_cantinaGames.pzPlayerScore == 20 ) {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2⭐ 20 POINTS! ^7Press [S] or [1] to Stand!" );
+	} else {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^7Drew ^2%d ^7(Score: ^2%d^7). Play card [1-4], [Space] End Turn, [S] Stand.", c, g_cantinaGames.pzPlayerScore );
+	}
+}
+
+static void SCR_Pazaak_OpponentTurn( void ) {
+	if ( g_cantinaGames.pzOppStood ) {
+		if ( !g_cantinaGames.pzPlayerStood ) SCR_Pazaak_DealPlayerTurn();
+		else SCR_Pazaak_ResolveSet();
+		return;
+	}
+
+	if ( g_cantinaGames.pzOppBoardCount >= 9 ) {
+		SCR_Pazaak_ResolveSet();
+		return;
+	}
+
+	int c = (rand() % 10) + 1;
+	g_cantinaGames.pzOppBoard[g_cantinaGames.pzOppBoardCount++] = c;
+	g_cantinaGames.pzOppScore += c;
+
+	// AI Hand Decision
+	if ( g_cantinaGames.pzOppScore > 20 ) {
+		for ( int i = 0; i < 4; i++ ) {
+			if ( !g_cantinaGames.pzOppHand[i].used && g_cantinaGames.pzOppHand[i].val < 0 && g_cantinaGames.pzOppScore + g_cantinaGames.pzOppHand[i].val <= 20 ) {
+				g_cantinaGames.pzOppScore += g_cantinaGames.pzOppHand[i].val;
+				g_cantinaGames.pzOppHand[i].used = qtrue;
+				break;
+			}
+		}
+	}
+
+	if ( g_cantinaGames.pzOppScore > 20 ) {
+		g_cantinaGames.pzPlayerSetsWon++;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🎉 %s BUSTED (%d)! ^7You won the set!", g_cantinaGames.pzOpponentName, g_cantinaGames.pzOppScore );
+		SCR_Pazaak_CheckMatchOver();
+		return;
+	}
+
+	if ( g_cantinaGames.pzOppScore >= 18 || (g_cantinaGames.pzPlayerStood && g_cantinaGames.pzOppScore > g_cantinaGames.pzPlayerScore) ) {
+		g_cantinaGames.pzOppStood = qtrue;
+	}
+
+	if ( g_cantinaGames.pzPlayerStood && g_cantinaGames.pzOppStood ) {
+		SCR_Pazaak_ResolveSet();
+	} else if ( !g_cantinaGames.pzPlayerStood ) {
+		SCR_Pazaak_DealPlayerTurn();
+	} else {
+		SCR_Pazaak_OpponentTurn();
+	}
+}
+
+static void SCR_Pazaak_ResolveSet( void ) {
+	int p = g_cantinaGames.pzPlayerScore;
+	int o = g_cantinaGames.pzOppScore;
+
+	if ( p > 20 && o > 20 ) {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3🤝 TIE SET (%d vs %d). Both busted.", p, o );
+	} else if ( p > 20 ) {
+		g_cantinaGames.pzOppSetsWon++;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1💀 BUST (%d vs %d). ^7%s takes the set.", p, o, g_cantinaGames.pzOpponentName );
+	} else if ( o > 20 ) {
+		g_cantinaGames.pzPlayerSetsWon++;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🎉 OPPONENT BUST (%d vs %d)! ^7You take the set!", p, o );
+	} else if ( p > o ) {
+		g_cantinaGames.pzPlayerSetsWon++;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🎉 SET WON (%d vs %d)! ^7You take the set!", p, o );
+	} else if ( o > p ) {
+		g_cantinaGames.pzOppSetsWon++;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1❌ SET LOST (%d vs %d). ^7%s takes the set.", p, o, g_cantinaGames.pzOpponentName );
+	} else {
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3🤝 TIE SET (%d vs %d). Score equal.", p, o );
+	}
+
+	SCR_Pazaak_CheckMatchOver();
+}
+
+static void SCR_Pazaak_CheckMatchOver( void ) {
+	if ( g_cantinaGames.pzPlayerSetsWon >= 3 ) {
+		g_cantinaGames.pzInMatch = qfalse;
+		int winAmt = g_cantinaGames.pzBet * 2;
+		g_rpgStats.credits += winAmt;
+		CL_AddReliableCommand( va( "rpg_gameresult 2 0 %d", winAmt ), qfalse );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3🏆 MATCH VICTORY (3-%d)! ^2Won +%d Credits! ^7Press [Space] for New Match.", g_cantinaGames.pzOppSetsWon, winAmt );
+	} else if ( g_cantinaGames.pzOppSetsWon >= 3 ) {
+		g_cantinaGames.pzInMatch = qfalse;
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1❌ MATCH DEFEAT (%d-3). ^7Lost %d Credits. Press [Space] for New Match.", g_cantinaGames.pzPlayerSetsWon, g_cantinaGames.pzBet );
+	} else {
+		SCR_Pazaak_StartNewSet();
+	}
+}
+
+static void SCR_DrawPazaakMiniCard( float x, float y, float w, float h, int val, qboolean isSideCard, qboolean isUsed, qboolean isFlip ) {
+	if ( isUsed ) {
+		vec4_t usedBg = { 0.05f, 0.08f, 0.12f, 0.40f };
+		vec4_t usedBorder = { 0.20f, 0.25f, 0.35f, 0.40f };
+		SCR_DrawRoundedGlassPanel( x, y, w, h, 3.0f, usedBg, usedBorder );
+		SCR_DrawVirtualString( x + w * 0.5f - 4.0f, y + h * 0.5f - 4.0f, 3.2f, "^0-", NULL );
+		return;
+	}
+
+	if ( isSideCard ) {
+		// Blue (+) or Red (-) modifier pill card
+		qboolean isNeg = (val < 0) ? qtrue : qfalse;
+		vec4_t pillBg = { isNeg ? 0.65f : 0.10f, isNeg ? 0.12f : 0.45f, isNeg ? 0.18f : 0.85f, 0.95f };
+		vec4_t pillBorder = { isFlip ? 1.0f : 0.8f, isFlip ? 0.85f : 0.9f, isFlip ? 0.2f : 1.0f, 1.0f };
+		SCR_DrawRoundedGlassPanel( x, y, w, h, 4.0f, pillBg, pillBorder );
+
+		const char *signStr = (val > 0) ? "+" : "";
+		char cardStr[16];
+		Com_sprintf( cardStr, sizeof(cardStr), "%s%d", signStr, val );
+		float strW = SCR_GetStringWidth( cardStr, 4.2f );
+		SCR_DrawVirtualString( x + (w - strW) * 0.5f, y + h * 0.5f - 5.0f, 4.2f, cardStr, NULL );
+		if ( isFlip ) {
+			SCR_DrawVirtualString( x + w - 8.0f, y + 2.0f, 2.4f, "^3±", NULL );
+		}
+	} else {
+		// Green Main Board Card (1-10)
+		vec4_t greenBg = { 0.08f, 0.45f, 0.22f, 0.95f };
+		vec4_t greenBorder = { 0.35f, 0.95f, 0.55f, 1.0f };
+		SCR_DrawRoundedGlassPanel( x, y, w, h, 4.0f, greenBg, greenBorder );
+
+		char cardStr[16];
+		Com_sprintf( cardStr, sizeof(cardStr), "%d", val );
+		float strW = SCR_GetStringWidth( cardStr, 4.8f );
+		SCR_DrawVirtualString( x + (w - strW) * 0.5f, y + h * 0.5f - 5.0f, 4.8f, cardStr, NULL );
+	}
+}
+
 /*
 ==================
 SCR_DrawCantinaGamesOverlay
 
-Main Cantina Games Hub and Canto Bight Blackjack 21 overlay
+Main Cantina Games Hub, Canto Bight Blackjack 21, and Star Wars Pazaak 20 overlay
 ==================
 */
 void SCR_DrawCantinaGamesOverlay( void ) {
@@ -4017,7 +4339,7 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		SCR_DrawRoundedGlassPanel( c1X + c1W - 120.0f, c1Y + 70.0f, 105.0f, 26.0f, 4.0f, btnBg, c1Border );
 		SCR_DrawVirtualString( c1X + c1W - 105.0f, c1Y + 76.0f, 4.4f, "^7PLAY TABLE", whiteColor );
 
-		// Card 2: Star Wars Pazaak (Coming Soon)
+		// Card 2: Star Wars Pazaak 20
 		float c2X = winX + 25.0f;
 		float c2Y = winY + 190.0f;
 		float c2W = winW - 50.0f;
@@ -4030,119 +4352,296 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 
 		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 14.0f, 6.0f, "^52. STAR WARS PAZAAK 20", cyanColor );
 		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 34.0f, 3.8f, "^7Iconic Star Wars cantina duel. 3x3 main deck grid & 4-card modifier hand.", whiteColor );
-		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 48.0f, 3.8f, "^7Best-of-3 set matches against AI Astromechs or Online players.", whiteColor );
+		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 48.0f, 3.8f, "^7Best-of-3 set matches against Astromech C-7 or Online players.", whiteColor );
 
 		vec4_t pzBtnBg = { 0.10f, 0.35f, 0.60f, c2Hover ? 1.0f : 0.80f };
 		SCR_DrawRoundedGlassPanel( c2X + c2W - 120.0f, c2Y + 70.0f, 105.0f, 26.0f, 4.0f, pzBtnBg, c2Border );
-		SCR_DrawVirtualString( c2X + c2W - 105.0f, c2Y + 76.0f, 4.4f, "^7PAZAAK", whiteColor );
+		SCR_DrawVirtualString( c2X + c2W - 105.0f, c2Y + 76.0f, 4.4f, "^7PLAY PAZAAK", whiteColor );
 		return;
 	}
 
 	// ========================================================
 	// VIEW 1: CANTO BIGHT BLACKJACK 21 TABLE
 	// ========================================================
-	float winW = 560.0f;
-	float winH = 400.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 240.0f - winH * 0.5f;
+	if ( g_cantinaGames.activeGame == 1 ) {
+		float winW = 560.0f;
+		float winH = 400.0f;
+		float winX = 320.0f - winW * 0.5f;
+		float winY = 240.0f - winH * 0.5f;
 
-	vec4_t feltBg = { 0.02f, 0.16f, 0.10f, 0.96f };
-	vec4_t feltBorder = { 0.95f, 0.75f, 0.15f, 0.95f };
-	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 12.0f, feltBg, feltBorder );
+		vec4_t feltBg = { 0.02f, 0.16f, 0.10f, 0.96f };
+		vec4_t feltBorder = { 0.95f, 0.75f, 0.15f, 0.95f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 12.0f, feltBg, feltBorder );
 
-	float titleW = SCR_GetStringWidth( "CANTO BIGHT BLACKJACK 21", 7.0f );
-	SCR_DrawVirtualString( winX + (winW - titleW) * 0.5f, winY + 12.0f, 7.0f, "^3CANTO BIGHT BLACKJACK 21", yellowCol );
-	SCR_DrawVirtualString( winX + 16.0f, winY + 12.0f, 4.2f, "< ^5[BACK]", cyanColor );
-	SCR_DrawVirtualString( winX + winW - 35.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
+		float titleW = SCR_GetStringWidth( "CANTO BIGHT BLACKJACK 21", 7.0f );
+		SCR_DrawVirtualString( winX + (winW - titleW) * 0.5f, winY + 12.0f, 7.0f, "^3CANTO BIGHT BLACKJACK 21", yellowCol );
+		SCR_DrawVirtualString( winX + 16.0f, winY + 12.0f, 4.2f, "< ^5[BACK]", cyanColor );
+		SCR_DrawVirtualString( winX + winW - 35.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
 
-	SCR_DrawVirtualString( winX + 20.0f, winY + 30.0f, 3.8f, "^7DEALER STANDS ON 17 • BLACKJACK PAYS 3:2", yellowCol );
-	SCR_DrawVirtualString( winX + winW - 150.0f, winY + 30.0f, 4.4f, va( "^7Bankroll: ^5%d CR", credits ), cyanColor );
+		SCR_DrawVirtualString( winX + 20.0f, winY + 30.0f, 3.8f, "^7DEALER STANDS ON 17 • BLACKJACK PAYS 3:2", yellowCol );
+		SCR_DrawVirtualString( winX + winW - 150.0f, winY + 30.0f, 4.4f, va( "^7Bankroll: ^5%d CR", credits ), cyanColor );
 
-	// Dealer Area
-	qboolean hideDealerHole = (!g_cantinaGames.dealerRevealed && g_cantinaGames.inRound) ? qtrue : qfalse;
-	int dScore = SCR_Blackjack_Score( g_cantinaGames.dealerHand, g_cantinaGames.dealerCardCount, hideDealerHole );
-	SCR_DrawVirtualString( winX + 30.0f, winY + 52.0f, 4.4f, va( "^7Croupier Droid Score: ^3%d", dScore ), whiteColor );
+		// Dealer Area
+		qboolean hideDealerHole = (!g_cantinaGames.dealerRevealed && g_cantinaGames.inRound) ? qtrue : qfalse;
+		int dScore = SCR_Blackjack_Score( g_cantinaGames.dealerHand, g_cantinaGames.dealerCardCount, hideDealerHole );
+		SCR_DrawVirtualString( winX + 30.0f, winY + 52.0f, 4.4f, va( "^7Croupier Droid Score: ^3%d", dScore ), whiteColor );
 
-	float dCardX = winX + 30.0f;
-	float dCardY = winY + 68.0f;
-	for ( int i = 0; i < g_cantinaGames.dealerCardCount; i++ ) {
-		qboolean hideHole = (i == 0 && !g_cantinaGames.dealerRevealed && g_cantinaGames.inRound) ? qtrue : qfalse;
-		SCR_DrawBlackjackCard( dCardX + i * 44.0f, dCardY, g_cantinaGames.dealerHand[i].val, g_cantinaGames.dealerHand[i].suit, hideHole );
+		float dCardX = winX + 30.0f;
+		float dCardY = winY + 68.0f;
+		for ( int i = 0; i < g_cantinaGames.dealerCardCount; i++ ) {
+			qboolean hideHole = (i == 0 && !g_cantinaGames.dealerRevealed && g_cantinaGames.inRound) ? qtrue : qfalse;
+			SCR_DrawBlackjackCard( dCardX + i * 44.0f, dCardY, g_cantinaGames.dealerHand[i].val, g_cantinaGames.dealerHand[i].suit, hideHole );
+		}
+
+		// Table Middle: Status Banner
+		float midY = winY + 140.0f;
+		vec4_t bannerBg = { 0.01f, 0.05f, 0.08f, 0.70f };
+		SCR_DrawRoundedGlassPanel( winX + 20.0f, midY, winW - 40.0f, 34.0f, 6.0f, bannerBg, feltBorder );
+
+		float msgW = SCR_GetStringWidth( g_cantinaGames.statusMsg, 4.4f );
+		SCR_DrawVirtualString( winX + (winW - msgW) * 0.5f, midY + 10.0f, 4.4f, g_cantinaGames.statusMsg, whiteColor );
+
+		// Player Area
+		int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
+		SCR_DrawVirtualString( winX + 30.0f, winY + 188.0f, 4.4f, va( "^7Your Hand Score: ^2%d", pScore ), whiteColor );
+
+		float pCardX = winX + 30.0f;
+		float pCardY = winY + 204.0f;
+		for ( int i = 0; i < g_cantinaGames.playerCardCount; i++ ) {
+			SCR_DrawBlackjackCard( pCardX + i * 44.0f, pCardY, g_cantinaGames.playerHand[i].val, g_cantinaGames.playerHand[i].suit, qfalse );
+		}
+
+		// Chip Selector
+		float chipY = winY + 276.0f;
+		SCR_DrawVirtualString( winX + 30.0f, chipY + 6.0f, 4.2f, va( "^7Bet: ^3%d CR", g_cantinaGames.currentBet ), yellowCol );
+
+		const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
+		vec4_t chipCols[5] = {
+			{ 0.15f, 0.40f, 0.85f, 0.9f },
+			{ 0.10f, 0.70f, 0.35f, 0.9f },
+			{ 0.85f, 0.20f, 0.20f, 0.9f },
+			{ 0.10f, 0.12f, 0.18f, 0.9f },
+			{ 0.55f, 0.20f, 0.85f, 0.9f }
+		};
+
+		float chipStartX = winX + 130.0f;
+		for ( int c = 0; c < 5; c++ ) {
+			float cx = chipStartX + c * 52.0f;
+			qboolean chipHover = (!g_cantinaGames.inRound && mx >= cx && mx <= cx + 46.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
+			SCR_DrawRoundedGlassPanel( cx, chipY, 46.0f, 24.0f, 4.0f, chipCols[c], chipHover ? yellowCol : feltBorder );
+			SCR_DrawVirtualString( cx + 6.0f, chipY + 6.0f, 3.8f, chipLabels[c], whiteColor );
+		}
+
+		// Clear Bet Button
+		qboolean clrHover = (!g_cantinaGames.inRound && mx >= winX + winW - 120.0f && mx <= winX + winW - 30.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
+		vec4_t clrBg = { 0.25f, 0.10f, 0.10f, clrHover ? 0.9f : 0.6f };
+		SCR_DrawRoundedGlassPanel( winX + winW - 120.0f, chipY, 90.0f, 24.0f, 4.0f, clrBg, feltBorder );
+		SCR_DrawVirtualString( winX + winW - 110.0f, chipY + 6.0f, 3.8f, "CLEAR BET", whiteColor );
+
+		// Action Buttons
+		float btnY = winY + 325.0f;
+		float btnW = 105.0f;
+		float btnH = 34.0f;
+
+		// DEAL
+		qboolean dealHover = (!g_cantinaGames.inRound && mx >= winX + 30.0f && mx <= winX + 30.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.inRound ? 0.3f : (dealHover ? 1.0f : 0.8f) };
+		SCR_DrawRoundedGlassPanel( winX + 30.0f, btnY, btnW, btnH, 6.0f, dealBg, feltBorder );
+		SCR_DrawVirtualString( winX + 45.0f, btnY + 10.0f, 5.0f, "DEAL [Spc]", whiteColor );
+
+		// HIT
+		qboolean hitHover = (g_cantinaGames.inRound && mx >= winX + 150.0f && mx <= winX + 150.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t hitBg = { 0.15f, 0.40f, 0.80f, !g_cantinaGames.inRound ? 0.3f : (hitHover ? 1.0f : 0.8f) };
+		SCR_DrawRoundedGlassPanel( winX + 150.0f, btnY, btnW, btnH, 6.0f, hitBg, feltBorder );
+		SCR_DrawVirtualString( winX + 172.0f, btnY + 10.0f, 5.0f, "HIT [1]", whiteColor );
+
+		// STAND
+		qboolean standHover = (g_cantinaGames.inRound && mx >= winX + 270.0f && mx <= winX + 270.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t standBg = { 0.80f, 0.50f, 0.10f, !g_cantinaGames.inRound ? 0.3f : (standHover ? 1.0f : 0.8f) };
+		SCR_DrawRoundedGlassPanel( winX + 270.0f, btnY, btnW, btnH, 6.0f, standBg, feltBorder );
+		SCR_DrawVirtualString( winX + 285.0f, btnY + 10.0f, 5.0f, "STAND [2]", whiteColor );
+
+		// DOUBLE
+		qboolean dblHover = (g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 390.0f && mx <= winX + 390.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t dblBg = { 0.55f, 0.20f, 0.75f, (!g_cantinaGames.inRound || g_cantinaGames.playerCardCount != 2) ? 0.3f : (dblHover ? 1.0f : 0.8f) };
+		SCR_DrawRoundedGlassPanel( winX + 390.0f, btnY, btnW, btnH, 6.0f, dblBg, feltBorder );
+		SCR_DrawVirtualString( winX + 400.0f, btnY + 10.0f, 4.4f, "DOUBLE [3]", whiteColor );
+		return;
 	}
 
-	// Table Middle: Status Banner
-	float midY = winY + 140.0f;
-	vec4_t bannerBg = { 0.01f, 0.05f, 0.08f, 0.70f };
-	SCR_DrawRoundedGlassPanel( winX + 20.0f, midY, winW - 40.0f, 34.0f, 6.0f, bannerBg, feltBorder );
+	// ========================================================
+	// VIEW 2: STAR WARS PAZAAK 20 TABLE
+	// ========================================================
+	if ( g_cantinaGames.activeGame == 2 ) {
+		float winW = 580.0f;
+		float winH = 430.0f;
+		float winX = 320.0f - winW * 0.5f;
+		float winY = 240.0f - winH * 0.5f;
 
-	float msgW = SCR_GetStringWidth( g_cantinaGames.statusMsg, 4.4f );
-	SCR_DrawVirtualString( winX + (winW - msgW) * 0.5f, midY + 10.0f, 4.4f, g_cantinaGames.statusMsg, whiteColor );
+		vec4_t pzBg = { 0.04f, 0.09f, 0.18f, 0.97f };
+		vec4_t pzBorder = { 0.25f, 0.75f, 0.95f, 0.95f };
+		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 12.0f, pzBg, pzBorder );
 
-	// Player Area
-	int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
-	SCR_DrawVirtualString( winX + 30.0f, winY + 188.0f, 4.4f, va( "^7Your Hand Score: ^2%d", pScore ), whiteColor );
+		float titleW = SCR_GetStringWidth( "STAR WARS PAZAAK 20", 7.0f );
+		SCR_DrawVirtualString( winX + (winW - titleW) * 0.5f, winY + 12.0f, 7.0f, "^5STAR WARS PAZAAK 20", cyanColor );
+		SCR_DrawVirtualString( winX + 16.0f, winY + 12.0f, 4.2f, "< ^5[BACK]", cyanColor );
+		SCR_DrawVirtualString( winX + winW - 35.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
 
-	float pCardX = winX + 30.0f;
-	float pCardY = winY + 204.0f;
-	for ( int i = 0; i < g_cantinaGames.playerCardCount; i++ ) {
-		SCR_DrawBlackjackCard( pCardX + i * 44.0f, pCardY, g_cantinaGames.playerHand[i].val, g_cantinaGames.playerHand[i].suit, qfalse );
+		SCR_DrawVirtualString( winX + 20.0f, winY + 28.0f, 3.6f, "^7GET AS CLOSE TO 20 WITHOUT GOING OVER • FIRST TO 3 SETS WINS POT", whiteColor );
+		SCR_DrawVirtualString( winX + winW - 150.0f, winY + 28.0f, 4.2f, va( "^7Bankroll: ^5%d CR", credits ), yellowCol );
+
+		// Opponent Area (Top)
+		float oppY = winY + 46.0f;
+		SCR_DrawVirtualString( winX + 25.0f, oppY + 2.0f, 4.8f, va( "^7Opponent: ^5%s", g_cantinaGames.pzOpponentName ), cyanColor );
+		
+		// Opponent Set Win Orbs (3 sets to win match)
+		char oppOrbs[32] = "";
+		for ( int s = 0; s < 3; s++ ) {
+			if ( s < g_cantinaGames.pzOppSetsWon ) Q_strcat( oppOrbs, sizeof(oppOrbs), "^1◆ " );
+			else Q_strcat( oppOrbs, sizeof(oppOrbs), "^0◇ " );
+		}
+		SCR_DrawVirtualString( winX + 200.0f, oppY + 2.0f, 5.0f, va( "Sets: %s", oppOrbs ), whiteColor );
+		SCR_DrawVirtualString( winX + winW - 130.0f, oppY + 2.0f, 5.2f, va( "Score: ^3%d^7%s", g_cantinaGames.pzOppScore, g_cantinaGames.pzOppStood ? " ^1[STOOD]" : "" ), yellowCol );
+
+		// Opponent 3x3 Grid (9 slots)
+		float cardW = 32.0f;
+		float cardH = 38.0f;
+		float oppGridX = winX + 25.0f;
+		float oppGridY = oppY + 18.0f;
+		for ( int i = 0; i < 9; i++ ) {
+			float gx = oppGridX + (i % 9) * 36.0f;
+			if ( i < g_cantinaGames.pzOppBoardCount ) {
+				SCR_DrawPazaakMiniCard( gx, oppGridY, cardW, cardH, g_cantinaGames.pzOppBoard[i], qfalse, qfalse, qfalse );
+			} else {
+				vec4_t emptyBg = { 0.02f, 0.05f, 0.10f, 0.50f };
+				vec4_t emptyBorder = { 0.15f, 0.30f, 0.50f, 0.40f };
+				SCR_DrawRoundedGlassPanel( gx, oppGridY, cardW, cardH, 3.0f, emptyBg, emptyBorder );
+			}
+		}
+
+		// Opponent Hand Cards (Hidden/Remaining)
+		float oppHandX = winX + winW - 170.0f;
+		for ( int h = 0; h < 4; h++ ) {
+			float hx = oppHandX + h * 38.0f;
+			qboolean isUsed = g_cantinaGames.pzOppHand[h].used;
+			SCR_DrawPazaakMiniCard( hx, oppGridY, 32.0f, 38.0f, 0, qtrue, isUsed, qfalse );
+		}
+
+		// Middle Status Banner
+		float midY = winY + 115.0f;
+		vec4_t bannerBg = { 0.01f, 0.04f, 0.10f, 0.85f };
+		SCR_DrawRoundedGlassPanel( winX + 20.0f, midY, winW - 40.0f, 32.0f, 6.0f, bannerBg, pzBorder );
+		float msgW = SCR_GetStringWidth( g_cantinaGames.pzStatusMsg, 4.2f );
+		SCR_DrawVirtualString( winX + (winW - msgW) * 0.5f, midY + 9.0f, 4.2f, g_cantinaGames.pzStatusMsg, whiteColor );
+
+		// Player Area (Bottom)
+		float pAreaY = winY + 155.0f;
+		SCR_DrawVirtualString( winX + 25.0f, pAreaY + 2.0f, 4.8f, "^2Your Board", whiteColor );
+
+		// Player Set Win Orbs
+		char pOrbs[32] = "";
+		for ( int s = 0; s < 3; s++ ) {
+			if ( s < g_cantinaGames.pzPlayerSetsWon ) Q_strcat( pOrbs, sizeof(pOrbs), "^2◆ " );
+			else Q_strcat( pOrbs, sizeof(pOrbs), "^0◇ " );
+		}
+		SCR_DrawVirtualString( winX + 200.0f, pAreaY + 2.0f, 5.0f, va( "Sets: %s", pOrbs ), whiteColor );
+		SCR_DrawVirtualString( winX + winW - 130.0f, pAreaY + 2.0f, 5.2f, va( "Score: ^2%d^7%s", g_cantinaGames.pzPlayerScore, g_cantinaGames.pzPlayerStood ? " ^1[STOOD]" : "" ), yellowCol );
+
+		// Player 3x3 Grid (9 slots)
+		float pGridX = winX + 25.0f;
+		float pGridY = pAreaY + 18.0f;
+		for ( int i = 0; i < 9; i++ ) {
+			float gx = pGridX + (i % 9) * 36.0f;
+			if ( i < g_cantinaGames.pzPlayerBoardCount ) {
+				SCR_DrawPazaakMiniCard( gx, pGridY, cardW, cardH, g_cantinaGames.pzPlayerBoard[i], qfalse, qfalse, qfalse );
+			} else {
+				vec4_t emptyBg = { 0.02f, 0.05f, 0.10f, 0.50f };
+				vec4_t emptyBorder = { 0.15f, 0.30f, 0.50f, 0.40f };
+				SCR_DrawRoundedGlassPanel( gx, pGridY, cardW, cardH, 3.0f, emptyBg, emptyBorder );
+			}
+		}
+
+		// Player Interactive 4-Card Modifier Hand
+		float handY = winY + 225.0f;
+		SCR_DrawVirtualString( winX + 25.0f, handY + 2.0f, 4.4f, "^3Your Side-Deck Hand (Play 1 per turn):", yellowCol );
+
+		float handStartX = winX + 25.0f;
+		for ( int h = 0; h < 4; h++ ) {
+			float hx = handStartX + h * 90.0f;
+			float hy = handY + 18.0f;
+			pzHandCard_t *c = &g_cantinaGames.pzPlayerHand[h];
+
+			qboolean canPlay = (g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && !g_cantinaGames.pzCardPlayedThisTurn && !c->used) ? qtrue : qfalse;
+			qboolean cardHover = (canPlay && mx >= hx && mx <= hx + 80.0f && my >= hy && my <= hy + 46.0f) ? qtrue : qfalse;
+
+			vec4_t cardPillBg = { (c->val < 0) ? 0.70f : 0.12f, (c->val < 0) ? 0.15f : 0.50f, (c->val < 0) ? 0.20f : 0.90f, c->used ? 0.35f : 0.95f };
+			vec4_t cardPillBorder = { cardHover ? 1.0f : (c->isFlip ? 1.0f : 0.80f), cardHover ? 0.9f : (c->isFlip ? 0.85f : 0.85f), cardHover ? 0.2f : (c->isFlip ? 0.20f : 0.95f), 1.0f };
+			SCR_DrawRoundedGlassPanel( hx, hy, 80.0f, 46.0f, 6.0f, cardPillBg, cardPillBorder );
+
+			if ( !c->used ) {
+				const char *signStr = (c->val > 0) ? "+" : "";
+				char valBuf[16];
+				Com_sprintf( valBuf, sizeof(valBuf), "%s%d", signStr, c->val );
+				SCR_DrawVirtualString( hx + 12.0f, hy + 14.0f, 6.0f, valBuf, whiteColor );
+				SCR_DrawVirtualString( hx + 55.0f, hy + 6.0f, 3.2f, va( "[%d]", h + 1 ), yellowCol );
+				if ( c->isFlip ) {
+					SCR_DrawVirtualString( hx + 50.0f, hy + 26.0f, 3.2f, "^3[FLIP]", cyanColor );
+				}
+			} else {
+				SCR_DrawVirtualString( hx + 24.0f, hy + 16.0f, 4.0f, "^0USED", whiteColor );
+			}
+		}
+
+		// Chip Wager Selector
+		float chipY = winY + 300.0f;
+		SCR_DrawVirtualString( winX + 25.0f, chipY + 6.0f, 4.2f, va( "^7Match Pot Wager: ^3%d CR", g_cantinaGames.pzBet ), yellowCol );
+
+		const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
+		vec4_t chipCols[5] = {
+			{ 0.15f, 0.40f, 0.85f, 0.9f },
+			{ 0.10f, 0.70f, 0.35f, 0.9f },
+			{ 0.85f, 0.20f, 0.20f, 0.9f },
+			{ 0.10f, 0.12f, 0.18f, 0.9f },
+			{ 0.55f, 0.20f, 0.85f, 0.9f }
+		};
+
+		float chipStartX = winX + 175.0f;
+		for ( int c = 0; c < 5; c++ ) {
+			float cx = chipStartX + c * 50.0f;
+			qboolean chipHover = (!g_cantinaGames.pzInMatch && mx >= cx && mx <= cx + 44.0f && my >= chipY && my <= chipY + 22.0f) ? qtrue : qfalse;
+			SCR_DrawRoundedGlassPanel( cx, chipY, 44.0f, 22.0f, 4.0f, chipCols[c], chipHover ? yellowCol : pzBorder );
+			SCR_DrawVirtualString( cx + 6.0f, chipY + 5.0f, 3.6f, chipLabels[c], whiteColor );
+		}
+
+		// Action Buttons (Bottom Bar)
+		float btnY = winY + 348.0f;
+		float btnW = 120.0f;
+		float btnH = 34.0f;
+
+		// DEAL / NEW MATCH
+		qboolean dealHover = (!g_cantinaGames.pzInMatch && mx >= winX + 25.0f && mx <= winX + 25.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.pzInMatch ? 0.30f : (dealHover ? 1.0f : 0.80f) };
+		SCR_DrawRoundedGlassPanel( winX + 25.0f, btnY, btnW, btnH, 6.0f, dealBg, pzBorder );
+		SCR_DrawVirtualString( winX + 35.0f, btnY + 10.0f, 4.8f, "DEAL MATCH", whiteColor );
+
+		// END TURN
+		qboolean endHover = (g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 160.0f && mx <= winX + 160.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t endBg = { 0.15f, 0.45f, 0.85f, (!g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood) ? 0.30f : (endHover ? 1.0f : 0.80f) };
+		SCR_DrawRoundedGlassPanel( winX + 160.0f, btnY, btnW, btnH, 6.0f, endBg, pzBorder );
+		SCR_DrawVirtualString( winX + 172.0f, btnY + 10.0f, 4.8f, "END TURN [Spc]", whiteColor );
+
+		// STAND
+		qboolean standHover = (g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 295.0f && mx <= winX + 295.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t standBg = { 0.85f, 0.50f, 0.10f, (!g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood) ? 0.30f : (standHover ? 1.0f : 0.80f) };
+		SCR_DrawRoundedGlassPanel( winX + 295.0f, btnY, btnW, btnH, 6.0f, standBg, pzBorder );
+		SCR_DrawVirtualString( winX + 318.0f, btnY + 10.0f, 4.8f, "STAND [S]", whiteColor );
+
+		// FORFEIT / RESET
+		qboolean forfHover = (g_cantinaGames.pzInMatch && mx >= winX + 430.0f && mx <= winX + 430.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		vec4_t forfBg = { 0.55f, 0.15f, 0.15f, !g_cantinaGames.pzInMatch ? 0.30f : (forfHover ? 1.0f : 0.70f) };
+		SCR_DrawRoundedGlassPanel( winX + 430.0f, btnY, btnW, btnH, 6.0f, forfBg, pzBorder );
+		SCR_DrawVirtualString( winX + 452.0f, btnY + 10.0f, 4.8f, "FORFEIT", whiteColor );
 	}
-
-	// Chip Selector
-	float chipY = winY + 276.0f;
-	SCR_DrawVirtualString( winX + 30.0f, chipY + 6.0f, 4.2f, va( "^7Bet: ^3%d CR", g_cantinaGames.currentBet ), yellowCol );
-
-	const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
-	vec4_t chipCols[5] = {
-		{ 0.15f, 0.40f, 0.85f, 0.9f },
-		{ 0.10f, 0.70f, 0.35f, 0.9f },
-		{ 0.85f, 0.20f, 0.20f, 0.9f },
-		{ 0.10f, 0.12f, 0.18f, 0.9f },
-		{ 0.55f, 0.20f, 0.85f, 0.9f }
-	};
-
-	float chipStartX = winX + 130.0f;
-	for ( int c = 0; c < 5; c++ ) {
-		float cx = chipStartX + c * 52.0f;
-		qboolean chipHover = (!g_cantinaGames.inRound && mx >= cx && mx <= cx + 46.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
-		SCR_DrawRoundedGlassPanel( cx, chipY, 46.0f, 24.0f, 4.0f, chipCols[c], chipHover ? yellowCol : feltBorder );
-		SCR_DrawVirtualString( cx + 6.0f, chipY + 6.0f, 3.8f, chipLabels[c], whiteColor );
-	}
-
-	// Clear Bet Button
-	qboolean clrHover = (!g_cantinaGames.inRound && mx >= winX + winW - 120.0f && mx <= winX + winW - 30.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
-	vec4_t clrBg = { 0.25f, 0.10f, 0.10f, clrHover ? 0.9f : 0.6f };
-	SCR_DrawRoundedGlassPanel( winX + winW - 120.0f, chipY, 90.0f, 24.0f, 4.0f, clrBg, feltBorder );
-	SCR_DrawVirtualString( winX + winW - 110.0f, chipY + 6.0f, 3.8f, "CLEAR BET", whiteColor );
-
-	// Action Buttons
-	float btnY = winY + 325.0f;
-	float btnW = 105.0f;
-	float btnH = 34.0f;
-
-	// DEAL
-	qboolean dealHover = (!g_cantinaGames.inRound && mx >= winX + 30.0f && mx <= winX + 30.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-	vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.inRound ? 0.3f : (dealHover ? 1.0f : 0.8f) };
-	SCR_DrawRoundedGlassPanel( winX + 30.0f, btnY, btnW, btnH, 6.0f, dealBg, feltBorder );
-	SCR_DrawVirtualString( winX + 45.0f, btnY + 10.0f, 5.0f, "DEAL [Spc]", whiteColor );
-
-	// HIT
-	qboolean hitHover = (g_cantinaGames.inRound && mx >= winX + 150.0f && mx <= winX + 150.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-	vec4_t hitBg = { 0.15f, 0.40f, 0.80f, !g_cantinaGames.inRound ? 0.3f : (hitHover ? 1.0f : 0.8f) };
-	SCR_DrawRoundedGlassPanel( winX + 150.0f, btnY, btnW, btnH, 6.0f, hitBg, feltBorder );
-	SCR_DrawVirtualString( winX + 172.0f, btnY + 10.0f, 5.0f, "HIT [1]", whiteColor );
-
-	// STAND
-	qboolean standHover = (g_cantinaGames.inRound && mx >= winX + 270.0f && mx <= winX + 270.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-	vec4_t standBg = { 0.80f, 0.50f, 0.10f, !g_cantinaGames.inRound ? 0.3f : (standHover ? 1.0f : 0.8f) };
-	SCR_DrawRoundedGlassPanel( winX + 270.0f, btnY, btnW, btnH, 6.0f, standBg, feltBorder );
-	SCR_DrawVirtualString( winX + 285.0f, btnY + 10.0f, 5.0f, "STAND [2]", whiteColor );
-
-	// DOUBLE
-	qboolean dblHover = (g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 390.0f && mx <= winX + 390.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-	vec4_t dblBg = { 0.55f, 0.20f, 0.75f, (!g_cantinaGames.inRound || g_cantinaGames.playerCardCount != 2) ? 0.3f : (dblHover ? 1.0f : 0.8f) };
-	SCR_DrawRoundedGlassPanel( winX + 390.0f, btnY, btnW, btnH, 6.0f, dblBg, feltBorder );
-	SCR_DrawVirtualString( winX + 400.0f, btnY + 10.0f, 4.4f, "DOUBLE [3]", whiteColor );
 }
 
 void SCR_Games_f( void ) {
@@ -4153,6 +4652,14 @@ void SCR_Games_f( void ) {
 void SCR_Blackjack_f( void ) {
 	g_cantinaGames.active = qtrue;
 	g_cantinaGames.activeGame = 1;
+}
+
+void SCR_Pazaak_f( void ) {
+	g_cantinaGames.active = qtrue;
+	g_cantinaGames.activeGame = 2;
+	if ( !g_cantinaGames.pzInMatch ) {
+		SCR_Pazaak_InitMatch();
+	}
 }
 
 /*
