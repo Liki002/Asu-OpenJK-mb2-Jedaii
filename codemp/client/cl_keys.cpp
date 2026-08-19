@@ -2248,42 +2248,47 @@ void CL_KeyDownEvent( int key, unsigned time )
 					return;
 				}
 
-				float chipY = winY + 276.0f;
+				float chipY = winY + 268.0f;
+				float chipSize = 34.0f;
 				float chipStartX = winX + 130.0f;
 				int chipAdd[5] = { 10, 25, 50, 100, 500 };
 				if ( !g_cantinaGames.inRound ) {
 					for ( int c = 0; c < 5; c++ ) {
-						float cx = chipStartX + c * 52.0f;
-						if ( mx >= cx && mx <= cx + 46.0f && my >= chipY && my <= chipY + 24.0f ) {
+						float cx = chipStartX + c * 48.0f;
+						if ( mx >= cx && mx <= cx + chipSize && my >= chipY && my <= chipY + chipSize ) {
 							if ( g_cantinaGames.currentBet + chipAdd[c] <= credits ) {
 								g_cantinaGames.currentBet += chipAdd[c];
 							}
 							return;
 						}
 					}
-					if ( mx >= winX + winW - 120.0f && mx <= winX + winW - 30.0f && my >= chipY && my <= chipY + 24.0f ) {
+					// Clear Bet
+					float clrX = winX + winW - 130.0f;
+					float clrW = 105.0f;
+					float clrH = 32.0f;
+					if ( mx >= clrX && mx <= clrX + clrW && my >= chipY && my <= chipY + clrH ) {
 						g_cantinaGames.currentBet = 10;
 						return;
 					}
 				}
 
-				float btnY = winY + 325.0f;
-				float btnW = 105.0f;
+				float btnY = winY + 318.0f;
+				float btnW = 115.0f;
 				float btnH = 34.0f;
 
-				if ( !g_cantinaGames.inRound && mx >= winX + 30.0f && mx <= winX + 30.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( !g_cantinaGames.inRound && mx >= winX + 25.0f && mx <= winX + 25.0f + btnW && my >= btnY && my <= btnY + btnH ) {
 					SCR_Blackjack_Deal();
 					return;
 				}
-				if ( g_cantinaGames.inRound && mx >= winX + 150.0f && mx <= winX + 150.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( g_cantinaGames.inRound && mx >= winX + 155.0f && mx <= winX + 155.0f + btnW && my >= btnY && my <= btnY + btnH ) {
 					SCR_Blackjack_Hit();
 					return;
 				}
-				if ( g_cantinaGames.inRound && mx >= winX + 270.0f && mx <= winX + 270.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( g_cantinaGames.inRound && mx >= winX + 285.0f && mx <= winX + 285.0f + btnW && my >= btnY && my <= btnY + btnH ) {
 					SCR_Blackjack_Stand();
 					return;
 				}
-				if ( g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 390.0f && mx <= winX + 390.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 415.0f && mx <= winX + 415.0f + btnW && my >= btnY && my <= btnY + btnH ) {
 					SCR_Blackjack_DoubleDown();
 					return;
 				}
@@ -2345,7 +2350,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 				}
 
 				// Player Hand Cards
-				float handY = winY + 225.0f;
+				float handY = winY + 215.0f;
 				float handStartX = winX + 25.0f;
 				for ( int h = 0; h < 4; h++ ) {
 					float hx = handStartX + h * 90.0f;
@@ -2361,13 +2366,14 @@ void CL_KeyDownEvent( int key, unsigned time )
 				}
 
 				// Chip Wager Selector
-				float chipY = winY + 300.0f;
-				float chipStartX = winX + 175.0f;
+				float pzChipY = winY + 292.0f;
+				float pzChipSize = 32.0f;
+				float pzChipStartX = winX + 175.0f;
 				int chipAdd[5] = { 10, 25, 50, 100, 500 };
 				if ( !g_cantinaGames.pzInMatch ) {
 					for ( int c = 0; c < 5; c++ ) {
-						float cx = chipStartX + c * 50.0f;
-						if ( mx >= cx && mx <= cx + 44.0f && my >= chipY && my <= chipY + 22.0f ) {
+						float cx = pzChipStartX + c * 46.0f;
+						if ( mx >= cx && mx <= cx + pzChipSize && my >= pzChipY && my <= pzChipY + pzChipSize ) {
 							if ( g_cantinaGames.pzBet + chipAdd[c] <= credits ) {
 								g_cantinaGames.pzBet += chipAdd[c];
 							}
@@ -2377,27 +2383,27 @@ void CL_KeyDownEvent( int key, unsigned time )
 				}
 
 				// Action Buttons
-				float btnY = winY + 348.0f;
-				float btnW = 120.0f;
-				float btnH = 34.0f;
+				float pzBtnY = winY + 342.0f;
+				float pzBtnW = 125.0f;
+				float pzBtnH = 36.0f;
 
 				// DEAL
-				if ( !g_cantinaGames.pzInMatch && mx >= winX + 25.0f && mx <= winX + 25.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( !g_cantinaGames.pzInMatch && mx >= winX + 25.0f && mx <= winX + 25.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH ) {
 					SCR_Pazaak_InitMatch();
 					return;
 				}
 				// END TURN
-				if ( g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 160.0f && mx <= winX + 160.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 160.0f && mx <= winX + 160.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH ) {
 					SCR_Pazaak_EndTurn();
 					return;
 				}
 				// STAND
-				if ( g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 295.0f && mx <= winX + 295.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 295.0f && mx <= winX + 295.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH ) {
 					SCR_Pazaak_Stand();
 					return;
 				}
 				// FORFEIT
-				if ( g_cantinaGames.pzInMatch && mx >= winX + 430.0f && mx <= winX + 430.0f + btnW && my >= btnY && my <= btnY + btnH ) {
+				if ( g_cantinaGames.pzInMatch && mx >= winX + 430.0f && mx <= winX + 430.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH ) {
 					g_cantinaGames.pzInMatch = qfalse;
 					Q_strncpyz( g_cantinaGames.pzStatusMsg, "^1Match forfeited. Press DEAL MATCH to play again.", sizeof( g_cantinaGames.pzStatusMsg ) );
 					return;

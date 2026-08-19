@@ -4335,9 +4335,19 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		SCR_DrawVirtualString( c1X + 16.0f, c1Y + 34.0f, 3.8f, "^7Classic casino table vs Croupier Droid. Natural Blackjack pays 3:2!", whiteColor );
 		SCR_DrawVirtualString( c1X + 16.0f, c1Y + 48.0f, 3.8f, "^7Wager from ^310 ^7to ^3500 Credits^7 per hand. Double Down on strong totals!", whiteColor );
 		
-		vec4_t btnBg = { 0.10f, 0.65f, 0.30f, c1Hover ? 1.0f : 0.80f };
-		SCR_DrawRoundedGlassPanel( c1X + c1W - 120.0f, c1Y + 70.0f, 105.0f, 26.0f, 4.0f, btnBg, c1Border );
-		SCR_DrawVirtualString( c1X + c1W - 105.0f, c1Y + 76.0f, 4.4f, "^7PLAY TABLE", whiteColor );
+		static qhandle_t s_hBtnPlayTable = 0, s_hBtnPlayTableHov = 0;
+		if ( s_hBtnPlayTable <= 0 && re && re->RegisterShaderNoMip ) {
+			s_hBtnPlayTable = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_play_table" );
+			s_hBtnPlayTableHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_play_table_hover" );
+		}
+		qhandle_t hPlay1 = c1Hover ? s_hBtnPlayTableHov : s_hBtnPlayTable;
+		if ( hPlay1 > 0 ) {
+			SCR_DrawPic( c1X + c1W - 130.0f, c1Y + 68.0f, 115.0f, 34.0f, hPlay1 );
+		} else {
+			vec4_t btnBg = { 0.10f, 0.65f, 0.30f, c1Hover ? 1.0f : 0.80f };
+			SCR_DrawRoundedGlassPanel( c1X + c1W - 120.0f, c1Y + 70.0f, 105.0f, 26.0f, 4.0f, btnBg, c1Border );
+			SCR_DrawVirtualString( c1X + c1W - 105.0f, c1Y + 76.0f, 4.4f, "^7PLAY TABLE", whiteColor );
+		}
 
 		// Card 2: Star Wars Pazaak 20
 		float c2X = winX + 25.0f;
@@ -4354,9 +4364,19 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 34.0f, 3.8f, "^7Iconic Star Wars cantina duel. 3x3 main deck grid & 4-card modifier hand.", whiteColor );
 		SCR_DrawVirtualString( c2X + 16.0f, c2Y + 48.0f, 3.8f, "^7Best-of-3 set matches against Astromech C-7 or Online players.", whiteColor );
 
-		vec4_t pzBtnBg = { 0.10f, 0.35f, 0.60f, c2Hover ? 1.0f : 0.80f };
-		SCR_DrawRoundedGlassPanel( c2X + c2W - 120.0f, c2Y + 70.0f, 105.0f, 26.0f, 4.0f, pzBtnBg, c2Border );
-		SCR_DrawVirtualString( c2X + c2W - 105.0f, c2Y + 76.0f, 4.4f, "^7PLAY PAZAAK", whiteColor );
+		static qhandle_t s_hBtnPlayPazaak = 0, s_hBtnPlayPazaakHov = 0;
+		if ( s_hBtnPlayPazaak <= 0 && re && re->RegisterShaderNoMip ) {
+			s_hBtnPlayPazaak = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_play_pazaak" );
+			s_hBtnPlayPazaakHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_play_pazaak_hover" );
+		}
+		qhandle_t hPlay2 = c2Hover ? s_hBtnPlayPazaakHov : s_hBtnPlayPazaak;
+		if ( hPlay2 > 0 ) {
+			SCR_DrawPic( c2X + c2W - 130.0f, c2Y + 68.0f, 115.0f, 34.0f, hPlay2 );
+		} else {
+			vec4_t pzBtnBg = { 0.10f, 0.35f, 0.60f, c2Hover ? 1.0f : 0.80f };
+			SCR_DrawRoundedGlassPanel( c2X + c2W - 120.0f, c2Y + 70.0f, 105.0f, 26.0f, 4.0f, pzBtnBg, c2Border );
+			SCR_DrawVirtualString( c2X + c2W - 105.0f, c2Y + 76.0f, 4.4f, "^7PLAY PAZAAK", whiteColor );
+		}
 		return;
 	}
 
@@ -4394,7 +4414,7 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		}
 
 		// Table Middle: Status Banner
-		float midY = winY + 140.0f;
+		float midY = winY + 138.0f;
 		vec4_t bannerBg = { 0.01f, 0.05f, 0.08f, 0.70f };
 		SCR_DrawRoundedGlassPanel( winX + 20.0f, midY, winW - 40.0f, 34.0f, 6.0f, bannerBg, feltBorder );
 
@@ -4403,69 +4423,128 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 
 		// Player Area
 		int pScore = SCR_Blackjack_Score( g_cantinaGames.playerHand, g_cantinaGames.playerCardCount, qfalse );
-		SCR_DrawVirtualString( winX + 30.0f, winY + 188.0f, 4.4f, va( "^7Your Hand Score: ^2%d", pScore ), whiteColor );
+		SCR_DrawVirtualString( winX + 30.0f, winY + 184.0f, 4.4f, va( "^7Your Hand Score: ^2%d", pScore ), whiteColor );
 
 		float pCardX = winX + 30.0f;
-		float pCardY = winY + 204.0f;
+		float pCardY = winY + 200.0f;
 		for ( int i = 0; i < g_cantinaGames.playerCardCount; i++ ) {
 			SCR_DrawBlackjackCard( pCardX + i * 44.0f, pCardY, g_cantinaGames.playerHand[i].val, g_cantinaGames.playerHand[i].suit, qfalse );
 		}
 
-		// Chip Selector
-		float chipY = winY + 276.0f;
-		SCR_DrawVirtualString( winX + 30.0f, chipY + 6.0f, 4.2f, va( "^7Bet: ^3%d CR", g_cantinaGames.currentBet ), yellowCol );
+		// Chip Shaders & Buttons Shaders Registration
+		static qhandle_t s_hChips[6] = {0}; // 10, 25, 50, 100, 500, clear
+		static qhandle_t s_hBtnDeal = 0, s_hBtnDealHov = 0;
+		static qhandle_t s_hBtnHit = 0, s_hBtnHitHov = 0;
+		static qhandle_t s_hBtnStand = 0, s_hBtnStandHov = 0;
+		static qhandle_t s_hBtnDouble = 0, s_hBtnDoubleHov = 0;
+		static qhandle_t s_hBtnClear = 0, s_hBtnClearHov = 0;
 
-		const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
-		vec4_t chipCols[5] = {
-			{ 0.15f, 0.40f, 0.85f, 0.9f },
-			{ 0.10f, 0.70f, 0.35f, 0.9f },
-			{ 0.85f, 0.20f, 0.20f, 0.9f },
-			{ 0.10f, 0.12f, 0.18f, 0.9f },
-			{ 0.55f, 0.20f, 0.85f, 0.9f }
-		};
+		if ( s_hChips[0] <= 0 && re && re->RegisterShaderNoMip ) {
+			s_hChips[0] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_10" );
+			s_hChips[1] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_25" );
+			s_hChips[2] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_50" );
+			s_hChips[3] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_100" );
+			s_hChips[4] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_500" );
+			s_hChips[5] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_clear" );
+
+			s_hBtnDeal = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_deal" );
+			s_hBtnDealHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_deal_hover" );
+			s_hBtnHit = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_hit" );
+			s_hBtnHitHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_hit_hover" );
+			s_hBtnStand = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_stand" );
+			s_hBtnStandHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_stand_hover" );
+			s_hBtnDouble = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_double" );
+			s_hBtnDoubleHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_double_hover" );
+			s_hBtnClear = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_clear" );
+			s_hBtnClearHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_clear_hover" );
+		}
+
+		// Chip Selector (3D Circular Chips)
+		float chipY = winY + 268.0f;
+		float chipSize = 34.0f;
+		SCR_DrawVirtualString( winX + 25.0f, chipY + 10.0f, 4.4f, va( "^7Bet: ^3%d CR", g_cantinaGames.currentBet ), yellowCol );
 
 		float chipStartX = winX + 130.0f;
 		for ( int c = 0; c < 5; c++ ) {
-			float cx = chipStartX + c * 52.0f;
-			qboolean chipHover = (!g_cantinaGames.inRound && mx >= cx && mx <= cx + 46.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
-			SCR_DrawRoundedGlassPanel( cx, chipY, 46.0f, 24.0f, 4.0f, chipCols[c], chipHover ? yellowCol : feltBorder );
-			SCR_DrawVirtualString( cx + 6.0f, chipY + 6.0f, 3.8f, chipLabels[c], whiteColor );
+			float cx = chipStartX + c * 48.0f;
+			qboolean chipHover = (!g_cantinaGames.inRound && mx >= cx && mx <= cx + chipSize && my >= chipY && my <= chipY + chipSize) ? qtrue : qfalse;
+			if ( s_hChips[c] > 0 ) {
+				SCR_DrawPic( cx, chipY, chipSize, chipSize, s_hChips[c] );
+				if ( chipHover ) {
+					vec4_t hovBorder = { 1.0f, 0.9f, 0.2f, 1.0f };
+					vec4_t empty = { 0, 0, 0, 0 };
+					SCR_DrawRoundedGlassPanel( cx - 2.0f, chipY - 2.0f, chipSize + 4.0f, chipSize + 4.0f, chipSize * 0.5f, empty, hovBorder );
+				}
+			} else {
+				vec4_t chipCols[5] = { { 0.15f, 0.40f, 0.85f, 0.9f }, { 0.10f, 0.70f, 0.35f, 0.9f }, { 0.85f, 0.20f, 0.20f, 0.9f }, { 0.10f, 0.12f, 0.18f, 0.9f }, { 0.55f, 0.20f, 0.85f, 0.9f } };
+				const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
+				SCR_DrawRoundedGlassPanel( cx, chipY, chipSize, chipSize, 4.0f, chipCols[c], chipHover ? yellowCol : feltBorder );
+				SCR_DrawVirtualString( cx + 4.0f, chipY + 10.0f, 3.8f, chipLabels[c], whiteColor );
+			}
 		}
 
 		// Clear Bet Button
-		qboolean clrHover = (!g_cantinaGames.inRound && mx >= winX + winW - 120.0f && mx <= winX + winW - 30.0f && my >= chipY && my <= chipY + 24.0f) ? qtrue : qfalse;
-		vec4_t clrBg = { 0.25f, 0.10f, 0.10f, clrHover ? 0.9f : 0.6f };
-		SCR_DrawRoundedGlassPanel( winX + winW - 120.0f, chipY, 90.0f, 24.0f, 4.0f, clrBg, feltBorder );
-		SCR_DrawVirtualString( winX + winW - 110.0f, chipY + 6.0f, 3.8f, "CLEAR BET", whiteColor );
+		float clrX = winX + winW - 130.0f;
+		float clrW = 105.0f;
+		float clrH = 32.0f;
+		qboolean clrHover = (!g_cantinaGames.inRound && mx >= clrX && mx <= clrX + clrW && my >= chipY && my <= chipY + clrH) ? qtrue : qfalse;
+		qhandle_t hClr = clrHover ? s_hBtnClearHov : s_hBtnClear;
+		if ( hClr > 0 ) {
+			SCR_DrawPic( clrX, chipY + 1.0f, clrW, clrH, hClr );
+		} else {
+			vec4_t clrBg = { 0.25f, 0.10f, 0.10f, clrHover ? 0.9f : 0.6f };
+			SCR_DrawRoundedGlassPanel( clrX, chipY, clrW, clrH, 4.0f, clrBg, feltBorder );
+			SCR_DrawVirtualString( clrX + 16.0f, chipY + 8.0f, 3.8f, "CLEAR BET", whiteColor );
+		}
 
-		// Action Buttons
-		float btnY = winY + 325.0f;
-		float btnW = 105.0f;
+		// Action Buttons Bar
+		float btnY = winY + 318.0f;
+		float btnW = 115.0f;
 		float btnH = 34.0f;
 
 		// DEAL
-		qboolean dealHover = (!g_cantinaGames.inRound && mx >= winX + 30.0f && mx <= winX + 30.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.inRound ? 0.3f : (dealHover ? 1.0f : 0.8f) };
-		SCR_DrawRoundedGlassPanel( winX + 30.0f, btnY, btnW, btnH, 6.0f, dealBg, feltBorder );
-		SCR_DrawVirtualString( winX + 45.0f, btnY + 10.0f, 5.0f, "DEAL [Spc]", whiteColor );
+		qboolean dealHover = (!g_cantinaGames.inRound && mx >= winX + 25.0f && mx <= winX + 25.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		qhandle_t hDeal = dealHover ? s_hBtnDealHov : s_hBtnDeal;
+		if ( hDeal > 0 ) {
+			SCR_DrawPic( winX + 25.0f, btnY, btnW, btnH, hDeal );
+		} else {
+			vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.inRound ? 0.3f : (dealHover ? 1.0f : 0.8f) };
+			SCR_DrawRoundedGlassPanel( winX + 25.0f, btnY, btnW, btnH, 6.0f, dealBg, feltBorder );
+			SCR_DrawVirtualString( winX + 45.0f, btnY + 10.0f, 5.0f, "DEAL [Spc]", whiteColor );
+		}
 
 		// HIT
-		qboolean hitHover = (g_cantinaGames.inRound && mx >= winX + 150.0f && mx <= winX + 150.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t hitBg = { 0.15f, 0.40f, 0.80f, !g_cantinaGames.inRound ? 0.3f : (hitHover ? 1.0f : 0.8f) };
-		SCR_DrawRoundedGlassPanel( winX + 150.0f, btnY, btnW, btnH, 6.0f, hitBg, feltBorder );
-		SCR_DrawVirtualString( winX + 172.0f, btnY + 10.0f, 5.0f, "HIT [1]", whiteColor );
+		qboolean hitHover = (g_cantinaGames.inRound && mx >= winX + 155.0f && mx <= winX + 155.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		qhandle_t hHit = hitHover ? s_hBtnHitHov : s_hBtnHit;
+		if ( hHit > 0 ) {
+			SCR_DrawPic( winX + 155.0f, btnY, btnW, btnH, hHit );
+		} else {
+			vec4_t hitBg = { 0.15f, 0.40f, 0.80f, !g_cantinaGames.inRound ? 0.3f : (hitHover ? 1.0f : 0.8f) };
+			SCR_DrawRoundedGlassPanel( winX + 155.0f, btnY, btnW, btnH, 6.0f, hitBg, feltBorder );
+			SCR_DrawVirtualString( winX + 175.0f, btnY + 10.0f, 5.0f, "HIT [1]", whiteColor );
+		}
 
 		// STAND
-		qboolean standHover = (g_cantinaGames.inRound && mx >= winX + 270.0f && mx <= winX + 270.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t standBg = { 0.80f, 0.50f, 0.10f, !g_cantinaGames.inRound ? 0.3f : (standHover ? 1.0f : 0.8f) };
-		SCR_DrawRoundedGlassPanel( winX + 270.0f, btnY, btnW, btnH, 6.0f, standBg, feltBorder );
-		SCR_DrawVirtualString( winX + 285.0f, btnY + 10.0f, 5.0f, "STAND [2]", whiteColor );
+		qboolean standHover = (g_cantinaGames.inRound && mx >= winX + 285.0f && mx <= winX + 285.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		qhandle_t hStand = standHover ? s_hBtnStandHov : s_hBtnStand;
+		if ( hStand > 0 ) {
+			SCR_DrawPic( winX + 285.0f, btnY, btnW, btnH, hStand );
+		} else {
+			vec4_t standBg = { 0.80f, 0.50f, 0.10f, !g_cantinaGames.inRound ? 0.3f : (standHover ? 1.0f : 0.8f) };
+			SCR_DrawRoundedGlassPanel( winX + 285.0f, btnY, btnW, btnH, 6.0f, standBg, feltBorder );
+			SCR_DrawVirtualString( winX + 300.0f, btnY + 10.0f, 5.0f, "STAND [2]", whiteColor );
+		}
 
 		// DOUBLE
-		qboolean dblHover = (g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 390.0f && mx <= winX + 390.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t dblBg = { 0.55f, 0.20f, 0.75f, (!g_cantinaGames.inRound || g_cantinaGames.playerCardCount != 2) ? 0.3f : (dblHover ? 1.0f : 0.8f) };
-		SCR_DrawRoundedGlassPanel( winX + 390.0f, btnY, btnW, btnH, 6.0f, dblBg, feltBorder );
-		SCR_DrawVirtualString( winX + 400.0f, btnY + 10.0f, 4.4f, "DOUBLE [3]", whiteColor );
+		qboolean dblHover = (g_cantinaGames.inRound && g_cantinaGames.playerCardCount == 2 && credits >= g_cantinaGames.currentBet && mx >= winX + 415.0f && mx <= winX + 415.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
+		qhandle_t hDouble = dblHover ? s_hBtnDoubleHov : s_hBtnDouble;
+		if ( hDouble > 0 ) {
+			SCR_DrawPic( winX + 415.0f, btnY, btnW, btnH, hDouble );
+		} else {
+			vec4_t dblBg = { 0.55f, 0.20f, 0.75f, (!g_cantinaGames.inRound || g_cantinaGames.playerCardCount != 2) ? 0.3f : (dblHover ? 1.0f : 0.8f) };
+			SCR_DrawRoundedGlassPanel( winX + 415.0f, btnY, btnW, btnH, 6.0f, dblBg, feltBorder );
+			SCR_DrawVirtualString( winX + 425.0f, btnY + 10.0f, 4.4f, "DOUBLE [3]", whiteColor );
+		}
 		return;
 	}
 
@@ -4527,42 +4606,43 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 			SCR_DrawPazaakMiniCard( hx, oppGridY, 32.0f, 38.0f, 0, qtrue, isUsed, qfalse );
 		}
 
-		// Middle Status Banner
+		// Table Middle: Match Status Message
 		float midY = winY + 115.0f;
-		vec4_t bannerBg = { 0.01f, 0.04f, 0.10f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX + 20.0f, midY, winW - 40.0f, 32.0f, 6.0f, bannerBg, pzBorder );
-		float msgW = SCR_GetStringWidth( g_cantinaGames.pzStatusMsg, 4.2f );
-		SCR_DrawVirtualString( winX + (winW - msgW) * 0.5f, midY + 9.0f, 4.2f, g_cantinaGames.pzStatusMsg, whiteColor );
+		vec4_t bannerBg = { 0.02f, 0.06f, 0.12f, 0.80f };
+		SCR_DrawRoundedGlassPanel( winX + 20.0f, midY, winW - 40.0f, 30.0f, 6.0f, bannerBg, pzBorder );
 
-		// Player Area (Bottom)
-		float pAreaY = winY + 155.0f;
-		SCR_DrawVirtualString( winX + 25.0f, pAreaY + 2.0f, 4.8f, "^2Your Board", whiteColor );
+		float msgW = SCR_GetStringWidth( g_cantinaGames.pzStatusMsg, 4.2f );
+		SCR_DrawVirtualString( winX + (winW - msgW) * 0.5f, midY + 8.0f, 4.2f, g_cantinaGames.pzStatusMsg, whiteColor );
+
+		// Player Area (Bottom Grid)
+		float plyY = winY + 152.0f;
+		SCR_DrawVirtualString( winX + 25.0f, plyY + 2.0f, 4.8f, "^7Your Board", cyanColor );
 
 		// Player Set Win Orbs
-		char pOrbs[32] = "";
+		char plyOrbs[32] = "";
 		for ( int s = 0; s < 3; s++ ) {
-			if ( s < g_cantinaGames.pzPlayerSetsWon ) Q_strcat( pOrbs, sizeof(pOrbs), "^2◆ " );
-			else Q_strcat( pOrbs, sizeof(pOrbs), "^0◇ " );
+			if ( s < g_cantinaGames.pzPlayerSetsWon ) Q_strcat( plyOrbs, sizeof(plyOrbs), "^2◆ " );
+			else Q_strcat( plyOrbs, sizeof(plyOrbs), "^0◇ " );
 		}
-		SCR_DrawVirtualString( winX + 200.0f, pAreaY + 2.0f, 5.0f, va( "Sets: %s", pOrbs ), whiteColor );
-		SCR_DrawVirtualString( winX + winW - 130.0f, pAreaY + 2.0f, 5.2f, va( "Score: ^2%d^7%s", g_cantinaGames.pzPlayerScore, g_cantinaGames.pzPlayerStood ? " ^1[STOOD]" : "" ), yellowCol );
+		SCR_DrawVirtualString( winX + 200.0f, plyY + 2.0f, 5.0f, va( "Sets: %s", plyOrbs ), whiteColor );
+		SCR_DrawVirtualString( winX + winW - 130.0f, plyY + 2.0f, 5.2f, va( "Score: ^2%d^7%s", g_cantinaGames.pzPlayerScore, g_cantinaGames.pzPlayerStood ? " ^3[STOOD]" : "" ), yellowCol );
 
-		// Player 3x3 Grid (9 slots)
-		float pGridX = winX + 25.0f;
-		float pGridY = pAreaY + 18.0f;
+		// Player 3x3 Grid
+		float plyGridX = winX + 25.0f;
+		float plyGridY = plyY + 18.0f;
 		for ( int i = 0; i < 9; i++ ) {
-			float gx = pGridX + (i % 9) * 36.0f;
+			float gx = plyGridX + (i % 9) * 36.0f;
 			if ( i < g_cantinaGames.pzPlayerBoardCount ) {
-				SCR_DrawPazaakMiniCard( gx, pGridY, cardW, cardH, g_cantinaGames.pzPlayerBoard[i], qfalse, qfalse, qfalse );
+				SCR_DrawPazaakMiniCard( gx, plyGridY, cardW, cardH, g_cantinaGames.pzPlayerBoard[i], qfalse, qfalse, qfalse );
 			} else {
 				vec4_t emptyBg = { 0.02f, 0.05f, 0.10f, 0.50f };
 				vec4_t emptyBorder = { 0.15f, 0.30f, 0.50f, 0.40f };
-				SCR_DrawRoundedGlassPanel( gx, pGridY, cardW, cardH, 3.0f, emptyBg, emptyBorder );
+				SCR_DrawRoundedGlassPanel( gx, plyGridY, cardW, cardH, 3.0f, emptyBg, emptyBorder );
 			}
 		}
 
-		// Player Interactive 4-Card Modifier Hand
-		float handY = winY + 225.0f;
+		// Player 4-Card Modifier Side-Deck Hand
+		float handY = winY + 215.0f;
 		SCR_DrawVirtualString( winX + 25.0f, handY + 2.0f, 4.4f, "^3Your Side-Deck Hand (Play 1 per turn):", yellowCol );
 
 		float handStartX = winX + 25.0f;
@@ -4592,55 +4672,101 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 			}
 		}
 
-		// Chip Wager Selector
-		float chipY = winY + 300.0f;
-		SCR_DrawVirtualString( winX + 25.0f, chipY + 6.0f, 4.2f, va( "^7Match Pot Wager: ^3%d CR", g_cantinaGames.pzBet ), yellowCol );
+		// Chip Wager Selector (3D Circular Chips)
+		static qhandle_t s_hPzChips[5] = {0};
+		static qhandle_t s_hBtnPzDeal = 0, s_hBtnPzDealHov = 0;
+		static qhandle_t s_hBtnPzEnd = 0, s_hBtnPzEndHov = 0;
+		static qhandle_t s_hBtnPzStand = 0, s_hBtnPzStandHov = 0;
+		static qhandle_t s_hBtnPzForf = 0, s_hBtnPzForfHov = 0;
 
-		const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
-		vec4_t chipCols[5] = {
-			{ 0.15f, 0.40f, 0.85f, 0.9f },
-			{ 0.10f, 0.70f, 0.35f, 0.9f },
-			{ 0.85f, 0.20f, 0.20f, 0.9f },
-			{ 0.10f, 0.12f, 0.18f, 0.9f },
-			{ 0.55f, 0.20f, 0.85f, 0.9f }
-		};
+		if ( s_hPzChips[0] <= 0 && re && re->RegisterShaderNoMip ) {
+			s_hPzChips[0] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_10" );
+			s_hPzChips[1] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_25" );
+			s_hPzChips[2] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_50" );
+			s_hPzChips[3] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_100" );
+			s_hPzChips[4] = re->RegisterShaderNoMip( "gfx/rpg_hud/chips/chip_500" );
 
-		float chipStartX = winX + 175.0f;
+			s_hBtnPzDeal = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_deal" );
+			s_hBtnPzDealHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_deal_hover" );
+			s_hBtnPzEnd = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_endturn" );
+			s_hBtnPzEndHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_endturn_hover" );
+			s_hBtnPzStand = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_stand" );
+			s_hBtnPzStandHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_stand_hover" );
+			s_hBtnPzForf = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_forfeit" );
+			s_hBtnPzForfHov = re->RegisterShaderNoMip( "gfx/rpg_hud/buttons/btn_forfeit_hover" );
+		}
+
+		float pzChipY = winY + 292.0f;
+		float pzChipSize = 32.0f;
+		SCR_DrawVirtualString( winX + 25.0f, pzChipY + 8.0f, 4.2f, va( "^7Match Pot: ^3%d CR", g_cantinaGames.pzBet ), yellowCol );
+
+		float pzChipStartX = winX + 175.0f;
 		for ( int c = 0; c < 5; c++ ) {
-			float cx = chipStartX + c * 50.0f;
-			qboolean chipHover = (!g_cantinaGames.pzInMatch && mx >= cx && mx <= cx + 44.0f && my >= chipY && my <= chipY + 22.0f) ? qtrue : qfalse;
-			SCR_DrawRoundedGlassPanel( cx, chipY, 44.0f, 22.0f, 4.0f, chipCols[c], chipHover ? yellowCol : pzBorder );
-			SCR_DrawVirtualString( cx + 6.0f, chipY + 5.0f, 3.6f, chipLabels[c], whiteColor );
+			float cx = pzChipStartX + c * 46.0f;
+			qboolean chipHover = (!g_cantinaGames.pzInMatch && mx >= cx && mx <= cx + pzChipSize && my >= pzChipY && my <= pzChipY + pzChipSize) ? qtrue : qfalse;
+			if ( s_hPzChips[c] > 0 ) {
+				SCR_DrawPic( cx, pzChipY, pzChipSize, pzChipSize, s_hPzChips[c] );
+				if ( chipHover ) {
+					vec4_t hovBorder = { 1.0f, 0.9f, 0.2f, 1.0f };
+					vec4_t empty = { 0, 0, 0, 0 };
+					SCR_DrawRoundedGlassPanel( cx - 2.0f, pzChipY - 2.0f, pzChipSize + 4.0f, pzChipSize + 4.0f, pzChipSize * 0.5f, empty, hovBorder );
+				}
+			} else {
+				vec4_t chipCols[5] = { { 0.15f, 0.40f, 0.85f, 0.9f }, { 0.10f, 0.70f, 0.35f, 0.9f }, { 0.85f, 0.20f, 0.20f, 0.9f }, { 0.10f, 0.12f, 0.18f, 0.9f }, { 0.55f, 0.20f, 0.85f, 0.9f } };
+				const char *chipLabels[5] = { "+10", "+25", "+50", "+100", "+500" };
+				SCR_DrawRoundedGlassPanel( cx, pzChipY, 44.0f, 22.0f, 4.0f, chipCols[c], chipHover ? yellowCol : pzBorder );
+				SCR_DrawVirtualString( cx + 6.0f, pzChipY + 5.0f, 3.6f, chipLabels[c], whiteColor );
+			}
 		}
 
 		// Action Buttons (Bottom Bar)
-		float btnY = winY + 348.0f;
-		float btnW = 120.0f;
-		float btnH = 34.0f;
+		float pzBtnY = winY + 342.0f;
+		float pzBtnW = 125.0f;
+		float pzBtnH = 36.0f;
 
 		// DEAL / NEW MATCH
-		qboolean dealHover = (!g_cantinaGames.pzInMatch && mx >= winX + 25.0f && mx <= winX + 25.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.pzInMatch ? 0.30f : (dealHover ? 1.0f : 0.80f) };
-		SCR_DrawRoundedGlassPanel( winX + 25.0f, btnY, btnW, btnH, 6.0f, dealBg, pzBorder );
-		SCR_DrawVirtualString( winX + 35.0f, btnY + 10.0f, 4.8f, "DEAL MATCH", whiteColor );
+		qboolean dealHover = (!g_cantinaGames.pzInMatch && mx >= winX + 25.0f && mx <= winX + 25.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH) ? qtrue : qfalse;
+		qhandle_t hPzDeal = dealHover ? s_hBtnPzDealHov : s_hBtnPzDeal;
+		if ( hPzDeal > 0 ) {
+			SCR_DrawPic( winX + 25.0f, pzBtnY, pzBtnW, pzBtnH, hPzDeal );
+		} else {
+			vec4_t dealBg = { 0.10f, 0.65f, 0.25f, g_cantinaGames.pzInMatch ? 0.30f : (dealHover ? 1.0f : 0.80f) };
+			SCR_DrawRoundedGlassPanel( winX + 25.0f, pzBtnY, pzBtnW, pzBtnH, 6.0f, dealBg, pzBorder );
+			SCR_DrawVirtualString( winX + 35.0f, pzBtnY + 10.0f, 4.8f, "DEAL MATCH", whiteColor );
+		}
 
 		// END TURN
-		qboolean endHover = (g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 160.0f && mx <= winX + 160.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t endBg = { 0.15f, 0.45f, 0.85f, (!g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood) ? 0.30f : (endHover ? 1.0f : 0.80f) };
-		SCR_DrawRoundedGlassPanel( winX + 160.0f, btnY, btnW, btnH, 6.0f, endBg, pzBorder );
-		SCR_DrawVirtualString( winX + 172.0f, btnY + 10.0f, 4.8f, "END TURN [Spc]", whiteColor );
+		qboolean endHover = (g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 160.0f && mx <= winX + 160.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH) ? qtrue : qfalse;
+		qhandle_t hPzEnd = endHover ? s_hBtnPzEndHov : s_hBtnPzEnd;
+		if ( hPzEnd > 0 ) {
+			SCR_DrawPic( winX + 160.0f, pzBtnY, pzBtnW, pzBtnH, hPzEnd );
+		} else {
+			vec4_t endBg = { 0.15f, 0.45f, 0.85f, (!g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood) ? 0.30f : (endHover ? 1.0f : 0.80f) };
+			SCR_DrawRoundedGlassPanel( winX + 160.0f, pzBtnY, pzBtnW, pzBtnH, 6.0f, endBg, pzBorder );
+			SCR_DrawVirtualString( winX + 172.0f, pzBtnY + 10.0f, 4.8f, "END TURN [Spc]", whiteColor );
+		}
 
 		// STAND
-		qboolean standHover = (g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 295.0f && mx <= winX + 295.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t standBg = { 0.85f, 0.50f, 0.10f, (!g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood) ? 0.30f : (standHover ? 1.0f : 0.80f) };
-		SCR_DrawRoundedGlassPanel( winX + 295.0f, btnY, btnW, btnH, 6.0f, standBg, pzBorder );
-		SCR_DrawVirtualString( winX + 318.0f, btnY + 10.0f, 4.8f, "STAND [S]", whiteColor );
+		qboolean standHover = (g_cantinaGames.pzInMatch && g_cantinaGames.pzIsPlayerTurn && !g_cantinaGames.pzPlayerStood && mx >= winX + 295.0f && mx <= winX + 295.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH) ? qtrue : qfalse;
+		qhandle_t hPzStand = standHover ? s_hBtnPzStandHov : s_hBtnPzStand;
+		if ( hPzStand > 0 ) {
+			SCR_DrawPic( winX + 295.0f, pzBtnY, pzBtnW, pzBtnH, hPzStand );
+		} else {
+			vec4_t standBg = { 0.85f, 0.50f, 0.10f, (!g_cantinaGames.pzInMatch || !g_cantinaGames.pzIsPlayerTurn || g_cantinaGames.pzPlayerStood) ? 0.30f : (standHover ? 1.0f : 0.80f) };
+			SCR_DrawRoundedGlassPanel( winX + 295.0f, pzBtnY, pzBtnW, pzBtnH, 6.0f, standBg, pzBorder );
+			SCR_DrawVirtualString( winX + 318.0f, pzBtnY + 10.0f, 4.8f, "STAND [S]", whiteColor );
+		}
 
 		// FORFEIT / RESET
-		qboolean forfHover = (g_cantinaGames.pzInMatch && mx >= winX + 430.0f && mx <= winX + 430.0f + btnW && my >= btnY && my <= btnY + btnH) ? qtrue : qfalse;
-		vec4_t forfBg = { 0.55f, 0.15f, 0.15f, !g_cantinaGames.pzInMatch ? 0.30f : (forfHover ? 1.0f : 0.70f) };
-		SCR_DrawRoundedGlassPanel( winX + 430.0f, btnY, btnW, btnH, 6.0f, forfBg, pzBorder );
-		SCR_DrawVirtualString( winX + 452.0f, btnY + 10.0f, 4.8f, "FORFEIT", whiteColor );
+		qboolean forfHover = (g_cantinaGames.pzInMatch && mx >= winX + 430.0f && mx <= winX + 430.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH) ? qtrue : qfalse;
+		qhandle_t hPzForf = forfHover ? s_hBtnPzForfHov : s_hBtnPzForf;
+		if ( hPzForf > 0 ) {
+			SCR_DrawPic( winX + 430.0f, pzBtnY, pzBtnW, pzBtnH, hPzForf );
+		} else {
+			vec4_t forfBg = { 0.55f, 0.15f, 0.15f, !g_cantinaGames.pzInMatch ? 0.30f : (forfHover ? 1.0f : 0.70f) };
+			SCR_DrawRoundedGlassPanel( winX + 430.0f, pzBtnY, pzBtnW, pzBtnH, 6.0f, forfBg, pzBorder );
+			SCR_DrawVirtualString( winX + 452.0f, pzBtnY + 10.0f, 4.8f, "FORFEIT", whiteColor );
+		}
 	}
 }
 

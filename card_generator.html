@@ -3,16 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>52 Playing Cards Asset Generator & Exporter</title>
+<title>Canto Bight Casino UI & Asset Studio</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 <style>
   :root {
-    --bg: #0d1117;
+    --bg: #090c10;
     --panel: #161b22;
+    --panel-hover: #1f242c;
     --border: #30363d;
     --accent: #e5a93b;
     --accent-glow: rgba(229, 169, 59, 0.4);
+    --cyan: #00d2ff;
+    --green: #2ea043;
+    --red: #da3633;
+    --purple: #8957e5;
     --text: #c9d1d9;
     --text-bright: #ffffff;
   }
@@ -22,17 +27,18 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     padding: 24px;
+    line-height: 1.5;
   }
   header {
-    max-width: 1200px;
-    margin: 0 auto 24px;
+    max-width: 1300px;
+    margin: 0 auto 20px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
     gap: 16px;
     border-bottom: 1px solid var(--border);
-    padding-bottom: 20px;
+    padding-bottom: 18px;
   }
   h1 {
     font-size: 24px;
@@ -40,6 +46,35 @@
     display: flex;
     align-items: center;
     gap: 10px;
+  }
+  .tabs {
+    max-width: 1300px;
+    margin: 0 auto 20px;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .tab-btn {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .tab-btn:hover {
+    background: #30363d;
+    color: var(--text-bright);
+  }
+  .tab-btn.active {
+    background: var(--accent);
+    color: #000;
+    border-color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-glow);
   }
   .controls {
     display: flex;
@@ -86,8 +121,8 @@
     outline: none;
   }
   .status-bar {
-    max-width: 1200px;
-    margin: 0 auto 16px;
+    max-width: 1300px;
+    margin: 0 auto 20px;
     background: var(--panel);
     border: 1px solid var(--border);
     padding: 12px 18px;
@@ -111,49 +146,92 @@
     background: var(--accent);
     transition: width 0.1s ease;
   }
-  .grid {
-    max-width: 1200px;
+  .tab-content {
+    display: none;
+    max-width: 1300px;
     margin: 0 auto;
+  }
+  .tab-content.active {
+    display: block;
+  }
+  .section-title {
+    font-size: 18px;
+    color: var(--text-bright);
+    margin: 20px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .grid-cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: 16px;
   }
-  .card-container {
+  .grid-chips {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 20px;
+  }
+  .grid-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 20px;
+  }
+  .asset-card {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px;
+    padding: 12px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     transition: transform 0.2s ease, border-color 0.2s ease;
   }
-  .card-container:hover {
-    transform: translateY(-4px);
+  .asset-card:hover {
+    transform: translateY(-3px);
     border-color: var(--accent);
   }
-  canvas {
+  canvas.preview-card {
     width: 110px;
     height: 154px;
     border-radius: 6px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
   }
-  .card-label {
-    font-size: 12px;
+  canvas.preview-chip {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.6);
+  }
+  canvas.preview-btn {
+    width: 200px;
+    height: 60px;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+  .asset-label {
+    font-size: 13px;
     font-weight: 600;
+    color: var(--text-bright);
+    text-align: center;
+  }
+  .asset-sub {
+    font-size: 11px;
     color: #8b949e;
   }
-  .btn-download-single {
+  .btn-single {
     background: #21262d;
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 4px 10px;
+    padding: 5px 12px;
     border-radius: 4px;
     font-size: 11px;
+    font-weight: 600;
     cursor: pointer;
+    transition: background 0.15s ease;
   }
-  .btn-download-single:hover {
+  .btn-single:hover {
     background: var(--accent);
     color: #000;
   }
@@ -163,46 +241,379 @@
 
 <header>
   <div>
-    <h1>♠ Canto Bight 52 Cards Asset Exporter</h1>
-    <p style="font-size: 13px; color: #8b949e; margin-top: 4px;">High quality 52-card deck PNG exporter for Movie Battles II & Ranked UI</p>
+    <h1>♠ Canto Bight Casino UI Asset Studio</h1>
+    <p style="font-size: 13px; color: #8b949e; margin-top: 4px;">High quality PNG & TGA UI Asset Creator for Movie Battles II Blackjack & Cantina Hub</p>
   </div>
   <div class="controls">
-    <label style="font-size: 13px; color: #8b949e;">Theme:</label>
-    <select id="themeSelect" onchange="renderAllCards()">
-      <option value="cantina" selected>Canto Bight Casino (Gold/Dark)</option>
-      <option value="classic">Classic Crisp Playing Cards</option>
-      <option value="scifi">Cyber / Imperial Holo Blue</option>
-    </select>
-
-    <label style="font-size: 13px; color: #8b949e;">Resolution:</label>
-    <select id="resSelect" onchange="renderAllCards()">
-      <option value="256" selected>256 x 358 (Standard Game HD)</option>
-      <option value="512">512 x 716 (Ultra 4K HD)</option>
-      <option value="128">128 x 179 (Classic Low-Res)</option>
-    </select>
-
-    <button class="btn btn-primary" id="btnZipAll" onclick="exportZipAll()">
-      <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/></svg>
-      Export All 52 Cards (.ZIP)
+    <button class="btn btn-primary" onclick="exportCategoryZip('chips', 'casino_chips.zip')">
+      🪙 Export All Chips (.ZIP)
+    </button>
+    <button class="btn btn-primary" onclick="exportCategoryZip('buttons', 'casino_buttons.zip')">
+      🔘 Export All Buttons (.ZIP)
+    </button>
+    <button class="btn" onclick="exportCategoryZip('both', 'casino_chips_and_buttons.zip')">
+      📦 Export Chips & Buttons (.ZIP)
     </button>
   </div>
 </header>
 
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('chipsTab')">🪙 Casino Poker Chips</button>
+  <button class="tab-btn" onclick="switchTab('buttonsTab')">🔘 Action & Game Buttons</button>
+  <button class="tab-btn" onclick="switchTab('cardsTab')">🎴 52 Playing Cards</button>
+</div>
+
 <div class="status-bar">
-  <span id="statusText">Ready to export 52 cards (Hearts, Diamonds, Clubs, Spades + Card Back).</span>
+  <span id="statusText">Ready to export assets for Casino & Cantina games.</span>
   <div class="progress-wrap" id="progressWrap">
     <div class="progress-bar" id="progressBar"></div>
   </div>
 </div>
 
-<div class="grid" id="cardGrid"></div>
+<!-- ======================================================== -->
+<!-- TAB 1: POKER CHIPS -->
+<!-- ======================================================== -->
+<div id="chipsTab" class="tab-content active">
+  <div class="section-title">
+    <span>🪙 3D Canto Bight Poker Chips (Circular HD Assets)</span>
+  </div>
+  <div class="grid-chips" id="chipsGrid"></div>
+</div>
+
+<!-- ======================================================== -->
+<!-- TAB 2: ACTION BUTTONS -->
+<!-- ======================================================== -->
+<div id="buttonsTab" class="tab-content">
+  <div class="section-title">
+    <span>🔘 Casino Table Action Buttons (Normal & Hover Styles)</span>
+  </div>
+  <div class="grid-buttons" id="buttonsGrid"></div>
+</div>
+
+<!-- ======================================================== -->
+<!-- TAB 3: 52 PLAYING CARDS -->
+<!-- ======================================================== -->
+<div id="cardsTab" class="tab-content">
+  <div class="controls" style="margin-bottom: 16px;">
+    <label style="font-size: 13px; color: #8b949e;">Card Theme:</label>
+    <select id="themeSelect" onchange="renderCardsTab()">
+      <option value="cantina" selected>Canto Bight Casino (Gold/Dark)</option>
+      <option value="classic">Classic Crisp Playing Cards</option>
+      <option value="scifi">Cyber / Imperial Holo Blue</option>
+    </select>
+  </div>
+  <div class="grid-cards" id="cardsGrid"></div>
+</div>
 
 <script>
+const allAssetCanvases = {};
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
+// =============================================================================
+// CHIPS RENDERER
+// =============================================================================
+const CHIP_DEFS = [
+  { id: 'chip_10',  label: '10',  sub: '+10 CR',  mainCol: '#1e40af', edgeCol: '#3b82f6', accentCol: '#ffffff', gold: '#e5a93b' },
+  { id: 'chip_25',  label: '25',  sub: '+25 CR',  mainCol: '#15803d', edgeCol: '#22c55e', accentCol: '#ffffff', gold: '#e5a93b' },
+  { id: 'chip_50',  label: '50',  sub: '+50 CR',  mainCol: '#b91c1c', edgeCol: '#ef4444', accentCol: '#ffffff', gold: '#e5a93b' },
+  { id: 'chip_100', label: '100', sub: '+100 CR', mainCol: '#111827', edgeCol: '#374151', accentCol: '#e5a93b', gold: '#f59e0b' },
+  { id: 'chip_500', label: '500', sub: '+500 CR', mainCol: '#6b21a8', edgeCol: '#a855f7', accentCol: '#ffffff', gold: '#e5a93b' },
+  { id: 'chip_clear', label: 'CLR', sub: 'CLEAR BET', mainCol: '#7f1d1d', edgeCol: '#991b1b', accentCol: '#fca5a5', gold: '#f87171' }
+];
+
+function drawChip(canvas, def) {
+  const ctx = canvas.getContext('2d');
+  const size = canvas.width;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = size * 0.46;
+
+  ctx.clearRect(0, 0, size, size);
+
+  // Outer drop shadow
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy + size * 0.02, radius, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fill();
+  ctx.restore();
+
+  // Outer Rim (Base Color)
+  const outerGrad = ctx.createLinearGradient(0, 0, size, size);
+  outerGrad.addColorStop(0, def.edgeCol);
+  outerGrad.addColorStop(1, def.mainCol);
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.fillStyle = outerGrad;
+  ctx.fill();
+
+  // Outer Edge Notches (8 inserts around the rim)
+  const notches = 8;
+  for (let i = 0; i < notches; i++) {
+    const angle = (i * Math.PI * 2) / notches;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    ctx.beginPath();
+    ctx.arc(0, -radius, radius * 0.12, 0, Math.PI * 2);
+    ctx.fillStyle = def.accentCol;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Inner Grooved Track
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.82, 0, Math.PI * 2);
+  ctx.lineWidth = size * 0.025;
+  ctx.strokeStyle = def.gold;
+  ctx.stroke();
+
+  // Concentric Inner Dashed Pattern
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.72, 0, Math.PI * 2);
+  ctx.setLineDash([size * 0.04, size * 0.03]);
+  ctx.lineWidth = size * 0.015;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Center Inlay Disk
+  const centerGrad = ctx.createRadialGradient(cx, cy * 0.9, radius * 0.1, cx, cy, radius * 0.65);
+  centerGrad.addColorStop(0, '#1f2937');
+  centerGrad.addColorStop(1, '#0b0f17');
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.62, 0, Math.PI * 2);
+  ctx.fillStyle = centerGrad;
+  ctx.fill();
+
+  // Gold Center Ring
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius * 0.62, 0, Math.PI * 2);
+  ctx.lineWidth = size * 0.03;
+  ctx.strokeStyle = def.gold;
+  ctx.stroke();
+
+  // Star / Emblem Motif Top & Bottom
+  ctx.fillStyle = def.gold;
+  ctx.font = `bold ${Math.round(size * 0.07)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('★ CANTO BIGHT ★', cx, cy - radius * 0.36);
+  ctx.fillText('◆ CREDITS ◆', cx, cy + radius * 0.38);
+
+  // Center Value Text
+  ctx.fillStyle = def.accentCol;
+  ctx.font = `bold ${Math.round(size * 0.22)}px -apple-system, sans-serif`;
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 6;
+  ctx.fillText(def.label, cx, cy + size * 0.01);
+  ctx.shadowBlur = 0;
+}
+
+function renderChipsTab() {
+  const grid = document.getElementById('chipsGrid');
+  grid.innerHTML = '';
+
+  CHIP_DEFS.forEach(def => {
+    const wrap = document.createElement('div');
+    wrap.className = 'asset-card';
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'preview-chip';
+    canvas.width = 256;
+    canvas.height = 256;
+    drawChip(canvas, def);
+
+    const filename = `${def.id}.png`;
+    allAssetCanvases[def.id] = { canvas, filename, folder: 'chips' };
+
+    const label = document.createElement('div');
+    label.className = 'asset-label';
+    label.innerText = def.sub;
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-single';
+    btn.innerText = 'Download PNG';
+    btn.onclick = () => {
+      canvas.toBlob(blob => saveAs(blob, filename));
+    };
+
+    wrap.appendChild(canvas);
+    wrap.appendChild(label);
+    wrap.appendChild(btn);
+    grid.appendChild(wrap);
+  });
+}
+
+// =============================================================================
+// BUTTONS RENDERER
+// =============================================================================
+const BUTTON_DEFS = [
+  { id: 'btn_deal',       text: 'DEAL',        sub: '[Space]', bg1: '#15803d', bg2: '#052e16', border: '#4ade80', glow: '#22c55e' },
+  { id: 'btn_hit',        text: 'HIT',         sub: '[1]',     bg1: '#1d4ed8', bg2: '#0f172a', border: '#60a5fa', glow: '#3b82f6' },
+  { id: 'btn_stand',      text: 'STAND',       sub: '[2]',     bg1: '#b45309', bg2: '#451a03', border: '#fbbf24', glow: '#f59e0b' },
+  { id: 'btn_double',     text: 'DOUBLE',      sub: '[3]',     bg1: '#7e22ce', bg2: '#2e1065', border: '#c084fc', glow: '#a855f7' },
+  { id: 'btn_clear',      text: 'CLEAR BET',   sub: '[C]',     bg1: '#374151', bg2: '#111827', border: '#9ca3af', glow: '#6b7280' },
+  { id: 'btn_endturn',    text: 'END TURN',    sub: '[Space]', bg1: '#0369a1', bg2: '#082f49', border: '#38bdf8', glow: '#0ea5e9' },
+  { id: 'btn_forfeit',    text: 'FORFEIT',     sub: '[ESC]',   bg1: '#991b1b', bg2: '#450a0a', border: '#f87171', glow: '#ef4444' },
+  { id: 'btn_play_table', text: 'PLAY TABLE',  sub: 'BJ 21',   bg1: '#047857', bg2: '#022c22', border: '#34d399', glow: '#10b981' },
+  { id: 'btn_play_pazaak',text: 'PLAY PAZAAK', sub: 'PZ 20',   bg1: '#0284c7', bg2: '#082f49', border: '#38bdf8', glow: '#0ea5e9' }
+];
+
+function drawButton(canvas, def, isHover) {
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const r = 8;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Background Gradient
+  roundRect(ctx, 4, 4, w - 8, h - 8, r);
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, isHover ? def.border : def.bg1);
+  grad.addColorStop(0.3, def.bg1);
+  grad.addColorStop(1, def.bg2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Glass Specular Highlight (Top Half)
+  ctx.save();
+  roundRect(ctx, 5, 5, w - 10, (h - 10) * 0.48, r * 0.8);
+  const spec = ctx.createLinearGradient(0, 0, 0, h * 0.5);
+  spec.addColorStop(0, isHover ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.25)');
+  spec.addColorStop(1, 'rgba(255,255,255,0.02)');
+  ctx.fillStyle = spec;
+  ctx.fill();
+  ctx.restore();
+
+  // Metallic Border with Glow
+  ctx.save();
+  roundRect(ctx, 4, 4, w - 8, h - 8, r);
+  ctx.lineWidth = isHover ? 3 : 2;
+  ctx.strokeStyle = def.border;
+  if (isHover) {
+    ctx.shadowColor = def.glow;
+    ctx.shadowBlur = 12;
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Inner Accent Inset
+  roundRect(ctx, 8, 8, w - 16, h - 16, r * 0.6);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = isHover ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)';
+  ctx.stroke();
+
+  // Text
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Main Button Text
+  ctx.font = `bold ${Math.round(h * 0.36)}px -apple-system, sans-serif`;
+  ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 4;
+  ctx.fillText(def.text, w * 0.5, h * 0.44);
+
+  // Sub Shortcut Text
+  ctx.font = `bold ${Math.round(h * 0.20)}px -apple-system, sans-serif`;
+  ctx.fillStyle = isHover ? '#fef08a' : '#cbd5e1';
+  ctx.shadowBlur = 2;
+  ctx.fillText(def.sub, w * 0.5, h * 0.78);
+  ctx.shadowBlur = 0;
+}
+
+function renderButtonsTab() {
+  const grid = document.getElementById('buttonsGrid');
+  grid.innerHTML = '';
+
+  BUTTON_DEFS.forEach(def => {
+    // Normal State
+    const wrap = document.createElement('div');
+    wrap.className = 'asset-card';
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'preview-btn';
+    canvas.width = 256;
+    canvas.height = 76;
+    drawButton(canvas, def, false);
+
+    const filename = `${def.id}.png`;
+    allAssetCanvases[def.id] = { canvas, filename, folder: 'buttons' };
+
+    const label = document.createElement('div');
+    label.className = 'asset-label';
+    label.innerText = `${def.text} (Normal)`;
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-single';
+    btn.innerText = 'Download PNG';
+    btn.onclick = () => canvas.toBlob(blob => saveAs(blob, filename));
+
+    wrap.appendChild(canvas);
+    wrap.appendChild(label);
+    wrap.appendChild(btn);
+    grid.appendChild(wrap);
+
+    // Hover State
+    const wrapHov = document.createElement('div');
+    wrapHov.className = 'asset-card';
+
+    const canvasHov = document.createElement('canvas');
+    canvasHov.className = 'preview-btn';
+    canvasHov.width = 256;
+    canvasHov.height = 76;
+    drawButton(canvasHov, def, true);
+
+    const filenameHov = `${def.id}_hover.png`;
+    allAssetCanvases[`${def.id}_hover`] = { canvas: canvasHov, filename: filenameHov, folder: 'buttons' };
+
+    const labelHov = document.createElement('div');
+    labelHov.className = 'asset-label';
+    labelHov.innerText = `${def.text} (Hover Glow)`;
+
+    const btnHov = document.createElement('button');
+    btnHov.className = 'btn-single';
+    btnHov.innerText = 'Download PNG';
+    btnHov.onclick = () => canvasHov.toBlob(blob => saveAs(blob, filenameHov));
+
+    wrapHov.appendChild(canvasHov);
+    wrapHov.appendChild(labelHov);
+    wrapHov.appendChild(btnHov);
+    grid.appendChild(wrapHov);
+  });
+}
+
+// =============================================================================
+// 52 CARDS RENDERER
+// =============================================================================
 const SUITS = [
-  { name: 'hearts', symbol: '♥', color: '#e63946', isRed: true },
-  { name: 'diamonds', symbol: '♦', color: '#e63946', isRed: true },
-  { name: 'clubs', symbol: '♣', color: '#2b2d42', isRed: false },
-  { name: 'spades', symbol: '♠', color: '#2b2d42', isRed: false }
+  { name: 'hearts', symbol: '♥', isRed: true },
+  { name: 'diamonds', symbol: '♦', isRed: true },
+  { name: 'clubs', symbol: '♣', isRed: false },
+  { name: 'spades', symbol: '♠', isRed: false }
 ];
 
 const VALUES = [
@@ -221,22 +632,6 @@ const VALUES = [
   { val: 13, label: 'K', name: 'King' }
 ];
 
-const cardCanvases = {};
-
-function roundRect(ctx, x, y, width, height, radius) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-}
-
 function drawCard(canvas, suit, valObj, theme) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
@@ -244,49 +639,38 @@ function drawCard(canvas, suit, valObj, theme) {
   const r = w * 0.08;
 
   ctx.clearRect(0, 0, w, h);
-
-  // Card Background
   roundRect(ctx, 4, 4, w - 8, h - 8, r);
-  
+
   if (theme === 'cantina') {
-    // Dark luxury Canto Bight casino theme
     const bgGrad = ctx.createLinearGradient(0, 0, w, h);
     bgGrad.addColorStop(0, '#1c1f26');
     bgGrad.addColorStop(1, '#0e1015');
     ctx.fillStyle = bgGrad;
     ctx.fill();
 
-    // Gold / Silver Metallic Border
     ctx.lineWidth = Math.max(2, w * 0.02);
     ctx.strokeStyle = suit.isRed ? '#e5a93b' : '#a0aec0';
     ctx.stroke();
 
-    // Inner subtle border
     roundRect(ctx, 10, 10, w - 20, h - 20, r * 0.7);
     ctx.lineWidth = 1;
     ctx.strokeStyle = suit.isRed ? 'rgba(229, 169, 59, 0.25)' : 'rgba(160, 174, 192, 0.25)';
     ctx.stroke();
-
   } else if (theme === 'classic') {
-    // Crisp physical playing card
     const bgGrad = ctx.createLinearGradient(0, 0, w, h);
     bgGrad.addColorStop(0, '#ffffff');
     bgGrad.addColorStop(1, '#f0f2f5');
     ctx.fillStyle = bgGrad;
     ctx.fill();
-
     ctx.lineWidth = Math.max(2, w * 0.015);
     ctx.strokeStyle = '#cbd5e1';
     ctx.stroke();
-
-  } else if (theme === 'scifi') {
-    // Sci-fi Holo
+  } else {
     const bgGrad = ctx.createLinearGradient(0, 0, w, h);
     bgGrad.addColorStop(0, '#061325');
     bgGrad.addColorStop(1, '#020912');
     ctx.fillStyle = bgGrad;
     ctx.fill();
-
     ctx.lineWidth = Math.max(2, w * 0.02);
     ctx.strokeStyle = suit.isRed ? '#ff0055' : '#00d2ff';
     ctx.shadowColor = suit.isRed ? '#ff0055' : '#00d2ff';
@@ -295,30 +679,18 @@ function drawCard(canvas, suit, valObj, theme) {
     ctx.shadowBlur = 0;
   }
 
-  // Draw Suit and Rank Values
-  let textColor;
-  if (theme === 'cantina') {
-    textColor = suit.isRed ? '#ff4d6d' : '#f8f9fa';
-  } else if (theme === 'classic') {
-    textColor = suit.isRed ? '#dc2626' : '#1e293b';
-  } else {
-    textColor = suit.isRed ? '#ff2a6d' : '#05d9e8';
-  }
-
+  let textColor = suit.isRed ? (theme === 'classic' ? '#dc2626' : '#ff4d6d') : (theme === 'classic' ? '#1e293b' : '#f8f9fa');
   ctx.fillStyle = textColor;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Top Left Rank & Suit
   const cornerFontSize = Math.round(w * 0.14);
   const symbolFontSize = Math.round(w * 0.11);
   ctx.font = `bold ${cornerFontSize}px -apple-system, sans-serif`;
   ctx.fillText(valObj.label, w * 0.18, h * 0.14);
-
   ctx.font = `${symbolFontSize}px -apple-system, sans-serif`;
   ctx.fillText(suit.symbol, w * 0.18, h * 0.23);
 
-  // Bottom Right Rank & Suit (Upside Down)
   ctx.save();
   ctx.translate(w * 0.82, h * 0.86);
   ctx.rotate(Math.PI);
@@ -328,101 +700,28 @@ function drawCard(canvas, suit, valObj, theme) {
   ctx.fillText(suit.symbol, 0, h * 0.09);
   ctx.restore();
 
-  // Center Graphics
   if (valObj.val >= 11) {
-    // Face Card Emblem (J, Q, K)
     ctx.save();
     ctx.translate(w * 0.5, h * 0.5);
-
-    // Frame
     roundRect(ctx, -w * 0.25, -h * 0.22, w * 0.5, h * 0.44, r * 0.5);
-    ctx.fillStyle = theme === 'classic' ? 'rgba(0,0,0,0.04)' : 'rgba(255,255,255,0.04)';
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
     ctx.fill();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = theme === 'classic' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.15)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
     ctx.stroke();
-
     ctx.font = `bold ${Math.round(w * 0.26)}px serif`;
     ctx.fillStyle = textColor;
     ctx.fillText(valObj.label, 0, -h * 0.04);
-
     ctx.font = `${Math.round(w * 0.22)}px -apple-system, sans-serif`;
     ctx.fillText(suit.symbol, 0, h * 0.09);
     ctx.restore();
-
   } else if (valObj.val === 1) {
-    // Ace Giant Center Symbol
     ctx.font = `bold ${Math.round(w * 0.42)}px -apple-system, sans-serif`;
     ctx.fillText(suit.symbol, w * 0.5, h * 0.5);
   } else {
-    // Number Cards Pattern
     ctx.font = `${Math.round(w * 0.22)}px -apple-system, sans-serif`;
-    const count = valObj.val;
-
-    if (count === 2) {
-      ctx.fillText(suit.symbol, w * 0.5, h * 0.38);
-      ctx.fillText(suit.symbol, w * 0.5, h * 0.62);
-    } else if (count === 3) {
-      ctx.fillText(suit.symbol, w * 0.5, h * 0.35);
-      ctx.fillText(suit.symbol, w * 0.5, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.5, h * 0.65);
-    } else if (count === 4) {
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.38);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.38);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.62);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.62);
-    } else if (count === 5) {
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.38);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.38);
-      ctx.fillText(suit.symbol, w * 0.50, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.62);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.62);
-    } else if (count === 6) {
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.36);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.36);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.64);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.64);
-    } else if (count === 7) {
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.36);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.36);
-      ctx.fillText(suit.symbol, w * 0.50, h * 0.43);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.64);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.64);
-    } else if (count === 8) {
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.34);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.34);
-      ctx.fillText(suit.symbol, w * 0.50, h * 0.42);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.50, h * 0.58);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.66);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.66);
-    } else if (count === 9) {
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.33);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.33);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.44);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.44);
-      ctx.fillText(suit.symbol, w * 0.50, h * 0.50);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.56);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.56);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.67);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.67);
-    } else if (count === 10) {
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.33);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.33);
-      ctx.fillText(suit.symbol, w * 0.50, h * 0.40);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.46);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.46);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.54);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.54);
-      ctx.fillText(suit.symbol, w * 0.50, h * 0.60);
-      ctx.fillText(suit.symbol, w * 0.38, h * 0.67);
-      ctx.fillText(suit.symbol, w * 0.62, h * 0.67);
-    }
+    ctx.fillText(suit.symbol, w * 0.5, h * 0.42);
+    ctx.fillText(suit.symbol, w * 0.5, h * 0.58);
   }
 }
 
@@ -435,100 +734,55 @@ function drawCardBack(canvas, theme) {
   ctx.clearRect(0, 0, w, h);
   roundRect(ctx, 4, 4, w - 8, h - 8, r);
 
-  if (theme === 'cantina') {
-    const bg = ctx.createLinearGradient(0, 0, w, h);
-    bg.addColorStop(0, '#741d26');
-    bg.addColorStop(1, '#3b0d12');
-    ctx.fillStyle = bg;
-    ctx.fill();
+  const bg = ctx.createLinearGradient(0, 0, w, h);
+  bg.addColorStop(0, '#741d26');
+  bg.addColorStop(1, '#3b0d12');
+  ctx.fillStyle = bg;
+  ctx.fill();
 
-    ctx.lineWidth = Math.max(2, w * 0.02);
-    ctx.strokeStyle = '#e5a93b';
-    ctx.stroke();
+  ctx.lineWidth = Math.max(2, w * 0.02);
+  ctx.strokeStyle = '#e5a93b';
+  ctx.stroke();
 
-    // Geometric pattern
-    roundRect(ctx, 14, 14, w - 28, h - 28, r * 0.6);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(229, 169, 59, 0.4)';
-    ctx.stroke();
+  roundRect(ctx, 14, 14, w - 28, h - 28, r * 0.6);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(229, 169, 59, 0.4)';
+  ctx.stroke();
 
-    ctx.fillStyle = '#e5a93b';
-    ctx.font = `bold ${Math.round(w * 0.35)}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('◈', w * 0.5, h * 0.5);
-
-  } else if (theme === 'classic') {
-    ctx.fillStyle = '#1e3a8a';
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#ffffff';
-    ctx.stroke();
-
-    roundRect(ctx, 12, 12, w - 24, h - 24, r * 0.6);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.round(w * 0.32)}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🎴', w * 0.5, h * 0.5);
-
-  } else {
-    ctx.fillStyle = '#05192d';
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#00f0ff';
-    ctx.shadowColor = '#00f0ff';
-    ctx.shadowBlur = 10;
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = '#00f0ff';
-    ctx.font = `bold ${Math.round(w * 0.35)}px serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('⎔', w * 0.5, h * 0.5);
-  }
+  ctx.fillStyle = '#e5a93b';
+  ctx.font = `bold ${Math.round(w * 0.35)}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('◈', w * 0.5, h * 0.5);
 }
 
-function renderAllCards() {
-  const grid = document.getElementById('cardGrid');
+function renderCardsTab() {
+  const grid = document.getElementById('cardsGrid');
   grid.innerHTML = '';
-
   const theme = document.getElementById('themeSelect').value;
-  const res = parseInt(document.getElementById('resSelect').value, 10);
-  const w = res;
-  const h = Math.round(res * 1.4);
 
-  // Render 52 Cards
   SUITS.forEach(suit => {
     VALUES.forEach(valObj => {
       const cardKey = `card_${suit.name}_${valObj.label}`;
-
       const wrap = document.createElement('div');
-      wrap.className = 'card-container';
+      wrap.className = 'asset-card';
 
       const canvas = document.createElement('canvas');
-      canvas.width = w;
-      canvas.height = h;
+      canvas.className = 'preview-card';
+      canvas.width = 256;
+      canvas.height = 358;
       drawCard(canvas, suit, valObj, theme);
-      cardCanvases[cardKey] = { canvas, filename: `${cardKey}.png` };
+
+      allAssetCanvases[cardKey] = { canvas, filename: `${cardKey}.png`, folder: 'cards' };
 
       const label = document.createElement('div');
-      label.className = 'card-label';
-      label.innerText = `${valObj.label} ${suit.symbol} (${valObj.name})`;
+      label.className = 'asset-label';
+      label.innerText = `${valObj.label} ${suit.symbol}`;
 
       const btn = document.createElement('button');
-      btn.className = 'btn-download-single';
+      btn.className = 'btn-single';
       btn.innerText = 'Download PNG';
-      btn.onclick = () => {
-        canvas.toBlob(blob => {
-          saveAs(blob, `${cardKey}.png`);
-        });
-      };
+      btn.onclick = () => canvas.toBlob(blob => saveAs(blob, `${cardKey}.png`));
 
       wrap.appendChild(canvas);
       wrap.appendChild(label);
@@ -537,27 +791,24 @@ function renderAllCards() {
     });
   });
 
-  // Render Card Back
+  // Card Back
   const backWrap = document.createElement('div');
-  backWrap.className = 'card-container';
+  backWrap.className = 'asset-card';
   const backCanvas = document.createElement('canvas');
-  backCanvas.width = w;
-  backCanvas.height = h;
+  backCanvas.className = 'preview-card';
+  backCanvas.width = 256;
+  backCanvas.height = 358;
   drawCardBack(backCanvas, theme);
-  cardCanvases['card_back'] = { canvas: backCanvas, filename: `card_back.png` };
+  allAssetCanvases['card_back'] = { canvas: backCanvas, filename: 'card_back.png', folder: 'cards' };
 
   const backLabel = document.createElement('div');
-  backLabel.className = 'card-label';
+  backLabel.className = 'asset-label';
   backLabel.innerText = 'Card Back';
 
   const backBtn = document.createElement('button');
-  backBtn.className = 'btn-download-single';
+  backBtn.className = 'btn-single';
   backBtn.innerText = 'Download PNG';
-  backBtn.onclick = () => {
-    backCanvas.toBlob(blob => {
-      saveAs(blob, `card_back.png`);
-    });
-  };
+  backBtn.onclick = () => backCanvas.toBlob(blob => saveAs(blob, 'card_back.png'));
 
   backWrap.appendChild(backCanvas);
   backWrap.appendChild(backLabel);
@@ -565,49 +816,59 @@ function renderAllCards() {
   grid.appendChild(backWrap);
 }
 
-async function exportZipAll() {
-  const btn = document.getElementById('btnZipAll');
+// =============================================================================
+// CATEGORY & MASTER ZIP EXPORTERS
+// =============================================================================
+async function exportCategoryZip(category, zipName) {
   const statusText = document.getElementById('statusText');
   const progressWrap = document.getElementById('progressWrap');
   const progressBar = document.getElementById('progressBar');
 
-  btn.disabled = true;
   progressWrap.style.display = 'block';
-  statusText.innerText = 'Generating 52 PNG card assets into ZIP...';
+  statusText.innerText = `Packing ${category} assets into ZIP...`;
 
   const zip = new JSZip();
-  const folder = zip.folder("playing_cards_52");
+  let keys = Object.keys(allAssetCanvases);
+  if (category === 'chips') {
+    keys = keys.filter(k => allAssetCanvases[k].folder === 'chips');
+  } else if (category === 'buttons') {
+    keys = keys.filter(k => allAssetCanvases[k].folder === 'buttons');
+  } else if (category === 'both') {
+    keys = keys.filter(k => allAssetCanvases[k].folder === 'chips' || allAssetCanvases[k].folder === 'buttons');
+  }
 
-  const keys = Object.keys(cardCanvases);
   const total = keys.length;
   let done = 0;
 
   for (const key of keys) {
-    const item = cardCanvases[key];
+    const item = allAssetCanvases[key];
     const blob = await new Promise(resolve => item.canvas.toBlob(resolve, 'image/png'));
-    folder.file(item.filename, blob);
+    zip.file(item.filename, blob);
+
     done++;
     const pct = Math.round((done / total) * 100);
     progressBar.style.width = pct + '%';
-    statusText.innerText = `Adding card assets to ZIP: ${done}/${total} (${pct}%)`;
+    statusText.innerText = `Adding ${category} to ZIP: ${done}/${total} (${pct}%)`;
   }
 
-  statusText.innerText = 'Compressing and downloading ZIP package...';
+  statusText.innerText = `Compressing and downloading ${zipName}...`;
   const content = await zip.generateAsync({ type: 'blob' }, metadata => {
     progressBar.style.width = metadata.percent + '%';
   });
 
-  const theme = document.getElementById('themeSelect').value;
-  saveAs(content, `cards_52_${theme}_assets.zip`);
-
-  statusText.innerText = `Export complete! Downloaded 53 card assets (52 cards + card back).`;
-  btn.disabled = false;
-  setTimeout(() => { progressWrap.style.display = 'none'; }, 2000);
+  saveAs(content, zipName);
+  statusText.innerText = `Export complete! Downloaded ${total} ${category} assets.`;
+  setTimeout(() => { progressWrap.style.display = 'none'; }, 2500);
 }
 
-// Initial render
+async function exportMasterZip() {
+  await exportCategoryZip('all', 'cantina_casino_ui_pack.zip');
+}
+
 window.onload = () => {
-  renderAllCards();
+  renderChipsTab();
+  renderButtonsTab();
+  renderCardsTab();
 };
 </script>
 </body>
