@@ -984,12 +984,16 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
     SV_Ranked_ProgressQuest(kState->username, "saber_kills", 1, killerCl);
 
   // ---- FIRST BLOOD ----
+  qboolean isDuelMode = (Q_stricmp(SV_Ranked_GetActiveMode(), "duel") == 0) ? qtrue : qfalse;
+
   if (!sv_ranked_firstBlood) {
     sv_ranked_firstBlood = qtrue;
     Com_Printf("[RANKED] FIRST BLOOD by %s!\n", killerName);
-    SV_Ranked_BroadcastOpen("cp \"^1FIRST BLOOD!\n^7%s\"", killerName);
-    SV_SendServerCommand(killerCl,
-                         "print \"^1FIRST BLOOD! ^7+15 Credits / +5 XP!\n\"");
+    if (!isDuelMode) {
+      SV_Ranked_BroadcastOpen("cp \"^1FIRST BLOOD!\n^7%s\"", killerName);
+      SV_SendServerCommand(killerCl,
+                           "print \"^1FIRST BLOOD! ^7+15 Credits / +5 XP!\n\"");
+    }
     UpdateAccountStats(kState->username, killerName, 0, 0, 0, 0, NULL);
     UpdateAccountCredits(kState->username, 15);
 
@@ -1001,8 +1005,10 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
   // ---- MELEE KILL BONUS ----
   if (mappedWep && !Q_stricmp(mappedWep, "Melee")) {
     Com_Printf("[RANKED] MELEE KILL bonus for %s!\n", killerName);
-    SV_Ranked_BroadcastOpen("cp \"^1BRAWLER!\n^7%s ^7styled on ^1%s\"",
-                            killerName, victimName);
+    if (!isDuelMode) {
+      SV_Ranked_BroadcastOpen("cp \"^1BRAWLER!\n^7%s ^7styled on ^1%s\"",
+                              killerName, victimName);
+    }
     UpdateAccountStats(kState->username, killerName, 5, 0, 0, 0, NULL);
     SV_Ranked_ProgressQuest(kState->username, "melee_kills", 1, killerCl);
   }
@@ -1013,7 +1019,7 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
                     !Q_stricmp(mappedWep, "Trip Mine"))) {
     kState->bombStreak++;
     Com_Printf("[RANKED] %s bomb streak: %d\n", killerName, kState->bombStreak);
-    if (kState->bombStreak == 4) {
+    if (kState->bombStreak == 4 && !isDuelMode) {
       SV_Ranked_BroadcastOpen(
           "cp \"^1BOMBERMAN!\n^7%s ^7landed 4 bomb kills!\"", killerName);
     }
@@ -1026,9 +1032,11 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
   if (kState->killsOnPlayers[victimId] == 5) {
     Com_Printf("[RANKED] DOMINATION: %s is dominating %s!\n", killerName,
                victimName);
-    SV_Ranked_BroadcastOpen("cp \"^3DOMINATION!\n^7%s ^7is crushing ^1%s\"",
-                            killerName, victimName);
-    SV_SendServerCommand(NULL, "chat \"^3DOMINATION: ^7%s ^7is dominating ^1%s!\"", killerName, victimName);
+    if (!isDuelMode) {
+      SV_Ranked_BroadcastOpen("cp \"^3DOMINATION!\n^7%s ^7is crushing ^1%s\"",
+                              killerName, victimName);
+      SV_SendServerCommand(NULL, "chat \"^3DOMINATION: ^7%s ^7is dominating ^1%s!\"", killerName, victimName);
+    }
     // Daily quest: dominations
     if (kState->loggedIn)
       SV_Ranked_ProgressQuest(kState->username, "dominations", 1, killerCl);

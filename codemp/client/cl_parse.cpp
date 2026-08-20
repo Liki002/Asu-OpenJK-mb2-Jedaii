@@ -1277,14 +1277,37 @@ void CL_ParseCommandString( msg_t *msg ) {
 		extern void SCR_Pazaak_InitMatch( void );
 		g_cantinaGames.active = qtrue;
 		g_cantinaGames.activeGame = 2;
-		SCR_Pazaak_InitMatch();
+		if ( !g_cantinaGames.pzInMatch ) SCR_Pazaak_InitMatch();
 	} else if ( !Q_strncmp( s, "pazaak_close", 12 ) ) {
 		g_cantinaGames.active = qfalse;
 	} else if ( !Q_strncmp( s, "pazaak_toggle", 13 ) ) {
 		extern void SCR_Pazaak_InitMatch( void );
 		g_cantinaGames.active = (!g_cantinaGames.active) ? qtrue : qfalse;
 		g_cantinaGames.activeGame = 2;
-		if ( g_cantinaGames.active ) SCR_Pazaak_InitMatch();
+		if ( g_cantinaGames.active && !g_cantinaGames.pzInMatch ) SCR_Pazaak_InitMatch();
+	} else if ( !Q_strncmp( s, "pazaak_invite", 13 ) ) {
+		int chId = -1, wager = 50;
+		char chName[64] = "";
+		sscanf( s, "pazaak_invite %d %63s %d", &chId, chName, &wager );
+		g_cantinaGames.pzPendingChallengerId = chId;
+		Q_strncpyz( g_cantinaGames.pzPendingChallengerName, chName, sizeof( g_cantinaGames.pzPendingChallengerName ) );
+		g_cantinaGames.pzPendingBet = wager;
+		g_cantinaGames.pzPendingExpireTime = cls.realtime + 30000;
+		Com_Printf( "^3[PAZAAK CHALLENGE] ^5%s ^7has challenged you to Pazaak for ^3%d Credits^7!\n^7Type ^2!pazaak accept %d ^7or open ^5/pazaak ^7to accept.\n", chName, wager, chId );
+	} else if ( !Q_strncmp( s, "pazaak_start", 12 ) ) {
+		extern void SCR_Pazaak_InitMultiplayerMatch( int oppId, const char *oppName, int bet, qboolean myTurnFirst );
+		int oppId = -1, bet = 50, firstTurn = 1;
+		char oppName[64] = "";
+		sscanf( s, "pazaak_start %d %63s %d %d", &oppId, oppName, &bet, &firstTurn );
+		SCR_Pazaak_InitMultiplayerMatch( oppId, oppName, bet, (firstTurn != 0) ? qtrue : qfalse );
+	} else if ( !Q_strncmp( s, "pazaak_sync", 11 ) ) {
+		extern void SCR_Pazaak_HandleOpponentAction( const char *actionStr );
+		SCR_Pazaak_HandleOpponentAction( s + 12 );
+	} else if ( !Q_strncmp( s, "pazaak_declined", 15 ) ) {
+		char decName[64] = "";
+		sscanf( s, "pazaak_declined %63s", decName );
+		Com_Printf( "^3[PAZAAK] ^5%s ^7declined your challenge.\n", decName );
+		Q_strncpyz( g_cantinaGames.pzStatusMsg, va( "^1%s declined your challenge.", decName ), sizeof( g_cantinaGames.pzStatusMsg ) );
 	}
 }
 

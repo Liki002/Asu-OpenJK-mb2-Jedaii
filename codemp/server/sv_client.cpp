@@ -1834,6 +1834,38 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
     }
     return;
   }
+  if (!Q_stricmp(Cmd_Argv(0), "rpg_pazaak_challenge") || !Q_stricmp(Cmd_Argv(0), "pazaak_challenge")) {
+    int targetId = atoi(Cmd_Argv(1));
+    int bet = (Cmd_Argc() >= 3) ? atoi(Cmd_Argv(2)) : 50;
+    extern void SV_Ranked_Pazaak_Challenge(client_t *cl, int targetId, int bet);
+    SV_Ranked_Pazaak_Challenge(cl, targetId, bet);
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "rpg_pazaak_accept") || !Q_stricmp(Cmd_Argv(0), "pazaak_accept")) {
+    int chId = atoi(Cmd_Argv(1));
+    extern void SV_Ranked_Pazaak_Accept(client_t *cl, int challengerId);
+    SV_Ranked_Pazaak_Accept(cl, chId);
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "rpg_pazaak_decline") || !Q_stricmp(Cmd_Argv(0), "pazaak_decline")) {
+    int chId = atoi(Cmd_Argv(1));
+    extern void SV_Ranked_Pazaak_Decline(client_t *cl, int challengerId);
+    SV_Ranked_Pazaak_Decline(cl, chId);
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "rpg_pazaak_sync") || !Q_stricmp(Cmd_Argv(0), "pazaak_sync")) {
+    extern void SV_Ranked_Pazaak_Sync(client_t *cl, const char *actionStr);
+    SV_Ranked_Pazaak_Sync(cl, Cmd_Args());
+    return;
+  }
+  if (!Q_stricmp(Cmd_Argv(0), "rpg_pazaak_endmatch") || !Q_stricmp(Cmd_Argv(0), "pazaak_endmatch")) {
+    int winId = atoi(Cmd_Argv(1));
+    int losId = atoi(Cmd_Argv(2));
+    int pot = atoi(Cmd_Argv(3));
+    extern void SV_Ranked_Pazaak_EndMatch(client_t *cl, int winnerId, int loserId, int pot);
+    SV_Ranked_Pazaak_EndMatch(cl, winId, losId, pot);
+    return;
+  }
 
   // Intercept Ranked Chat Commands (Reconstruct full command string to handle spaces/quotes)
   if (!Q_stricmp(Cmd_Argv(0), "say") || !Q_stricmp(Cmd_Argv(0), "say_team") || !Q_stricmp(Cmd_Argv(0), "tell") ||

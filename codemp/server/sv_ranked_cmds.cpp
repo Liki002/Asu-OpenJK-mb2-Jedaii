@@ -1628,6 +1628,156 @@ void SV_Ranked_ShowPartyStudio(client_t *cl) {
   SV_SendServerCommand(cl, "partymenu_open");
 }
 
+// Pazaak Multiplayer Management
+typedef struct {
+  qboolean inMatch;
+  int player1;
+  int player2;
+  int bet;
+} pzServerMatch_t;
+
+static pzServerMatch_t s_pzMatches[MAX_CLIENTS];
+
+static int SV_Ranked_GetClientCredits(int clientNum) {
+  if (clientNum < 0 || clientNum >= sv_maxclients->integer) return 0;
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r->loggedIn || !r->username[0]) return 0;
+  cJSON *acc = SV_Ranked_GetAccount(r->username);
+  cJSON *credPtr = acc ? cJSON_GetObjectItemCaseSensitive(acc, "credits") : NULL;
+  return credPtr ? credPtr->valueint : 0;
+}
+
+static int SV_Ranked_FindClientByName(const char *name) {
+  if (!name || !name[0]) return -1;
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    if (svs.clients[i].state >= CS_ACTIVE) {
+      if (!Q_stricmp(svs.clients[i].name, name)) return i;
+      char cleanName[MAX_STRING_CHARS];
+      Q_strncpyz(cleanName, svs.clients[i].name, sizeof(cleanName));
+      Q_CleanStr(cleanName);
+      if (!Q_stricmp(cleanName, name)) return i;
+    }
+  }
+  return -1;
+}
+
+void SV_Ranked_Pazaak_Challenge(client_t *cl, int targetId, int bet) {
+  if (!cl || targetId < 0 || targetId >= sv_maxclients->integer) return;
+  int myId = (int)(cl - svs.clients);
+  if (myId == targetId) {
+    SV_SendServerCommand(cl, "print \"^1You cannot challenge yourself to Pazaak!\n\"");
+    return;
+  }
+  client_t *tCl = &svs.clients[targetId];
+  if (tCl->state < CS_ACTIVE) {
+    SV_SendServerCommand(cl, "print \"^1Target player is not active.\n\"");
+    return;
+  }
+  if (bet < 10) bet = 10;
+  if (bet > 5000) bet = 5000;
+
+  int myCr = SV_Ranked_GetClientCredits(myId);
+  int tCr = SV_Ranked_GetClientCredits(targetId);
+  if (myCr < bet) {
+    SV_SendServerCommand(cl, va("print \"^1You need at least %d Credits to challenge (you have %d CR).\n\"", bet, myCr));
+    return;
+  }
+  if (tCr < bet) {
+    SV_SendServerCommand(cl, va("print \"^1Target player does not have enough credits (%d CR) for this wager.\n\"", tCr));
+    return;
+  }
+
+  char cleanMyName[64];
+  Q_strncpyz(cleanMyName, cl->name, sizeof(cleanMyName));
+  for (int i = 0; cleanMyName[i]; i++) {
+    if (cleanMyName[i] == ' ') cleanMyName[i] = '_';
+  }
+
+  SV_SendServerCommand(tCl, va("pazaak_invite %d %s %d", myId, cleanMyName, bet));
+  SV_SendServerCommand(tCl, va("chat \"^3[PAZAAK CHALLENGE] ^5%s ^7has challenged you to a Pazaak duel for ^3%d CR^7! Type ^2!pazaak accept %d ^7to play!\"", cl->name, bet, myId));
+  SV_SendServerCommand(cl, va("print \"^3[PAZAAK] ^7Challenge sent to ^5%s ^7for ^3%d CR^7! Awaiting response...\n\"", tCl->name, bet));
+  SV_SendServerCommand(cl, va("chat \"^3[PAZAAK] ^7Challenge sent to ^5%s ^7for ^3%d CR^7!\"", tCl->name, bet));
+}
+
+void SV_Ranked_Pazaak_Accept(client_t *cl, int challengerId) {
+  if (!cl || challengerId < 0 || challengerId >= sv_maxclients->integer) return;
+  int myId = (int)(cl - svs.clients);
+  client_t *cCl = &svs.clients[challengerId];
+  if (cCl->state < CS_ACTIVE) {
+    SV_SendServerCommand(cl, "print \"^1Challenger is no longer active.\n\"");
+    return;
+  }
+  int bet = 50;
+  int myCr = SV_Ranked_GetClientCredits(myId);
+  int cCr = SV_Ranked_GetClientCredits(challengerId);
+  if (myCr < bet || cCr < bet) {
+    SV_SendServerCommand(cl, "print \"^1Insufficient credits for Pazaak match.\n\"");
+    return;
+  }
+
+  rankedMatchState_t *rMe = &sv_rankedPlayers[myId];
+  rankedMatchState_t *rOpp = &sv_rankedPlayers[challengerId];
+  if (rMe->loggedIn && rMe->username[0]) UpdateAccountCredits(rMe->username, -bet);
+  if (rOpp->loggedIn && rOpp->username[0]) UpdateAccountCredits(rOpp->username, -bet);
+  SV_Ranked_SaveAccounts();
+  SV_Ranked_SyncClientRPG(cl);
+  SV_Ranked_SyncClientRPG(cCl);
+
+  int firstTurn = rand() % 2;
+  char cleanMyName[64], cleanOppName[64];
+  Q_strncpyz(cleanMyName, cl->name, sizeof(cleanMyName));
+  Q_strncpyz(cleanOppName, cCl->name, sizeof(cleanOppName));
+  for (int i = 0; cleanMyName[i]; i++) if (cleanMyName[i] == ' ') cleanMyName[i] = '_';
+  for (int i = 0; cleanOppName[i]; i++) if (cleanOppName[i] == ' ') cleanOppName[i] = '_';
+
+  s_pzMatches[myId].inMatch = qtrue;
+  s_pzMatches[myId].player1 = myId;
+  s_pzMatches[myId].player2 = challengerId;
+  s_pzMatches[myId].bet = bet;
+
+  s_pzMatches[challengerId] = s_pzMatches[myId];
+
+  SV_SendServerCommand(cl, va("pazaak_start %d %s %d %d", challengerId, cleanOppName, bet, firstTurn));
+  SV_SendServerCommand(cCl, va("pazaak_start %d %s %d %d", myId, cleanMyName, bet, 1 - firstTurn));
+
+  SV_SendServerCommand(NULL, va("chat \"^3[PAZAAK DUEL] ^5%s ^3VS ^5%s ^7for a ^3%d CR ^7pot!\"", cl->name, cCl->name, bet * 2));
+}
+
+void SV_Ranked_Pazaak_Decline(client_t *cl, int challengerId) {
+  if (!cl || challengerId < 0 || challengerId >= sv_maxclients->integer) return;
+  client_t *cCl = &svs.clients[challengerId];
+  if (cCl->state >= CS_ACTIVE) {
+    char cleanName[64];
+    Q_strncpyz(cleanName, cl->name, sizeof(cleanName));
+    for (int i = 0; cleanName[i]; i++) if (cleanName[i] == ' ') cleanName[i] = '_';
+    SV_SendServerCommand(cCl, va("pazaak_declined %s", cleanName));
+  }
+}
+
+void SV_Ranked_Pazaak_Sync(client_t *cl, const char *actionStr) {
+  if (!cl || !actionStr) return;
+  int myId = (int)(cl - svs.clients);
+  if (!s_pzMatches[myId].inMatch) return;
+  int oppId = (s_pzMatches[myId].player1 == myId) ? s_pzMatches[myId].player2 : s_pzMatches[myId].player1;
+  if (oppId >= 0 && oppId < sv_maxclients->integer && svs.clients[oppId].state >= CS_ACTIVE) {
+    SV_SendServerCommand(&svs.clients[oppId], va("pazaak_sync %s", actionStr));
+  }
+}
+
+void SV_Ranked_Pazaak_EndMatch(client_t *cl, int winnerId, int loserId, int pot) {
+  if (winnerId >= 0 && winnerId < sv_maxclients->integer) {
+    rankedMatchState_t *rWin = &sv_rankedPlayers[winnerId];
+    if (rWin->loggedIn && rWin->username[0]) {
+      UpdateAccountCredits(rWin->username, pot);
+      SV_Ranked_ProgressQuest(rWin->username, "casino_wins", 1, &svs.clients[winnerId]);
+      SV_Ranked_SaveAccounts();
+      SV_Ranked_SyncClientRPG(&svs.clients[winnerId]);
+    }
+  }
+  if (winnerId >= 0 && winnerId < sv_maxclients->integer) s_pzMatches[winnerId].inMatch = qfalse;
+  if (loserId >= 0 && loserId < sv_maxclients->integer) s_pzMatches[loserId].inMatch = qfalse;
+}
+
 qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
   if (!chatText || chatText[0] == '\0')
     return qfalse;
@@ -1908,6 +2058,29 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     if (!Q_stricmp(cmdSpace, "!blackjack") || !Q_stricmp(cmdSpace, "!casino")) {
       SV_SendServerCommand(cl, "blackjack_open");
     } else if (!Q_stricmp(cmdSpace, "!pazaak")) {
+      const char *subArg = strchr(chatText, ' ');
+      if (subArg && *(subArg + 1) != '\0') {
+        char subCmd[32] = "";
+        char targetStr[64] = "";
+        int wager = 50;
+        sscanf(subArg + 1, "%31s %63s %d", subCmd, targetStr, &wager);
+        if (!Q_stricmp(subCmd, "challenge") || !Q_stricmp(subCmd, "c")) {
+          int tid = atoi(targetStr);
+          if (tid == 0 && targetStr[0] != '0') {
+            tid = SV_Ranked_FindClientByName(targetStr);
+          }
+          SV_Ranked_Pazaak_Challenge(cl, tid, wager);
+          return qtrue;
+        } else if (!Q_stricmp(subCmd, "accept") || !Q_stricmp(subCmd, "a")) {
+          int chId = atoi(targetStr);
+          SV_Ranked_Pazaak_Accept(cl, chId);
+          return qtrue;
+        } else if (!Q_stricmp(subCmd, "decline") || !Q_stricmp(subCmd, "d")) {
+          int chId = atoi(targetStr);
+          SV_Ranked_Pazaak_Decline(cl, chId);
+          return qtrue;
+        }
+      }
       SV_SendServerCommand(cl, "pazaak_open");
     } else {
       SV_SendServerCommand(cl, "games_open");

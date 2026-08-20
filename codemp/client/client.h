@@ -727,6 +727,16 @@ typedef struct {
 	qboolean pzCardPlayedThisTurn;
 	char     pzStatusMsg[128];
 	char     pzOpponentName[64];
+
+	// Pazaak Multiplayer & Player List
+	int      pzTab;               // 0 = Solo vs Droid / Active Match, 1 = Online Players & Challenges
+	int      pzPlayerScroll;      // Scroll offset for online player list
+	qboolean pzIsMultiplayer;     // qtrue if playing against a real connected player
+	int      pzOpponentClientId;  // Client ID of online opponent
+	int      pzPendingChallengerId; // -1 if none
+	char     pzPendingChallengerName[64];
+	int      pzPendingBet;
+	int      pzPendingExpireTime;
 } cantinaGames_t;
 
 extern cantinaGames_t g_cantinaGames;

@@ -2349,8 +2349,87 @@ void CL_KeyDownEvent( int key, unsigned time )
 					return;
 				}
 
+				// Tab 0 Click (Solo / Active Match)
+				if ( mx >= winX + 25.0f && mx <= winX + 265.0f && my >= winY + 28.0f && my <= winY + 48.0f ) {
+					g_cantinaGames.pzTab = 0;
+					return;
+				}
+				// Tab 1 Click (Online Players & Challenges)
+				if ( mx >= winX + 285.0f && mx <= winX + 525.0f && my >= winY + 28.0f && my <= winY + 48.0f ) {
+					g_cantinaGames.pzTab = 1;
+					return;
+				}
+
+				// ==================== TAB 1: ONLINE PLAYERS & CHALLENGES ====================
+				if ( g_cantinaGames.pzTab == 1 ) {
+					float contentX = winX + 25.0f;
+					float contentW = winW - 50.0f;
+					float curY = winY + 58.0f;
+
+					// Accept / Decline Incoming Challenge
+					if ( g_cantinaGames.pzPendingChallengerId >= 0 && cls.realtime < g_cantinaGames.pzPendingExpireTime ) {
+						float acX = contentX + contentW - 145.0f;
+						float acY = curY + 4.0f;
+						if ( mx >= acX && mx <= acX + 65.0f && my >= acY && my <= acY + 22.0f ) {
+							CL_AddReliableCommand( va( "rpg_pazaak_accept %d", g_cantinaGames.pzPendingChallengerId ), qfalse );
+							return;
+						}
+
+						float decX = contentX + contentW - 72.0f;
+						float decY = curY + 4.0f;
+						if ( mx >= decX && mx <= decX + 65.0f && my >= decY && my <= decY + 22.0f ) {
+							CL_AddReliableCommand( va( "rpg_pazaak_decline %d", g_cantinaGames.pzPendingChallengerId ), qfalse );
+							g_cantinaGames.pzPendingChallengerId = -1;
+							return;
+						}
+						curY += 36.0f;
+					}
+
+					// Online Players List Click
+					int onlineIds[MAX_CLIENTS];
+					int onlineTotal = 0;
+					int myClientNum = cl.snap.ps.clientNum;
+					int csBase = CS_PLAYERS;
+					for ( int i = 0; i < MAX_CLIENTS; i++ ) {
+						if ( !cl.gameState.stringOffsets[ csBase + i ] ) continue;
+						const char *cInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ csBase + i ];
+						char nameBuf[64];
+						Q_strncpyz( nameBuf, Info_ValueForKey( cInfo, "n" ), sizeof( nameBuf ) );
+						if ( !nameBuf[0] || i == myClientNum ) continue;
+						onlineIds[onlineTotal++] = i;
+					}
+
+					curY += 18.0f;
+					float rowH = 26.0f;
+					for ( int v = 0; v < 7 && (g_cantinaGames.pzPlayerScroll + v) < onlineTotal; v++ ) {
+						int targetId = onlineIds[g_cantinaGames.pzPlayerScroll + v];
+						float rowY = curY + v * (rowH + 3.0f);
+						float chBtnX = contentX + contentW - 105.0f;
+						float chBtnY = rowY + 2.0f;
+						if ( mx >= chBtnX && mx <= chBtnX + 100.0f && my >= chBtnY && my <= chBtnY + 22.0f ) {
+							CL_AddReliableCommand( va( "rpg_pazaak_challenge %d %d", targetId, g_cantinaGames.pzBet ), qfalse );
+							Com_Printf( "^3[PAZAAK] ^7Challenged player #%d for %d Credits!\n", targetId, g_cantinaGames.pzBet );
+							return;
+						}
+					}
+
+					// Chip Selector in Tab 1
+					float chipY = winY + winH - 52.0f;
+					float chipStartX = contentX + 140.0f;
+					int chipVals[5] = { 10, 25, 50, 100, 500 };
+					for ( int c = 0; c < 5; c++ ) {
+						float cx = chipStartX + c * 52.0f;
+						if ( mx >= cx && mx <= cx + 46.0f && my >= chipY && my <= chipY + 26.0f ) {
+							g_cantinaGames.pzBet = chipVals[c];
+							return;
+						}
+					}
+					return;
+				}
+
+				// ==================== TAB 0: SOLO TABLE / ACTIVE MATCH ====================
 				// Player Hand Cards
-				float handY = winY + 215.0f;
+				float handY = winY + 228.0f;
 				float handStartX = winX + 25.0f;
 				for ( int h = 0; h < 4; h++ ) {
 					float hx = handStartX + h * 90.0f;
@@ -2366,7 +2445,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 				}
 
 				// Chip Wager Selector
-				float pzChipY = winY + 292.0f;
+				float pzChipY = winY + 300.0f;
 				float pzChipSize = 32.0f;
 				float pzChipStartX = winX + 175.0f;
 				int chipAdd[5] = { 10, 25, 50, 100, 500 };
@@ -2383,11 +2462,11 @@ void CL_KeyDownEvent( int key, unsigned time )
 				}
 
 				// Action Buttons
-				float pzBtnY = winY + 342.0f;
+				float pzBtnY = winY + 348.0f;
 				float pzBtnW = 125.0f;
 				float pzBtnH = 36.0f;
 
-				// DEAL
+				// DEAL / MATCH
 				if ( !g_cantinaGames.pzInMatch && mx >= winX + 25.0f && mx <= winX + 25.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH ) {
 					SCR_Pazaak_InitMatch();
 					return;
@@ -2405,9 +2484,25 @@ void CL_KeyDownEvent( int key, unsigned time )
 				// FORFEIT
 				if ( g_cantinaGames.pzInMatch && mx >= winX + 430.0f && mx <= winX + 430.0f + pzBtnW && my >= pzBtnY && my <= pzBtnY + pzBtnH ) {
 					g_cantinaGames.pzInMatch = qfalse;
+					if ( g_cantinaGames.pzIsMultiplayer ) {
+						CL_AddReliableCommand( "rpg_pazaak_sync forfeit", qfalse );
+					}
 					Q_strncpyz( g_cantinaGames.pzStatusMsg, "^1Match forfeited. Press DEAL MATCH to play again.", sizeof( g_cantinaGames.pzStatusMsg ) );
 					return;
 				}
+			}
+
+			if ( key == A_MWHEELUP ) {
+				if ( g_cantinaGames.pzTab == 1 && g_cantinaGames.pzPlayerScroll > 0 ) {
+					g_cantinaGames.pzPlayerScroll--;
+				}
+				return;
+			}
+			if ( key == A_MWHEELDOWN ) {
+				if ( g_cantinaGames.pzTab == 1 ) {
+					g_cantinaGames.pzPlayerScroll++;
+				}
+				return;
 			}
 
 			if ( key == A_SPACE || key == A_ENTER ) {
