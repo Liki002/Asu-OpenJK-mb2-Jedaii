@@ -673,10 +673,13 @@ static void SV_StressBot_Frame( int time ) {
 			// === ROLE 1: SABER THROWER ===
 			int throwCycle = ( time + i * 400 ) % 4500;
 			if ( throwCycle < 1200 ) {
-				// Hold +use and press +attack to execute Saber Throw!
-				cmd.buttons |= ( BUTTON_USE | BUTTON_ATTACK );
+				// Aim and execute Saber Throw!
+				cmd.buttons |= ( BUTTON_USE | BUTTON_ATTACK | BUTTON_ALT_ATTACK );
 				cmd.generic_cmd = GENCMD_FORCE_THROW;
-				cmd.forwardmove = 32;
+				if ( throwCycle % 1000 < 30 ) {
+					SV_ExecuteClientCommand( cl, "force_throw", qtrue );
+				}
+				cmd.forwardmove = 16;
 			} else if ( throwCycle < 2500 ) {
 				// Saber in flight - strafe and jump
 				cmd.rightmove = ( i % 2 == 0 ) ? 127 : -127;
@@ -692,15 +695,15 @@ static void SV_StressBot_Frame( int time ) {
 			if ( closestTarget >= 0 && bestDist < 250.0f ) {
 				// Within duel challenge distance (< 256 units)
 				int duelCycle = ( time + i * 200 ) % 6000;
-				if ( duelCycle < 1500 ) {
-					// Look at target, press USE / engage_duel to trigger Bow Animation!
+				if ( duelCycle < 1800 ) {
+					// Face each other and execute official "bow" animation & engage_duel!
 					cmd.buttons |= BUTTON_USE;
-					cmd.generic_cmd = GENCMD_ENGAGE_DUEL;
+					cmd.generic_cmd = GENCMD_BOW;
 					cmd.forwardmove = 0;
 					cmd.rightmove = 0;
 
-					// Send engage_duel once per second to trigger duel prompt
-					if ( ( time % 1000 ) < 30 ) {
+					if ( ( duelCycle % 1000 ) < 30 ) {
+						SV_ExecuteClientCommand( cl, "bow", qtrue );
 						SV_ExecuteClientCommand( cl, "engage_duel", qtrue );
 					}
 				} else {
