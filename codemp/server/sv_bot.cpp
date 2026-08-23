@@ -597,12 +597,12 @@ void BotClientCommand( int client, char *command ) {
 ==================
 SV_StressBot_Frame
 
-Generates movement, jumping, lightsaber swings, and battle AI for
-all connected stress test bots.
+Generates movement, jumping, lightsaber swings, saber throwing, bowing,
+and private duels for all connected stress test bots.
 ==================
 */
 static void SV_StressBot_Frame( int time ) {
-	int i;
+	int i, j;
 	for ( i = 0; i < sv_maxclients->integer; i++ ) {
 		client_t *cl = &svs.clients[i];
 		if ( cl->state != CS_ACTIVE ) {
@@ -613,7 +613,7 @@ static void SV_StressBot_Frame( int time ) {
 		}
 
 		// Keep them primed / respawning if round or duel ends
-		if ( ( ( time + i * 250 ) % 2000 ) < 50 ) {
+		if ( ( ( time + i * 250 ) % 2500 ) < 50 ) {
 			const char *teamCode = ( i % 2 == 0 ) ? "b" : "r";
 			const char *classCode = ( i % 2 == 0 ) ? "5" : "6";
 			SV_ExecuteClientCommand( cl, va( "team %s", teamCode ), qtrue );
@@ -627,33 +627,123 @@ static void SV_StressBot_Frame( int time ) {
 		usercmd_t cmd;
 		memset( &cmd, 0, sizeof( cmd ) );
 		cmd.serverTime = time;
+		cmd.weapon = 1; // WP_SABER (always draw and hold lightsaber)
 
-		// Simulated battle movement
-		int phase = ( ( time / 600 ) + i * 3 ) % 12;
-		if ( phase < 6 ) {
-			cmd.forwardmove = 127; // charge forward
-		} else if ( phase < 9 ) {
-			cmd.rightmove = ( i % 2 == 0 ) ? 127 : -127; // circle strafe
+		// Find closest other player or bot
+		float bestDist = 999999.0f;
+		int closestTarget = -1;
+		vec3_t targetDir;
+		VectorClear( targetDir );
+
+		if ( cl->gentity ) {
+			vec3_t myOrg;
+			VectorCopy( cl->gentity->r.currentOrigin, myOrg );
+			for ( j = 0; j < sv_maxclients->integer; j++ ) {
+				if ( j == i ) continue;
+				client_t *other = &svs.clients[j];
+				if ( other->state != CS_ACTIVE || !other->gentity ) continue;
+
+				vec3_t diff;
+				VectorSubtract( other->gentity->r.currentOrigin, myOrg, diff );
+				float d = VectorLength( diff );
+				if ( d < bestDist ) {
+					bestDist = d;
+					closestTarget = j;
+					VectorCopy( diff, targetDir );
+				}
+			}
+		}
+
+		int role = i % 3;
+		// Role 0: Aggressive Swinger / Acrobatic Duelist
+		// Role 1: Saber Thrower (throws saber and retrieves it)
+		// Role 2: Formal Duelist (approaches, bows, and duels)
+
+		if ( closestTarget >= 0 && bestDist < 600.0f ) {
+			// Aim towards nearby target
+			vec3_t aimAngles;
+			vectoangles( targetDir, aimAngles );
+			cmd.angles[YAW] = (short)ANGLE2SHORT( aimAngles[YAW] );
+			cmd.angles[PITCH] = (short)ANGLE2SHORT( aimAngles[PITCH] );
 		} else {
-			cmd.forwardmove = -64; // backstep
+			// Default arena wander yaw
+			float yaw = (float)( ( ( time / 20 ) + i * 45 ) % 360 );
+			cmd.angles[YAW] = (short)ANGLE2SHORT( yaw );
+			cmd.angles[PITCH] = (short)ANGLE2SHORT( 0 );
 		}
 
-		// Smooth rotation around arena
-		float yaw = (float)( ( ( time / 20 ) + i * 40 ) % 360 );
-		cmd.angles[YAW] = (short)ANGLE2SHORT( yaw );
-		cmd.angles[PITCH] = (short)ANGLE2SHORT( 0 );
+		if ( role == 1 ) {
+			// === ROLE 1: SABER THROWER ===
+			int cycle = ( time + i * 350 ) % 4000;
+			if ( cycle < 1000 ) {
+				// Aim and throw saber!
+				cmd.generic_cmd = GENCMD_FORCE_THROW;
+				cmd.buttons |= BUTTON_ALT_ATTACK;
+				cmd.forwardmove = 32;
+			} else if ( cycle < 2000 ) {
+				// Saber in flight - strafe and jump
+				cmd.rightmove = ( i % 2 == 0 ) ? 127 : -127;
+				if ( cycle % 800 < 100 ) cmd.upmove = 127;
+			} else if ( cycle < 3000 ) {
+				// Saber retrieved - flourish and swing
+				cmd.generic_cmd = GENCMD_FLOURISH;
+				if ( cycle % 300 < 150 ) cmd.buttons |= BUTTON_ATTACK;
+				cmd.forwardmove = 127;
+			} else {
+				// Backstep and switch stance
+				cmd.forwardmove = -64;
+				cmd.generic_cmd = GENCMD_SABERATTACKCYCLE;
+			}
+		} else if ( role == 2 ) {
+			// === ROLE 2: FORMAL DUELIST (BOW & PRIVATE DUEL) ===
+			if ( closestTarget >= 0 && bestDist < 250.0f ) {
+				// Close proximity / bumped into another bot -> Bow & Engage Private Duel
+				int bumpCycle = ( time + i * 200 ) % 5000;
+				if ( bumpCycle < 1500 ) {
+					// Both bow and initiate duel
+					cmd.generic_cmd = GENCMD_ENGAGE_DUEL;
+					cmd.buttons |= BUTTON_USE;
+					cmd.forwardmove = 0;
+					cmd.rightmove = 0;
+				} else {
+					// Duel combat: Circle strafe, parry, strike
+					cmd.rightmove = ( ( bumpCycle / 800 ) % 2 == 0 ) ? 127 : -127;
+					if ( bumpCycle % 700 < 250 ) cmd.buttons |= BUTTON_ATTACK;
+					if ( bumpCycle % 1000 < 400 ) cmd.buttons |= BUTTON_ALT_ATTACK;
+					if ( bestDist > 90.0f ) cmd.forwardmove = 64;
+					else cmd.forwardmove = -64;
+				}
+			} else {
+				// Walk towards closest target to find duel partner
+				cmd.forwardmove = 127;
+				if ( ( time + i * 500 ) % 2500 < 150 ) cmd.upmove = 127;
+			}
+		} else {
+			// === ROLE 0: AGGRESSIVE SWINGER / ACROBAT ===
+			int phase = ( ( time / 500 ) + i * 3 ) % 12;
+			if ( phase < 6 ) {
+				cmd.forwardmove = 127; // charge
+			} else if ( phase < 9 ) {
+				cmd.rightmove = ( i % 2 == 0 ) ? 127 : -127; // strafe
+			} else {
+				cmd.forwardmove = -64; // backstep
+			}
 
-		// Jump occasionally
-		if ( ( time + i * 300 ) % 1800 < 150 ) {
-			cmd.upmove = 127;
-		}
+			// Jump and flip
+			if ( ( time + i * 300 ) % 1500 < 150 ) {
+				cmd.upmove = 127;
+			}
 
-		// Saber swings & blocks
-		if ( ( time + i * 150 ) % 700 < 250 ) {
-			cmd.buttons |= BUTTON_ATTACK;
-		}
-		if ( ( time + i * 200 ) % 1200 < 300 ) {
-			cmd.buttons |= BUTTON_ALT_ATTACK;
+			// Random directional swing strings (light, medium, heavy combos)
+			if ( ( time + i * 150 ) % 600 < 300 ) {
+				cmd.buttons |= BUTTON_ATTACK;
+			}
+			if ( ( time + i * 250 ) % 1400 < 300 ) {
+				cmd.buttons |= BUTTON_ALT_ATTACK;
+			}
+			if ( ( time + i * 700 ) % 3000 < 50 ) {
+				cmd.generic_cmd = GENCMD_SABERATTACKCYCLE;
+			}
 		}
 
 		SV_ClientThink( cl, &cmd );
