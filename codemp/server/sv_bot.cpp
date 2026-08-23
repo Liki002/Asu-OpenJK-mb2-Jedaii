@@ -595,10 +595,79 @@ void BotClientCommand( int client, char *command ) {
 
 /*
 ==================
+SV_StressBot_Frame
+
+Generates movement, jumping, lightsaber swings, and battle AI for
+all connected stress test bots.
+==================
+*/
+static void SV_StressBot_Frame( int time ) {
+	int i;
+	for ( i = 0; i < sv_maxclients->integer; i++ ) {
+		client_t *cl = &svs.clients[i];
+		if ( cl->state != CS_ACTIVE ) {
+			continue;
+		}
+		if ( strncmp( cl->name, "StressBot_", 10 ) != 0 ) {
+			continue;
+		}
+
+		// Keep them primed / respawning if round or duel ends
+		if ( ( ( time + i * 250 ) % 2000 ) < 50 ) {
+			const char *teamCode = ( i % 2 == 0 ) ? "b" : "r";
+			const char *classCode = ( i % 2 == 0 ) ? "5" : "6";
+			SV_ExecuteClientCommand( cl, va( "team %s", teamCode ), qtrue );
+			SV_ExecuteClientCommand( cl, va( "class %s", classCode ), qtrue );
+			SV_ExecuteClientCommand( cl, "engage_duel", qtrue );
+			SV_ExecuteClientCommand( cl, "ui_about_to_spawn 1", qtrue );
+			SV_ExecuteClientCommand( cl, "ui_holdteam 0", qtrue );
+			SV_ExecuteClientCommand( cl, "siegeclass 0", qtrue );
+		}
+
+		usercmd_t cmd;
+		memset( &cmd, 0, sizeof( cmd ) );
+		cmd.serverTime = time;
+
+		// Simulated battle movement
+		int phase = ( ( time / 600 ) + i * 3 ) % 12;
+		if ( phase < 6 ) {
+			cmd.forwardmove = 127; // charge forward
+		} else if ( phase < 9 ) {
+			cmd.rightmove = ( i % 2 == 0 ) ? 127 : -127; // circle strafe
+		} else {
+			cmd.forwardmove = -64; // backstep
+		}
+
+		// Smooth rotation around arena
+		float yaw = (float)( ( ( time / 20 ) + i * 40 ) % 360 );
+		cmd.angles[YAW] = (short)ANGLE2SHORT( yaw );
+		cmd.angles[PITCH] = (short)ANGLE2SHORT( 0 );
+
+		// Jump occasionally
+		if ( ( time + i * 300 ) % 1800 < 150 ) {
+			cmd.upmove = 127;
+		}
+
+		// Saber swings & blocks
+		if ( ( time + i * 150 ) % 700 < 250 ) {
+			cmd.buttons |= BUTTON_ATTACK;
+		}
+		if ( ( time + i * 200 ) % 1200 < 300 ) {
+			cmd.buttons |= BUTTON_ALT_ATTACK;
+		}
+
+		SV_ClientThink( cl, &cmd );
+	}
+}
+
+/*
+==================
 SV_BotFrame
 ==================
 */
 void SV_BotFrame( int time ) {
+	SV_StressBot_Frame( time );
+
 	if (!bot_enable)
 		return;
 	//NOTE: maybe the game is already shutdown
