@@ -597,56 +597,6 @@ void BotClientCommand( int client, char *command ) {
 ==================
 SV_StressBot_Frame
 
-Lightweight, smooth 40Hz simulated player movement for server load testing.
-Keeps server CPU minimal, avoids clustering, and maintains flat 20ms ping.
-==================
-*/
-static void SV_StressBot_Frame( int time ) {
-	int i;
-	for ( i = 0; i < sv_maxclients->integer; i++ ) {
-		client_t *cl = &svs.clients[i];
-		if ( cl->state != CS_ACTIVE || !cl->gentity ) {
-			continue;
-		}
-		if ( strncmp( cl->name, "StressBot_", 10 ) != 0 ) {
-			continue;
-		}
-
-		// Throttle bot inputs to 40Hz (25ms interval) to match human clients
-		if ( cl->lastUsercmd.serverTime && ( time - cl->lastUsercmd.serverTime < 25 ) ) {
-			continue;
-		}
-
-		usercmd_t cmd;
-		memset( &cmd, 0, sizeof( cmd ) );
-		cmd.serverTime = time;
-		cmd.weapon = 1; // WP_SABER
-
-		// Spread out movement angles evenly around arena so bots never clump together
-		float spreadAngle = (float)( ( ( time / 30 ) + ( i * ( 360 / 10 ) ) ) % 360 );
-		cmd.angles[YAW] = (short)ANGLE2SHORT( spreadAngle );
-		cmd.angles[PITCH] = (short)ANGLE2SHORT( 0 );
-
-		// Forward movement & alternating circle strafe
-		cmd.forwardmove = ( ( ( time / 1500 ) + i ) % 2 == 0 ) ? 127 : 64;
-		cmd.rightmove = ( i % 2 == 0 ) ? 64 : -64;
-
-		// Controlled saber attacks (timed swings and parries)
-		int atkCycle = ( time + i * 180 ) % 1000;
-		if ( atkCycle < 200 ) {
-			cmd.buttons |= BUTTON_ATTACK;
-		} else if ( atkCycle < 350 ) {
-			cmd.buttons |= BUTTON_ALT_ATTACK;
-		}
-
-		SV_ClientThink( cl, &cmd );
-	}
-}
-
-/*
-==================
-SV_StressBot_Frame
-
 Generates movement, jumping, lightsaber swings, and battle AI for
 all connected stress test bots.
 ==================
