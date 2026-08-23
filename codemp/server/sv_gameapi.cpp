@@ -30,6 +30,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "qcommon/stringed_ingame.h"
 #include "qcommon/timing.h"
 #include "server.h"
+#include "sv_gameapi.h"
 
 botlib_export_t *botlib_export;
 
@@ -119,16 +120,100 @@ void GVM_ClientThink(int clientNum, usercmd_t *ucmd) {
   ge->ClientThink(clientNum, ucmd);
 }
 
-void GVM_RunFrame(int levelTime) {
-  if (!gvm)
-    return;
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <setjmp.h>
+#include <signal.h>
+#include <unistd.h>
+
+static sigjmp_buf g_frame_recover_env;
+static volatile sig_atomic_t g_in_frame_execution = 0;
+static struct sigaction g_old_segv_act;
+static struct sigaction g_old_bus_act;
+static struct sigaction g_old_fpe_act;
+static int g_crash_guards_installed = 0;
+
+static void SV_CrashGuard_Handler(int sig, siginfo_t *info, void *ctx) {
+  if (g_in_frame_execution) {
+    g_in_frame_execution = 0;
+    const char *sigName = (sig == SIGSEGV) ? "SIGSEGV" :
+                          (sig == SIGBUS) ? "SIGBUS" :
+                          (sig == SIGFPE) ? "SIGFPE" : "SIGNAL";
+    char msg[256];
+    snprintf(msg, sizeof(msg), "\n^1[CRASH-GUARD] Intercepted %s (addr: %p) in jampgame! Recovered frame to prevent crash.\n",
+             sigName, info ? info->si_addr : NULL);
+    write(STDERR_FILENO, msg, strlen(msg));
+    siglongjmp(g_frame_recover_env, 1);
+  }
+  if (sig == SIGSEGV && g_old_segv_act.sa_sigaction) {
+    g_old_segv_act.sa_sigaction(sig, info, ctx);
+  } else {
+    _exit(128 + sig);
+  }
+}
+
+static void SV_CrashGuard_Install(void) {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_sigaction = SV_CrashGuard_Handler;
+  sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+  sigemptyset(&sa.sa_mask);
+
+  sigaction(SIGSEGV, &sa, &g_old_segv_act);
+  sigaction(SIGBUS, &sa, &g_old_bus_act);
+  sigaction(SIGFPE, &sa, &g_old_fpe_act);
+  g_crash_guards_installed = 1;
+}
+#endif
+
+#ifdef _WIN32
+static void GVM_RunFrame_Inner(int levelTime) {
   if (gvm->isLegacy) {
     VM_Call(gvm, GAME_RUN_FRAME, levelTime);
     return;
   }
   VMSwap v(gvm);
+  ge->RunFrame(levelTime);
+}
+#endif
+
+void GVM_RunFrame(int levelTime) {
+  if (!gvm)
+    return;
+
+  // Clean any orphaned thrown-saber/missile entities before running frame
+  SV_CleanOrphanedEntities();
+
+#ifdef _WIN32
+  __try {
+    GVM_RunFrame_Inner(levelTime);
+  }
+  __except (EXCEPTION_EXECUTE_HANDLER) {
+    Com_Printf("^1[CRASH-GUARD] Intercepted exception 0x%08X in game module! Recovering frame...\n", (unsigned int)GetExceptionCode());
+  }
+#else
+  if (!g_crash_guards_installed) {
+    SV_CrashGuard_Install();
+  }
+
+  g_in_frame_execution = 1;
+  if (sigsetjmp(g_frame_recover_env, 1) != 0) {
+    g_in_frame_execution = 0;
+    Com_Printf("^3[CRASH-GUARD] Frame execution safely recovered. Game loop continuing...\n");
+    return;
+  }
+
+  if (gvm->isLegacy) {
+    VM_Call(gvm, GAME_RUN_FRAME, levelTime);
+    g_in_frame_execution = 0;
+    return;
+  }
+  VMSwap v(gvm);
 
   ge->RunFrame(levelTime);
+  g_in_frame_execution = 0;
+#endif
 }
 
 qboolean GVM_ConsoleCommand(void) {

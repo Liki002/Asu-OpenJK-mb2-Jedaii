@@ -161,3 +161,43 @@ qboolean SV_GameCommand( void ) {
 
 	return GVM_ConsoleCommand();
 }
+
+/*
+====================
+SV_CleanOrphanedEntities
+
+Sanitizes orphaned thrown-saber, missile, and projectile entities whose owner client
+disconnected, died, or changed team to prevent G_RunMissile SIGSEGV in jampgame.
+====================
+*/
+void SV_CleanOrphanedEntities( void ) {
+	if ( !sv.gentities || sv.gentitySize <= 0 || sv.state != SS_GAME ) {
+		return;
+	}
+
+	int numEnts = sv.num_entities;
+	if ( numEnts <= 0 || numEnts > MAX_GENTITIES ) {
+		numEnts = MAX_GENTITIES;
+	}
+
+	for ( int i = MAX_CLIENTS; i < numEnts; i++ ) {
+		sharedEntity_t *ent = SV_GentityNum( i );
+		if ( !ent || !ent->r.linked ) {
+			continue;
+		}
+
+		// Check missiles (e.g. ET_MISSILE, thrown sabers, projectiles)
+		if ( ent->s.eType == ET_MISSILE || ent->s.weapon == WP_SABER ) {
+			int owner = ent->r.ownerNum;
+			if ( owner >= 0 && owner < sv_maxclients->integer ) {
+				client_t *ownerCl = &svs.clients[owner];
+				if ( ownerCl->state < CS_ACTIVE ) {
+					// Owner disconnected mid-flight -> sanitize owner to prevent crash
+					ent->r.ownerNum = ENTITYNUM_NONE;
+					ent->s.otherEntityNum = ENTITYNUM_NONE;
+				}
+			}
+		}
+	}
+}
+
