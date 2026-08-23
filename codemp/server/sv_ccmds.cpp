@@ -544,10 +544,23 @@ static void SV_SpawnStressBots_f(void) {
     client_t *cl = &svs.clients[clientNum];
     Com_sprintf(cl->name, sizeof(cl->name), "StressBot_%d", b);
 
+    // Set genuine IP structure to prevent bad address type warnings
+    cl->netchan.remoteAddress.type = NA_IP;
+    cl->netchan.remoteAddress.ip[0] = 127;
+    cl->netchan.remoteAddress.ip[1] = 0;
+    cl->netchan.remoteAddress.ip[2] = 0;
+    cl->netchan.remoteAddress.ip[3] = 1;
+    cl->netchan.remoteAddress.port = 10000 + b;
+
+    // Alternate teams (Red: Jedi, Blue: Sith)
+    const char *teamCode = (b % 2 == 0) ? "b" : "r";
+    const char *modelCode = (b % 2 == 0) ? "reborn/default" : "jedi_hf/default";
+    const char *classCode = (b % 2 == 0) ? "5" : "6";
+
     char userinfo[MAX_INFO_STRING];
     Com_sprintf(userinfo, sizeof(userinfo),
-      "\\name\\%s\\rate\\25000\\snaps\\40\\team\\r\\model\\jedi_hf\\headmodel\\jedi_hf\\cg_predictItems\\1\\ja_guid\\STRESSBOT000000000000000000%04X",
-      cl->name, b);
+      "\\name\\%s\\rate\\25000\\snaps\\40\\team\\%s\\model\\%s\\headmodel\\%s\\cg_predictItems\\1\\ja_guid\\STRESSBOT000000000000000000%04X",
+      cl->name, teamCode, modelCode, modelCode, b);
     Q_strncpyz(cl->userinfo, userinfo, sizeof(cl->userinfo));
 
     // Connect & Enter World
@@ -557,6 +570,11 @@ static void SV_SpawnStressBots_f(void) {
     usercmd_t ucmd;
     memset(&ucmd, 0, sizeof(ucmd));
     SV_ClientEnterWorld(cl, &ucmd);
+
+    // Join team and select class so bots appear on the scoreboard
+    SV_ExecuteClientCommand(cl, va("team %s", teamCode), qtrue);
+    SV_ExecuteClientCommand(cl, va("class %s", classCode), qtrue);
+
     spawned++;
   }
   Com_Printf("^2Successfully spawned %d stress test bots into the server!\n", spawned);
