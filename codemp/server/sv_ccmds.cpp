@@ -512,6 +512,56 @@ static void SV_KickBots_f(void) {
     cl->lastPacketTime = svs.time; // in case there is a funny zombie
   }
 }
+
+/*
+==================
+SV_SpawnStressBots_f
+
+Spawns simulated stress test clients directly into the game to test
+tickrate, physics, combat logic, and snapshot broadcasting under full load.
+Usage: spawnstressbots <count> (e.g. spawnstressbots 15)
+==================
+*/
+static void SV_SpawnStressBots_f(void) {
+  if (!com_sv_running->integer || sv.state != SS_GAME) {
+    Com_Printf("Server is not running in game mode.\n");
+    return;
+  }
+  int count = 10;
+  if (Cmd_Argc() > 1) {
+    count = atoi(Cmd_Argv(1));
+  }
+  if (count <= 0) count = 1;
+  if (count > sv_maxclients->integer - 1) count = sv_maxclients->integer - 1;
+
+  int spawned = 0;
+  for (int b = 1; b <= count; b++) {
+    int clientNum = SV_BotAllocateClient();
+    if (clientNum < 0) {
+      Com_Printf("^1Server is full. Spawned %d bots.\n", spawned);
+      break;
+    }
+    client_t *cl = &svs.clients[clientNum];
+    Com_sprintf(cl->name, sizeof(cl->name), "StressBot_%d", b);
+
+    char userinfo[MAX_INFO_STRING];
+    Com_sprintf(userinfo, sizeof(userinfo),
+      "\\name\\%s\\rate\\25000\\snaps\\40\\team\\r\\model\\jedi_hf\\headmodel\\jedi_hf\\cg_predictItems\\1\\ja_guid\\STRESSBOT000000000000000000%04X",
+      cl->name, b);
+    Q_strncpyz(cl->userinfo, userinfo, sizeof(cl->userinfo));
+
+    // Connect & Enter World
+    GVM_ClientConnect(clientNum, qtrue, qtrue);
+    GVM_ClientUserinfoChanged(clientNum);
+
+    usercmd_t ucmd;
+    memset(&ucmd, 0, sizeof(ucmd));
+    SV_ClientEnterWorld(cl, &ucmd);
+    spawned++;
+  }
+  Com_Printf("^2Successfully spawned %d stress test bots into the server!\n", spawned);
+}
+
 /*
 ==================
 SV_KickAll_f
@@ -2300,6 +2350,8 @@ void SV_AddOperatorCommands(void) {
                  "Sends a heartbeat to the masterserver");
   Cmd_AddCommand("kick", SV_Kick_f, "Kick a user from the server");
   Cmd_AddCommand("kickbots", SV_KickBots_f, "Kick all bots from the server");
+  Cmd_AddCommand("spawnstressbots", SV_SpawnStressBots_f, "Spawn simulated stress test bots into the server");
+  Cmd_AddCommand("spawnbots", SV_SpawnStressBots_f, "Spawn simulated stress test bots into the server");
   Cmd_AddCommand("kickall", SV_KickAll_f, "Kick all users from the server");
   Cmd_AddCommand("kicknum", SV_KickNum_f,
                  "Kick a user from the server by userid");
