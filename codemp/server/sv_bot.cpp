@@ -649,8 +649,6 @@ SV_BotFrame
 ==================
 */
 void SV_BotFrame( int time ) {
-	SV_StressBot_Frame( time );
-
 	if (!bot_enable)
 		return;
 	//NOTE: maybe the game is already shutdown
