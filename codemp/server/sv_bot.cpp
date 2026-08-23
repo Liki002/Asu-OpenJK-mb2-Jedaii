@@ -612,18 +612,6 @@ static void SV_StressBot_Frame( int time ) {
 			continue;
 		}
 
-		// Keep them primed / respawning if round or duel ends
-		if ( ( ( time + i * 250 ) % 2500 ) < 50 ) {
-			const char *teamCode = ( i % 2 == 0 ) ? "b" : "r";
-			const char *classCode = ( i % 2 == 0 ) ? "5" : "6";
-			SV_ExecuteClientCommand( cl, va( "team %s", teamCode ), qtrue );
-			SV_ExecuteClientCommand( cl, va( "class %s", classCode ), qtrue );
-			SV_ExecuteClientCommand( cl, "engage_duel", qtrue );
-			SV_ExecuteClientCommand( cl, "ui_about_to_spawn 1", qtrue );
-			SV_ExecuteClientCommand( cl, "ui_holdteam 0", qtrue );
-			SV_ExecuteClientCommand( cl, "siegeclass 0", qtrue );
-		}
-
 		usercmd_t cmd;
 		memset( &cmd, 0, sizeof( cmd ) );
 		cmd.serverTime = time;
