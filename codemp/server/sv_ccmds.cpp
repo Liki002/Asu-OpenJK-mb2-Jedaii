@@ -575,6 +575,9 @@ static void SV_SpawnStressBots_f(void) {
     SV_ExecuteClientCommand(cl, va("team %s", teamCode), qtrue);
     SV_ExecuteClientCommand(cl, va("class %s", classCode), qtrue);
 
+    // Physically spawn the bot entity into the map via MBII forceteam
+    Cbuf_AddText(va("forceteam %d %s\n", clientNum, teamCode));
+
     spawned++;
   }
   Com_Printf("^2Successfully spawned %d stress test bots into the server!\n", spawned);
