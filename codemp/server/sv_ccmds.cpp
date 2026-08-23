@@ -556,11 +556,12 @@ static void SV_SpawnStressBots_f(void) {
     const char *teamCode = (b % 2 == 0) ? "b" : "r";
     const char *modelCode = (b % 2 == 0) ? "reborn/default" : "jedi_hf/default";
     const char *classCode = (b % 2 == 0) ? "5" : "6";
+    const char *curPw = Cvar_VariableString("g_password");
 
     char userinfo[MAX_INFO_STRING];
     Com_sprintf(userinfo, sizeof(userinfo),
-      "\\name\\%s\\rate\\25000\\snaps\\40\\team\\%s\\model\\%s\\headmodel\\%s\\cg_predictItems\\1\\ja_guid\\STRESSBOT000000000000000000%04X",
-      cl->name, teamCode, modelCode, modelCode, b);
+      "\\name\\%s\\password\\%s\\rate\\25000\\snaps\\40\\team\\%s\\model\\%s\\headmodel\\%s\\cg_predictItems\\1\\ja_guid\\STRESSBOT000000000000000000%04X",
+      cl->name, curPw ? curPw : "", teamCode, modelCode, modelCode, b);
     Q_strncpyz(cl->userinfo, userinfo, sizeof(cl->userinfo));
 
     // Connect & Enter World
