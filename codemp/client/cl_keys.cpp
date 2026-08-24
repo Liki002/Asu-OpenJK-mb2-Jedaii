@@ -814,14 +814,22 @@ void Message_Key( int key ) {
 
 	if ( key == A_ENTER || key == A_KP_ENTER ) {
 		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
+			char safeChatBuf[MAX_STRING_CHARS];
+			Q_strncpyz( safeChatBuf, chatField.buffer, sizeof( safeChatBuf ) );
+			for ( char *p = safeChatBuf; *p; p++ ) {
+				if ( *p == '"' || *p == ';' || *p == '\n' || *p == '\r' ) {
+					*p = '\'';
+				}
+			}
+
 			if ( chat_playerNum != -1 )
-				Cbuf_AddText( va( "tell %i \"%s\"\n", chat_playerNum, chatField.buffer ) );
+				Cbuf_AddText( va( "tell %i \"%s\"\n", chat_playerNum, safeChatBuf ) );
 			else if ( chat_party )
-				Cbuf_AddText( va( "say_party \"%s\"\n", chatField.buffer ) );
+				Cbuf_AddText( va( "say_party \"%s\"\n", safeChatBuf ) );
 			else if ( chat_team )
-				Cbuf_AddText( va( "say_team \"%s\"\n", chatField.buffer ) );
+				Cbuf_AddText( va( "say_team \"%s\"\n", safeChatBuf ) );
 			else
-				Cbuf_AddText( va( "say \"%s\"\n", chatField.buffer ) );
+				Cbuf_AddText( va( "say \"%s\"\n", safeChatBuf ) );
 		}
 		chat_party = qfalse;
 		chat_team = qfalse;

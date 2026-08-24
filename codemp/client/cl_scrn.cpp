@@ -1675,8 +1675,8 @@ void SCR_DrawInspectOverlay( void ) {
 		crosshairNum = CGVM_CrosshairPlayer();
 	}
 
-	// Poll server periodically if looking at a valid player
-	if ( crosshairNum >= 0 && crosshairNum < 64 ) {
+	// Poll server periodically if looking at a valid player (only on Ranked servers)
+	if ( cl_isRankedServer && crosshairNum >= 0 && crosshairNum < 64 ) {
 		if ( crosshairNum != s_lastInspectedPlayer || (cls.realtime - s_inspectLastPollMs >= 3000) ) {
 			s_inspectLastPollMs = cls.realtime;
 			s_lastInspectedPlayer = crosshairNum;

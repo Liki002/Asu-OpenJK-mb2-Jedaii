@@ -106,6 +106,7 @@ cvar_t  *cl_lanForcePackets;
 cvar_t	*cl_drawRecording;
 
 vec3_t cl_windVec;
+qboolean cl_isRankedServer = qfalse;
 
 
 clientActive_t		cl;
@@ -720,6 +721,7 @@ void CL_ClearState (void) {
 //	S_StopAllSounds();
 	Com_Memset( &cl, 0, sizeof( cl ) );
 	CL_ResetRPGOverlays();
+	cl_isRankedServer = qfalse;
 }
 
 /*

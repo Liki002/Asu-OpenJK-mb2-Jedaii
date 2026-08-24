@@ -506,7 +506,9 @@ void CL_ConsolePrint( const char *txt) {
 				g_lastParsedKillerHP = parsedHP;
 				g_lastParsedKillerBP = parsedBP;
 				g_liveCombatBP = parsedBP;
-				CL_AddReliableCommand( va( "my_bp %d", parsedBP ), qfalse );
+				if ( cl_isRankedServer ) {
+					CL_AddReliableCommand( va( "my_bp %d", parsedBP ), qfalse );
+				}
 			} else if ( sscanf( withPos + 5, "%dHP", &parsedHP ) == 1 ) {
 				g_lastParsedKillerHP = parsedHP;
 			}

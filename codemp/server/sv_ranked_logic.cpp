@@ -3050,6 +3050,14 @@ static void Adventure_DisplayNode(client_t *cl, int nodeIdx) {
 
   SV_SendServerCommand(cl, "chat \"^6--- Adventure ---\"");
   SV_SendServerCommand(cl, va("chat \"%s\"", safeDesc));
+  SV_SendServerCommand(cl, va("print \"\n^6--- Adventure ---\n%s\n\"", safeDesc));
+
+  for (int k = 0; k < node->numChoices; k++) {
+    if (node->choices[k].text && node->choices[k].text[0]) {
+      SV_SendServerCommand(cl, va("chat \"^3[%d] ^7%s (type ^2!choose %d^7)\"", k + 1, node->choices[k].text, k + 1));
+      SV_SendServerCommand(cl, va("print \"^3[%d] ^7%s (type ^2!choose %d^7)\n\"", k + 1, node->choices[k].text, k + 1));
+    }
+  }
 }
 
 static void Adventure_EndAdventure(client_t *cl, int outcomeNodeIdx) {
@@ -3259,6 +3267,37 @@ void SV_Ranked_Logic_Frame(void) {
           sv_rankedPlayers[i].grantedWeaponsMask = 0;
           if (sv_rankedPlayers[i].livesActive && sv_rankedPlayers[i].remainingLives <= 0) {
             ps->pm_type = PM_SPECTATOR;
+          }
+        }
+      }
+    }
+  }
+
+  // Periodic Duel Opponent Status Telemetry (every 1000ms)
+  static int lastDuelStatusSync = 0;
+  if (svs.time - lastDuelStatusSync >= 1000) {
+    lastDuelStatusSync = svs.time;
+    if (sv_maxclients) {
+      for (int i = 0; i < sv_maxclients->integer; i++) {
+        rankedMatchState_t *r = &sv_rankedPlayers[i];
+        if (r->inDuel && r->duelOpponent > i && r->duelOpponent < sv_maxclients->integer) {
+          int opp = r->duelOpponent;
+          if (svs.clients[i].state >= CS_ACTIVE && svs.clients[opp].state >= CS_ACTIVE) {
+            playerState_t *ps1 = SV_GameClientNum(i);
+            playerState_t *ps2 = SV_GameClientNum(opp);
+            int hp1 = ps1 ? ps1->stats[STAT_HEALTH] : 0;
+            int fp1 = ps1 ? ps1->fd.forcePower : 0;
+            int bp1 = (ps1 && ps1->jetpackFuel > 0) ? ps1->jetpackFuel : (r->lastBP > 0 ? r->lastBP : (ps1 ? ps1->stats[STAT_ARMOR] : 100));
+
+            int hp2 = ps2 ? ps2->stats[STAT_HEALTH] : 0;
+            int fp2 = ps2 ? ps2->fd.forcePower : 0;
+            int bp2 = (ps2 && ps2->jetpackFuel > 0) ? ps2->jetpackFuel : (sv_rankedPlayers[opp].lastBP > 0 ? sv_rankedPlayers[opp].lastBP : (ps2 ? ps2->stats[STAT_ARMOR] : 100));
+
+            r->lastBP = bp1;
+            sv_rankedPlayers[opp].lastBP = bp2;
+
+            SV_SendServerCommand(&svs.clients[i], va("duel_opp_status %d %d %d", hp2, bp2, fp2));
+            SV_SendServerCommand(&svs.clients[opp], va("duel_opp_status %d %d %d", hp1, bp1, fp1));
           }
         }
       }

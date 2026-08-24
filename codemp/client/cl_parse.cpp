@@ -799,6 +799,14 @@ void CL_ParseCommandString( msg_t *msg ) {
 	Q_strncpyz( clc.serverCommands[ index ], s, sizeof( clc.serverCommands[ index ] ) );
 
 	// RPG Client Data Sync Parser
+	if ( !Q_strncmp( s, "rpg_", 4 ) || !Q_strncmp( s, "top_", 4 ) || !Q_strncmp( s, "stats_", 6 ) ||
+	     !Q_strncmp( s, "toast_", 6 ) || !Q_strncmp( s, "inspect_", 8 ) || !Q_strncmp( s, "bounty_", 7 ) ||
+	     !Q_strncmp( s, "shop_", 5 ) || !Q_strncmp( s, "inv_", 4 ) || !Q_strncmp( s, "adv_", 4 ) ||
+	     !Q_strncmp( s, "party_", 6 ) || !Q_strncmp( s, "pazaak_", 7 ) || !Q_strncmp( s, "blackjack_", 10 ) ||
+	     !Q_strncmp( s, "games_", 6 ) || !Q_strncmp( s, "ranked_", 7 ) ) {
+		cl_isRankedServer = qtrue;
+	}
+
 	if ( !Q_strncmp( s, "rpg_sync", 8 ) ) {
 		int currentXP = 0, maxXP = 1000, level = 1, fr = 1000;
 		char rankBuf[64] = "";
@@ -905,11 +913,13 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgToast.startTimeMs  = cls.realtime;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
 
-		extern int SCR_GetClientNumByName( const char *name );
-		CL_AddReliableCommand( va( "my_bp %d", bp ), qfalse );
-		int oppId = SCR_GetClientNumByName( oppBuf );
-		if ( oppId >= 0 ) {
-			CL_AddReliableCommand( va( "duel_bp %d 0", oppId ), qfalse );
+		if ( cl_isRankedServer ) {
+			extern int SCR_GetClientNumByName( const char *name );
+			CL_AddReliableCommand( va( "my_bp %d", bp ), qfalse );
+			int oppId = SCR_GetClientNumByName( oppBuf );
+			if ( oppId >= 0 ) {
+				CL_AddReliableCommand( va( "duel_bp %d 0", oppId ), qfalse );
+			}
 		}
 	} else if ( !Q_strncmp( s, "toast_lose", 10 ) ) {
 		int eloDelta = 0, cr = 0, xp = 0, hp = 0, bp = 0;
@@ -925,11 +935,13 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgToast.startTimeMs  = cls.realtime;
 		Q_strncpyz( g_rpgToast.opponentName, oppBuf, sizeof( g_rpgToast.opponentName ) );
 
-		extern int SCR_GetClientNumByName( const char *name );
-		CL_AddReliableCommand( "my_bp 0", qfalse );
-		int oppId = SCR_GetClientNumByName( oppBuf );
-		if ( oppId >= 0 ) {
-			CL_AddReliableCommand( va( "duel_bp %d %d", oppId, bp ), qfalse );
+		if ( cl_isRankedServer ) {
+			extern int SCR_GetClientNumByName( const char *name );
+			CL_AddReliableCommand( "my_bp 0", qfalse );
+			int oppId = SCR_GetClientNumByName( oppBuf );
+			if ( oppId >= 0 ) {
+				CL_AddReliableCommand( va( "duel_bp %d %d", oppId, bp ), qfalse );
+			}
 		}
 	}
  else if ( !Q_strncmp( s, "inspect_data", 12 ) ) {

@@ -1594,7 +1594,7 @@ void SV_Ranked_PartyChat(client_t *cl, const char *msg) {
   const char *col = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorCodes[p->teamColorIdx] : "^5";
 
   char formattedMsg[MAX_STRING_CHARS];
-  Com_sprintf(formattedMsg, sizeof(formattedMsg), "%s[PARTY: %s] ^7%s%s: ^7%s", col, p->teamName, col, cl->name, msg);
+  Com_sprintf(formattedMsg, sizeof(formattedMsg), "%s[PARTY: %s] ^7%s%s: ^3%s", col, p->teamName, col, cl->name, msg);
 
   for (int j = 0; j < p->memberCount; j++) {
     int memberId = p->clientNums[j];
@@ -2064,11 +2064,13 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
         char targetStr[64] = "";
         int wager = 50;
         sscanf(subArg + 1, "%31s %63s %d", subCmd, targetStr, &wager);
-        if (!Q_stricmp(subCmd, "challenge") || !Q_stricmp(subCmd, "c")) {
+        if (!Q_stricmp(subCmd, "challenge") || !Q_stricmp(subCmd, "c") ||
+            !Q_stricmp(subCmd, "invite") || !Q_stricmp(subCmd, "i")) {
           int tid = atoi(targetStr);
           if (tid == 0 && targetStr[0] != '0') {
             tid = SV_Ranked_FindClientByName(targetStr);
           }
+          if (wager <= 0) wager = 50;
           SV_Ranked_Pazaak_Challenge(cl, tid, wager);
           return qtrue;
         } else if (!Q_stricmp(subCmd, "accept") || !Q_stricmp(subCmd, "a")) {
@@ -2093,6 +2095,28 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_Ranked_Adventure_Choose(cl, atoi(arg + 1));
     } else {
       SV_SendServerCommand(cl, "chat \"^1Usage: !choose <choice_number>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!bp") || !Q_stricmp(cmdSpace, "!opp") || !Q_stricmp(cmdSpace, "!duelstatus")) {
+    int cNum = (int)(cl - svs.clients);
+    rankedMatchState_t *r = &sv_rankedPlayers[cNum];
+    playerState_t *myPs = SV_GameClientNum(cNum);
+    int myHp = myPs ? myPs->stats[STAT_HEALTH] : 0;
+    int myFp = myPs ? myPs->fd.forcePower : 0;
+    int myBp = (myPs && myPs->jetpackFuel > 0) ? myPs->jetpackFuel : (r->lastBP > 0 ? r->lastBP : (myPs ? myPs->stats[STAT_ARMOR] : 100));
+
+    if (r->inDuel && r->duelOpponent >= 0 && r->duelOpponent < sv_maxclients->integer && svs.clients[r->duelOpponent].state >= CS_ACTIVE) {
+      int oppId = r->duelOpponent;
+      client_t *oppCl = &svs.clients[oppId];
+      playerState_t *oppPs = SV_GameClientNum(oppId);
+      int oppHp = oppPs ? oppPs->stats[STAT_HEALTH] : 0;
+      int oppFp = oppPs ? oppPs->fd.forcePower : 0;
+      int oppBp = (oppPs && oppPs->jetpackFuel > 0) ? oppPs->jetpackFuel : (sv_rankedPlayers[oppId].lastBP > 0 ? sv_rankedPlayers[oppId].lastBP : (oppPs ? oppPs->stats[STAT_ARMOR] : 100));
+
+      SV_SendServerCommand(cl, va("chat \"^3[OPPONENT] ^5%s ^7- ^1HP: %d ^7| ^5BP: %d ^7| ^4FP: %d\"", oppCl->name, oppHp, oppBp, oppFp));
+      SV_SendServerCommand(cl, va("chat \"^3[YOUR STATUS] ^1HP: %d ^7| ^5BP: %d ^7| ^4FP: %d\"", myHp, myBp, myFp));
+    } else {
+      SV_SendServerCommand(cl, va("chat \"^3[YOUR STATUS] ^1HP: %d ^7| ^5BP: %d ^7| ^4FP: %d\"", myHp, myBp, myFp));
     }
     return qtrue;
   } else if (!Q_stricmp(cmdSpace, "duel_bp") || !Q_stricmp(cmdSpace, "my_bp")) {

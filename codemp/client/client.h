@@ -759,6 +759,7 @@ typedef struct {
 } rpgInspectCard_t;
 
 extern rpgInspectCard_t g_rpgInspect;
+extern qboolean cl_isRankedServer;
 
 void SCR_DrawToastOverlay( void );
 void SCR_DrawInspectOverlay( void );
