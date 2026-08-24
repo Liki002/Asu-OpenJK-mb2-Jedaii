@@ -4765,7 +4765,7 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 			if ( g_cantinaGames.pzPlayerScroll > maxScroll ) g_cantinaGames.pzPlayerScroll = maxScroll;
 			if ( g_cantinaGames.pzPlayerScroll < 0 ) g_cantinaGames.pzPlayerScroll = 0;
 
-			SCR_DrawVirtualString( contentX, curY + 2.0f, 4.6f, va( "^3[ONLINE PLAYERS (%d)] ^7• Set Wager Below & Click Challenge [MWHEEL Scroll]", onlineTotal ), whiteColor );
+			SCR_DrawVirtualString( contentX, curY + 2.0f, 4.6f, va( "^3[ONLINE PLAYERS (%d)] ^7- Set Wager Below & Click Challenge [MWHEEL Scroll]", onlineTotal ), whiteColor );
 			curY += 18.0f;
 
 			float rowH = 26.0f;
@@ -4811,7 +4811,7 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		}
 
 		// ==================== TAB 0: SOLO TABLE / ACTIVE MATCH ====================
-		SCR_DrawVirtualString( winX + 20.0f, winY + 56.0f, 3.4f, "^7GET AS CLOSE TO 20 WITHOUT GOING OVER • FIRST TO 3 SETS WINS POT", whiteColor );
+		SCR_DrawVirtualString( winX + 20.0f, winY + 56.0f, 3.4f, "^7GET AS CLOSE TO 20 WITHOUT GOING OVER | FIRST TO 3 SETS WINS POT", whiteColor );
 		SCR_DrawVirtualString( winX + winW - 150.0f, winY + 56.0f, 4.2f, va( "^7Bankroll: ^5%d CR", credits ), yellowCol );
 
 		// Opponent Area (Top)
@@ -4821,8 +4821,8 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		// Opponent Set Win Orbs (3 sets to win match)
 		char oppOrbs[32] = "";
 		for ( int s = 0; s < 3; s++ ) {
-			if ( s < g_cantinaGames.pzOppSetsWon ) Q_strcat( oppOrbs, sizeof(oppOrbs), "^1◆ " );
-			else Q_strcat( oppOrbs, sizeof(oppOrbs), "^0◇ " );
+			if ( s < g_cantinaGames.pzOppSetsWon ) Q_strcat( oppOrbs, sizeof(oppOrbs), "^1* " );
+			else Q_strcat( oppOrbs, sizeof(oppOrbs), "^0- " );
 		}
 		SCR_DrawVirtualString( winX + 200.0f, oppY + 2.0f, 5.0f, va( "Sets: %s", oppOrbs ), whiteColor );
 		SCR_DrawVirtualString( winX + winW - 130.0f, oppY + 2.0f, 5.2f, va( "Score: ^3%d^7%s", g_cantinaGames.pzOppScore, g_cantinaGames.pzOppStood ? " ^1[STOOD]" : "" ), yellowCol );
@@ -4866,8 +4866,8 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		// Player Set Win Orbs
 		char plyOrbs[32] = "";
 		for ( int s = 0; s < 3; s++ ) {
-			if ( s < g_cantinaGames.pzPlayerSetsWon ) Q_strcat( plyOrbs, sizeof(plyOrbs), "^2◆ " );
-			else Q_strcat( plyOrbs, sizeof(plyOrbs), "^0◇ " );
+			if ( s < g_cantinaGames.pzPlayerSetsWon ) Q_strcat( plyOrbs, sizeof(plyOrbs), "^2* " );
+			else Q_strcat( plyOrbs, sizeof(plyOrbs), "^0- " );
 		}
 		SCR_DrawVirtualString( winX + 200.0f, plyY + 2.0f, 5.0f, va( "Sets: %s", plyOrbs ), whiteColor );
 		SCR_DrawVirtualString( winX + winW - 130.0f, plyY + 2.0f, 5.2f, va( "Score: ^2%d^7%s", g_cantinaGames.pzPlayerScore, g_cantinaGames.pzPlayerStood ? " ^3[STOOD]" : "" ), yellowCol );

@@ -11,45 +11,27 @@ typedef struct {
 
 static const emojiMap_t g_emojiMap[] = {
     { ":fire:",      "\x80" },
-    { "🔥",           "\x80" },
     { ":potato:",    "\x81" },
-    { "🥔",           "\x81" },
     { ":swords:",    "\x82" },
     { ":duel:",      "\x82" },
-    { "⚔",           "\x82" },
-    { "⚔️",          "\x82" },
     { ":crown:",     "\x83" },
     { ":king:",      "\x83" },
-    { "👑",           "\x83" },
     { ":trophy:",    "\x84" },
     { ":winner:",    "\x84" },
-    { "🏆",           "\x84" },
     { ":skull:",     "\x85" },
     { ":rip:",       "\x85" },
-    { "💀",           "\x85" },
     { ":100:",       "\x86" },
-    { "💯",           "\x86" },
     { ":heart:",     "\x87" },
     { ":<3:",        "\x87" },
-    { "❤️",          "\x87" },
-    { "❤",           "\x87" },
     { ":star:",      "\x88" },
-    { "⭐",           "\x88" },
     { ":zap:",       "\x89" },
-    { "⚡",           "\x89" },
     { ":flex:",      "\x8a" },
-    { "💪",           "\x8a" },
     { ":gg:",        "\x8b" },
-    { "🎮",           "\x8b" },
     { ":thumbsup:",  "\x8c" },
     { ":+1:",        "\x8c" },
-    { "👍",           "\x8c" },
     { ":target:",    "\x8d" },
-    { "🎯",           "\x8d" },
     { ":rocket:",    "\x8e" },
-    { "🚀",           "\x8e" },
     { ":poop:",      "\x8f" },
-    { "💩",           "\x8f" },
     { NULL,          NULL }
 };
 
@@ -1594,7 +1576,7 @@ void SV_Ranked_PartyChat(client_t *cl, const char *msg) {
   const char *col = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorCodes[p->teamColorIdx] : "^5";
 
   char formattedMsg[MAX_STRING_CHARS];
-  Com_sprintf(formattedMsg, sizeof(formattedMsg), "%s[PARTY: %s] ^7%s%s: ^3%s", col, p->teamName, col, cl->name, msg);
+  Com_sprintf(formattedMsg, sizeof(formattedMsg), "%s[PARTY: %s] ^7%s^7: ^3%s", col, p->teamName, cl->name, msg);
 
   for (int j = 0; j < p->memberCount; j++) {
     int memberId = p->clientNums[j];
@@ -2168,6 +2150,36 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       char colorOrIdsBuf[128] = "";
       int numParsed = sscanf(chatText, "%*s %63s %127s", teamName, colorOrIdsBuf);
       if (numParsed >= 1 && teamName[0] != '\0') {
+        if (!Q_stricmp(teamName, "invite") || !Q_stricmp(teamName, "i")) {
+          int clientNum = cl - svs.clients;
+          rankedParty_t *p = &sv_rankedParties[clientNum];
+          if (!p->active) {
+            SV_SendServerCommand(cl, "chat \"^1You don't have an active party! Use ^3!createparty <Name>^1 first.\"");
+            return qtrue;
+          }
+          if (p->memberCount >= MAX_PARTY_MEMBERS) {
+            SV_SendServerCommand(cl, "chat \"^1Your party is full! (Max 6 members)\"");
+            return qtrue;
+          }
+
+          int targetId = atoi(colorOrIdsBuf);
+          if (targetId == 0 && colorOrIdsBuf[0] != '0') {
+            targetId = SV_Ranked_FindClientByName(colorOrIdsBuf);
+          }
+
+          if (targetId >= 0 && targetId < sv_maxclients->integer && svs.clients[targetId].state >= CS_ACTIVE) {
+            const char *colorCodes[8] = { "^4", "^1", "^2", "^3", "^5", "^6", "^0", "^7" };
+            const char *pCol = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorCodes[p->teamColorIdx] : "^5";
+            sv_rankedPlayers[targetId].pendingPartyLeader = clientNum;
+            SV_SendServerCommand(svs.clients + targetId, va("party_invite_req %d \"%s\" \"%s\"", clientNum, cl->name, p->teamName));
+            SV_SendServerCommand(svs.clients + targetId, va("chat \"^3[PARTY INVITE] ^5%s ^7invited you to join team '%s%s^7'!\n^7Type ^2!acceptparty^7 or ^2!ap^7 to join!\"", cl->name, pCol, p->teamName));
+            SV_SendServerCommand(cl, va("chat \"^2Invited ^5%s ^2to your party!\"", svs.clients[targetId].name));
+          } else {
+            SV_SendServerCommand(cl, "chat \"^3Usage: ^5!party invite <Player Name or ID>\"");
+          }
+          return qtrue;
+        }
+
         int clientNum = cl - svs.clients;
         const char *colorNames[8] = { "blue", "red", "green", "yellow", "purple", "orange", "black", "white" };
         int selectedColor = 0;
@@ -2275,7 +2287,8 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     }
     return qtrue;
 
-  } else if (!Q_stricmp(cmdSpace, "!inviteparty") || !Q_stricmp(cmdSpace, "!ip")) {
+  } else if (!Q_stricmp(cmdSpace, "!inviteparty") || !Q_stricmp(cmdSpace, "!partyinvite") ||
+             !Q_stricmp(cmdSpace, "!pi") || !Q_stricmp(cmdSpace, "!ip")) {
     int clientNum = cl - svs.clients;
     rankedParty_t *p = &sv_rankedParties[clientNum];
     if (!p->active) {
@@ -2288,13 +2301,23 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     }
 
     int targetId = -1;
-    if (sscanf(chatText, "%*s %d", &targetId) == 1 && targetId >= 0 && targetId < sv_maxclients->integer && svs.clients[targetId].state >= CS_ACTIVE) {
+    char targetArg[64] = "";
+    if (sscanf(chatText, "%*s %63s", targetArg) == 1) {
+      targetId = atoi(targetArg);
+      if (targetId == 0 && targetArg[0] != '0') {
+        targetId = SV_Ranked_FindClientByName(targetArg);
+      }
+    }
+
+    if (targetId >= 0 && targetId < sv_maxclients->integer && svs.clients[targetId].state >= CS_ACTIVE) {
+      const char *colorCodes[8] = { "^4", "^1", "^2", "^3", "^5", "^6", "^0", "^7" };
+      const char *pCol = (p->teamColorIdx >= 0 && p->teamColorIdx < 8) ? colorCodes[p->teamColorIdx] : "^5";
       sv_rankedPlayers[targetId].pendingPartyLeader = clientNum;
       SV_SendServerCommand(svs.clients + targetId, va("party_invite_req %d \"%s\" \"%s\"", clientNum, cl->name, p->teamName));
-      SV_SendServerCommand(svs.clients + targetId, va("chat \"^3[PARTY INVITE] ^5%s ^7invited you to join team '^3%s^7'!\n^7Type ^2!acceptparty^7 or ^2!ap^7 to join!\"", cl->name, p->teamName));
+      SV_SendServerCommand(svs.clients + targetId, va("chat \"^3[PARTY INVITE] ^5%s ^7invited you to join team '%s%s^7'!\n^7Type ^2!acceptparty^7 or ^2!ap^7 to join!\"", cl->name, pCol, p->teamName));
       SV_SendServerCommand(cl, va("chat \"^2Invited ^5%s ^2to your party!\"", svs.clients[targetId].name));
     } else {
-      SV_SendServerCommand(cl, "chat \"^3Usage: ^5!inviteparty <PlayerID>\"");
+      SV_SendServerCommand(cl, "chat \"^3Usage: ^5!partyinvite <Player Name or ID>\"");
     }
     return qtrue;
 
