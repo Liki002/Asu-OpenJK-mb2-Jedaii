@@ -842,7 +842,7 @@ void SV_SendMessageToClient(msg_t *msg, client_t *client) {
   // normal rate / snapshotMsec calculation
   rateMsec = SV_RateMsec(client, msg->cursize);
 
-  if (rateMsec < client->snapshotMsec) {
+  if (rateMsec < client->snapshotMsec || (sv_ratePolicy && sv_ratePolicy->integer == 0)) {
     // never send more packets than this, no matter what the rate is at
     rateMsec = client->snapshotMsec;
     client->rateDelayed = qfalse;
