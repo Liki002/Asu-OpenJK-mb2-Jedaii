@@ -160,7 +160,7 @@ static void SV_Ranked_Cmd_Roll(client_t *cl) {
     creditsChange = -creds;
 
   UpdateAccountCredits(r->username, creditsChange);
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 
   if (creditsChange >= 0) {
     SV_SendServerCommand(cl, "chat \"^7You rolled ^5%d^7. %s ^7+%d credits!\"",
@@ -265,7 +265,7 @@ static void SV_Ranked_Cmd_GiveCredits(client_t *cl, const char *chatText) {
   }
 
   UpdateAccountCredits(t->username, amount);
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 
   SV_SendServerCommand(cl, "chat \"^2You gave ^5%d ^2credits to ^7%s^2.\"",
                        amount, svs.clients[targetClient].name);
@@ -338,7 +338,7 @@ static void SV_Ranked_Cmd_SetElo(client_t *cl, const char *chatText) {
       } else {
         cJSON_AddNumberToObject(modeData, "elo", amount);
       }
-      SV_Ranked_SaveAccounts();
+      SV_Ranked_MarkAccountsDirty();
     } else {
       SV_SendServerCommand(cl, "chat \"^1Could not find mode data for player.\"");
       return;
@@ -427,7 +427,7 @@ static void SV_Ranked_Cmd_SetRank(client_t *cl, const char *chatText) {
     if (Q_stricmp(rankName, "default") != 0) {
       cJSON_AddStringToObject(acc, "custom_rank_override", rankName);
     }
-    SV_Ranked_SaveAccounts();
+    SV_Ranked_MarkAccountsDirty();
   }
 
   SV_SendServerCommand(cl,
@@ -1305,7 +1305,7 @@ static void SV_Ranked_Cmd_Send(client_t *cl, const char *chatText) {
       "chat \"^3[BANK] ^2You received ^5%d ^2credits from ^7%s^2.\"", amount,
       cl->name);
   SV_Ranked_Log("BANK: %s sent %d credits to %s", r->username, amount, t->username);
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 }
 
 // Parse `!bet target amount`
@@ -1408,7 +1408,7 @@ static void SV_Ranked_Cmd_Bet(client_t *cl, const char *chatText) {
   }
 
   UpdateAccountCredits(r->username, -amount);
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 
   r->currentBetTarget = targetClient;
   r->currentBetAmount = amount;
@@ -1451,7 +1451,7 @@ static void SV_Ranked_Cmd_ChangePassword(client_t *cl, const char *chatText) {
     cJSON *passObj = cJSON_GetObjectItemCaseSensitive(acc, "password");
     if (passObj) {
       cJSON_SetValuestring(passObj, arg);
-      SV_Ranked_SaveAccounts();
+      SV_Ranked_MarkAccountsDirty();
       SV_SendServerCommand(cl, "chat \"^2Password successfully changed.\"");
       Com_Printf("RANKED: Client %d changed their password.\n", clientNum);
     }
@@ -1535,7 +1535,7 @@ static void SV_Ranked_Cmd_ChangeUsername(client_t *cl, const char *chatText) {
 
   // Re-attach with new key
   cJSON_AddItemToObject(accountsDB, newKey, detached);
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 
   // Update session state
   Q_strncpyz(r->username, newKey, sizeof(r->username));
@@ -1701,7 +1701,7 @@ void SV_Ranked_Pazaak_Accept(client_t *cl, int challengerId) {
   rankedMatchState_t *rOpp = &sv_rankedPlayers[challengerId];
   if (rMe->loggedIn && rMe->username[0]) UpdateAccountCredits(rMe->username, -bet);
   if (rOpp->loggedIn && rOpp->username[0]) UpdateAccountCredits(rOpp->username, -bet);
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
   SV_Ranked_SyncClientRPG(cl);
   SV_Ranked_SyncClientRPG(cCl);
 
@@ -1752,7 +1752,7 @@ void SV_Ranked_Pazaak_EndMatch(client_t *cl, int winnerId, int loserId, int pot)
     if (rWin->loggedIn && rWin->username[0]) {
       UpdateAccountCredits(rWin->username, pot);
       SV_Ranked_ProgressQuest(rWin->username, "casino_wins", 1, &svs.clients[winnerId]);
-      SV_Ranked_SaveAccounts();
+      SV_Ranked_MarkAccountsDirty();
       SV_Ranked_SyncClientRPG(&svs.clients[winnerId]);
     }
   }

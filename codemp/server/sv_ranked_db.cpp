@@ -464,8 +464,24 @@ void SV_Ranked_LoadAccounts(void) {
   accountsDB = root;
 }
 
-// Forward declaration — defined later in this file
 void SV_Ranked_SyncTopLevelFields(cJSON *acc);
+
+static qboolean s_rankedAccountsDirty = qfalse;
+static int s_rankedLastSaveTime = 0;
+
+void SV_Ranked_MarkAccountsDirty(void) {
+  s_rankedAccountsDirty = qtrue;
+}
+
+void SV_Ranked_SaveAccountsIfDirty(qboolean force) {
+  if (!s_rankedAccountsDirty && !force) return;
+  int now = Sys_Milliseconds();
+  if (!force && (now - s_rankedLastSaveTime < 5000)) return; // debounce 5 seconds
+
+  s_rankedAccountsDirty = qfalse;
+  s_rankedLastSaveTime = now;
+  SV_Ranked_SaveAccounts();
+}
 
 void SV_Ranked_SaveAccounts(void) {
   if (!accountsDB)

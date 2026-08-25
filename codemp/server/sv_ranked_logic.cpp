@@ -488,7 +488,7 @@ static void UpdateAccountStats(const char *username, const char *displayName,
     }
   }
 
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
   SV_Ranked_SyncClientRPGByName(username);
 }
 
@@ -527,7 +527,7 @@ static void AddEloToAccount(const char *username, int eloDelta) {
       cJSON_SetNumberValue(xpPtr, xpPtr->valueint + 50);
   }
 
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 }
 
 /*
@@ -587,7 +587,7 @@ static void IncrementWinLoss(const char *username, qboolean won, client_t *cl) {
     }
   }
 
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 }
 
 // ===========================================================================
@@ -718,7 +718,7 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
             "chat \"^1%s ^7has defeated ^3%s^7! ^2+%d XP ^3+%d Credits\"",
             killerName, bosses[b].displayName, bosses[b].xp, bosses[b].cr);
         SV_Ranked_Log("BOSS: %s defeated %s", killerName, bosses[b].displayName);
-        SV_Ranked_SaveAccounts();
+        SV_Ranked_MarkAccountsDirty();
         isBoss = qtrue;
         break;
       }
@@ -728,7 +728,7 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
         UpdateAccountStats(kState->username, killerName, 0, 2, 0, 0, NULL);
         SV_SendServerCommand(svs.clients + killerId, "chat \"^2NPC Slayed! ^7+2 XP\"");
         SV_Ranked_Log("NPC_SLAY: %s defeated NPC (%s) for 2 XP", killerName, clean);
-        SV_Ranked_SaveAccounts();
+        SV_Ranked_MarkAccountsDirty();
       }
     }
     return;
@@ -749,7 +749,7 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
                     cJSON *deathsPtr = cJSON_GetObjectItemCaseSensitive(modeData, "deaths");
                     if (deathsPtr) cJSON_SetNumberValue(deathsPtr, deathsPtr->valueint + 1);
                     else cJSON_AddNumberToObject(modeData, "deaths", 1);
-                    SV_Ranked_SaveAccounts();
+                    SV_Ranked_MarkAccountsDirty();
                 }
             }
         }
@@ -1258,7 +1258,7 @@ void SV_Ranked_ProcessScoreboard(const char *text) {
       parse = strchr(parse, ' ');
   }
 
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 }
 
 // ===========================================================================
@@ -1298,7 +1298,7 @@ void SV_Ranked_UpdateDisplayName(int clientNum, const char *newName) {
     return; // No change
   }
 
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
 }
 
 // ===========================================================================
@@ -2492,7 +2492,7 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   }
 
   if (rWin->loggedIn || rLose->loggedIn)
-    SV_Ranked_SaveAccounts();
+    SV_Ranked_MarkAccountsDirty();
 
   // Instant live sync to winner and loser HUDs
   if (rWin->loggedIn) SV_Ranked_SyncClientRPG(&svs.clients[winnerId]);
@@ -2566,7 +2566,7 @@ void SV_Ranked_SetAdmin(int targetClient, int adminId) {
       else
         cJSON_SetNumberValue(adminLvlPtr, adminId);
 
-      SV_Ranked_SaveAccounts();
+      SV_Ranked_MarkAccountsDirty();
       Com_Printf("[RANKED] SMOD: %s granted admin level %d\n", rAdmin->username,
                  adminId);
       SV_SendServerCommand(&svs.clients[targetClient],
@@ -3001,7 +3001,7 @@ void SV_Ranked_Trivia_HandleAnswer(client_t *cl, const char *message) {
         else
           cJSON_AddNumberToObject(acc, "credits", 50);
 
-        SV_Ranked_SaveAccounts();
+        SV_Ranked_MarkAccountsDirty();
       }
     }
 
@@ -3168,6 +3168,7 @@ void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex) {
 
 // Called every SV_Frame — drives the 10-second potato tick and trivia
 void SV_Ranked_Logic_Frame(void) {
+  SV_Ranked_SaveAccountsIfDirty(qfalse);
   SV_Ranked_Trivia_Frame();
   SV_Ranked_Vote_Frame();
 
@@ -3187,7 +3188,7 @@ void SV_Ranked_Logic_Frame(void) {
       }
     }
     if (saved) {
-      SV_Ranked_SaveAccounts();
+      SV_Ranked_MarkAccountsDirty();
     }
   }
 
@@ -3321,7 +3322,7 @@ void SV_Ranked_HotPotatoDisconnect(int clientNum) {
     return;
   // Save outstanding credits for this player before re-picking
   HP_UpdateTopPotato(clientNum);
-  SV_Ranked_SaveAccounts();
+  SV_Ranked_MarkAccountsDirty();
   HP_PickRandom();
 }
 
