@@ -212,9 +212,8 @@ static void SV_WriteSnapshotToClient(client_t *client, msg_t *msg) {
   MSG_WriteByte(msg, lastframe);
 
   snapFlags = svs.snapFlagServerBit;
-  if (client->rateDelayed) {
-    snapFlags |= SNAPFLAG_RATE_DELAYED;
-  }
+  // Modern unchoked delivery — never throttle snapshots
+  client->rateDelayed = qfalse;
   if (client->state != CS_ACTIVE) {
     snapFlags |= SNAPFLAG_NOT_ACTIVE;
   }
@@ -839,16 +838,9 @@ void SV_SendMessageToClient(msg_t *msg, client_t *client) {
     return;
   }
 
-  // normal rate / snapshotMsec calculation
-  rateMsec = SV_RateMsec(client, msg->cursize);
-
-  if (rateMsec < client->snapshotMsec || (sv_ratePolicy && sv_ratePolicy->integer == 0)) {
-    // never send more packets than this, no matter what the rate is at
-    rateMsec = client->snapshotMsec;
-    client->rateDelayed = qfalse;
-  } else {
-    client->rateDelayed = qtrue;
-  }
+  // Modern broadband delivery: never artificially hold back snapshots
+  rateMsec = client->snapshotMsec;
+  client->rateDelayed = qfalse;
 
   client->nextSnapshotTime =
       svs.time + ((int)(rateMsec * com_timescale->value));
