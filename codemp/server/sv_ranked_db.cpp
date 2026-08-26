@@ -761,6 +761,34 @@ void SV_Ranked_LoginOrRegister(client_t *cl, const char *username,
   cJSON *eloPtr = duel ? cJSON_GetObjectItemCaseSensitive(duel, "elo") : NULL;
   r->tempElo = eloPtr ? eloPtr->valueint : 1000;
 
+  // High-Tier Inactivity Decay for Diamond+ (1800+ ELO)
+  if (r->tempElo > 1800) {
+    cJSON *lastDuelTimePtr = cJSON_GetObjectItemCaseSensitive(acc, "last_duel_time");
+    if (lastDuelTimePtr) {
+      double lastTime = lastDuelTimePtr->valuedouble;
+      double diffSecs = (double)time(NULL) - lastTime;
+      int daysInactive = (int)(diffSecs / 86400.0);
+      if (daysInactive > 14) {
+        int decayDays = daysInactive - 14;
+        int decayAmount = decayDays * 5;
+        if (r->tempElo - decayAmount < 1800) {
+          decayAmount = r->tempElo - 1800;
+        }
+        if (decayAmount > 0) {
+          r->tempElo -= decayAmount;
+          if (eloPtr) cJSON_SetNumberValue(eloPtr, r->tempElo);
+          cJSON_DeleteItemFromObject(acc, "last_duel_time");
+          cJSON_AddNumberToObject(acc, "last_duel_time", (double)time(NULL));
+          SV_SendServerCommand(cl, va("print \"^3[Ranked Decay] ^7Your rating decayed by ^1-%d ELO ^7due to %d days of duel inactivity. Current MMR: ^2%d^7.\n\"",
+                               decayAmount, daysInactive, r->tempElo));
+          SV_Ranked_Log("DECAY: user='%s' decayed=%d newElo=%d inactiveDays=%d", key, decayAmount, r->tempElo, daysInactive);
+        }
+      }
+    } else {
+      cJSON_AddNumberToObject(acc, "last_duel_time", (double)time(NULL));
+    }
+  }
+
   SV_Ranked_Log("%s: user='%s' ip='%s'", acc ? "LOGIN" : "REGISTER", key,
                 Info_ValueForKey(cl->userinfo, "ip"));
 

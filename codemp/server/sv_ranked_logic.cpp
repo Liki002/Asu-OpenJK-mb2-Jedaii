@@ -1530,6 +1530,8 @@ static int CalculateDuelElo(int playerMMR, int opponentMMR, qboolean isWinner,
     K = 40; // Accelerated placement calibration for first 10 duels
   } else if (totalPlayerGames < limitNewGames) {
     K = kNew ? kNew->valueint : 25;
+  } else if (playerMMR >= 1600 && opponentMMR >= 1600) {
+    K = 16; // High-Tier Stakes Symmetry (1600+ Platinum/Diamond/Master)
   } else if (playerMMR < limitLowElo) {
     K = kLow ? kLow->valueint : 20;
   }
@@ -2001,6 +2003,10 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   int streakBonus = wStreak / 2;
   if (streakBonus > 10)
     streakBonus = 10;
+  // High-Tier Stakes Symmetry (1600+ Platinum/Diamond/Master)
+  if (wMmr >= 1600 && lMmr >= 1600 && streakBonus > 3) {
+    streakBonus = 3;
+  }
   winEloChange += streakBonus;
 
   int upsetBonus = 0;
@@ -2482,12 +2488,18 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
       const char *lIdent = (lGuidPtr && lGuidPtr->valuestring && lGuidPtr->valuestring[0])
                                ? lGuidPtr->valuestring : va("temp:%s", cleanLose);
       SV_Ranked_TrackRival(rWin->username, lIdent, svs.clients[loserId].name);
+
+      cJSON_DeleteItemFromObject(aWin, "last_duel_time");
+      cJSON_AddNumberToObject(aWin, "last_duel_time", (double)time(NULL));
     }
     if (rLose->loggedIn && aLose) {
       cJSON *wGuidPtr = aWin ? cJSON_GetObjectItemCaseSensitive(aWin, "engine_guid") : NULL;
       const char *wIdent = (wGuidPtr && wGuidPtr->valuestring && wGuidPtr->valuestring[0])
                                ? wGuidPtr->valuestring : va("temp:%s", cleanWin);
       SV_Ranked_TrackRival(rLose->username, wIdent, svs.clients[winnerId].name);
+
+      cJSON_DeleteItemFromObject(aLose, "last_duel_time");
+      cJSON_AddNumberToObject(aLose, "last_duel_time", (double)time(NULL));
     }
   }
 

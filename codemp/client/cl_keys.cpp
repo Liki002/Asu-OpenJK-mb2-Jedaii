@@ -2394,13 +2394,16 @@ void CL_KeyDownEvent( int key, unsigned time )
 					}
 
 					// Online Players List Click
+					extern int SCR_GetPlayersCSBase( void );
+					int csBase = SCR_GetPlayersCSBase();
 					int onlineIds[MAX_CLIENTS];
 					int onlineTotal = 0;
 					int myClientNum = cl.snap.ps.clientNum;
-					int csBase = CS_PLAYERS;
 					for ( int i = 0; i < MAX_CLIENTS; i++ ) {
+						if ( i + csBase >= MAX_CONFIGSTRINGS ) break;
 						if ( !cl.gameState.stringOffsets[ csBase + i ] ) continue;
 						const char *cInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ csBase + i ];
+						if ( !cInfo || !cInfo[0] ) continue;
 						char nameBuf[64];
 						Q_strncpyz( nameBuf, Info_ValueForKey( cInfo, "n" ), sizeof( nameBuf ) );
 						if ( !nameBuf[0] || i == myClientNum ) continue;

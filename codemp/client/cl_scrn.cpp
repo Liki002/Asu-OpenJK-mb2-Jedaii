@@ -3855,7 +3855,7 @@ void SCR_Blackjack_Deal( void ) {
 		int winAmt = (int)(g_cantinaGames.currentBet * 2.5f);
 		g_rpgStats.credits += winAmt;
 		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", winAmt ), qfalse );
-		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^3⭐ NATURAL BLACKJACK! ^2Won +%d CR!^7", winAmt );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^3* NATURAL BLACKJACK! * ^2Won +%d CR!^7", winAmt );
 	} else {
 		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^7Your total is ^2%d^7. [1] Hit or [2] Stand?", pScore );
 	}
@@ -3879,21 +3879,21 @@ void SCR_Blackjack_Stand( void ) {
 		int winAmt = g_cantinaGames.currentBet * 2;
 		g_rpgStats.credits += winAmt;
 		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", winAmt ), qfalse );
-		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^2🎉 DEALER BUST (%d)! ^7Won ^2+%d CR^7!", dScore, winAmt );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^2[WIN] DEALER BUST (%d)! ^7Won ^2+%d CR^7!", dScore, winAmt );
 	} else if ( pScore > dScore ) {
 		g_cantinaGames.lastOutcome = 1;
 		int winAmt = g_cantinaGames.currentBet * 2;
 		g_rpgStats.credits += winAmt;
 		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", winAmt ), qfalse );
-		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^2🎉 YOU WIN (%d vs %d)! ^7Won ^2+%d CR^7!", pScore, dScore, winAmt );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^2[WIN] YOU WIN (%d vs %d)! ^7Won ^2+%d CR^7!", pScore, dScore, winAmt );
 	} else if ( dScore > pScore ) {
 		g_cantinaGames.lastOutcome = 2;
-		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1❌ DEALER WINS (%d vs %d). ^7Lost %d CR.", dScore, pScore, g_cantinaGames.currentBet );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1[LOSS] DEALER WINS (%d vs %d). ^7Lost %d CR.", dScore, pScore, g_cantinaGames.currentBet );
 	} else {
 		g_cantinaGames.lastOutcome = 3;
 		g_rpgStats.credits += g_cantinaGames.currentBet;
 		CL_AddReliableCommand( va( "rpg_gameresult 1 0 %d", g_cantinaGames.currentBet ), qfalse );
-		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^3🤝 PUSH (%d vs %d). ^7Bet returned.", pScore, dScore );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^3[PUSH] TIE (%d vs %d). ^7Bet returned.", pScore, dScore );
 	}
 }
 
@@ -3907,7 +3907,7 @@ void SCR_Blackjack_Hit( void ) {
 		g_cantinaGames.dealerRevealed = qtrue;
 		g_cantinaGames.inRound = qfalse;
 		g_cantinaGames.lastOutcome = 5;
-		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1💀 BUST (%d)! ^7Lost %d Credits.", pScore, g_cantinaGames.currentBet );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1[BUST] BUST (%d)! ^7Lost %d Credits.", pScore, g_cantinaGames.currentBet );
 	} else if ( pScore == 21 ) {
 		SCR_Blackjack_Stand();
 	} else {
@@ -3934,7 +3934,7 @@ void SCR_Blackjack_DoubleDown( void ) {
 		g_cantinaGames.dealerRevealed = qtrue;
 		g_cantinaGames.inRound = qfalse;
 		g_cantinaGames.lastOutcome = 5;
-		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1💀 BUST (%d)! ^7Lost %d Credits.", pScore, g_cantinaGames.currentBet );
+		Com_sprintf( g_cantinaGames.statusMsg, sizeof( g_cantinaGames.statusMsg ), "^1[BUST] BUST (%d)! ^7Lost %d Credits.", pScore, g_cantinaGames.currentBet );
 	} else {
 		SCR_Blackjack_Stand();
 	}
@@ -4137,7 +4137,7 @@ void SCR_Pazaak_HandleOpponentAction( const char *actionStr ) {
 	} else if ( !Q_stricmp( action, "endturn" ) ) {
 		if ( g_cantinaGames.pzOppScore > 20 ) {
 			g_cantinaGames.pzPlayerSetsWon++;
-			Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🎉 %s BUSTED (%d)! ^7You won the set!", g_cantinaGames.pzOpponentName, g_cantinaGames.pzOppScore );
+			Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2[WIN] %s BUSTED (%d)! ^7You won the set!", g_cantinaGames.pzOpponentName, g_cantinaGames.pzOppScore );
 			SCR_Pazaak_CheckMatchOver();
 			return;
 		}
@@ -4149,7 +4149,7 @@ void SCR_Pazaak_HandleOpponentAction( const char *actionStr ) {
 		int pot = g_cantinaGames.pzBet * 2;
 		g_rpgStats.credits += pot;
 		CL_AddReliableCommand( va( "rpg_pazaak_endmatch %d %d %d", cl.snap.ps.clientNum, g_cantinaGames.pzOpponentClientId, pot ), qfalse );
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🏆 %s FORFEITED! ^7You won the ^3%d CR ^7pot!", g_cantinaGames.pzOpponentName, pot );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2[VICTORY] %s FORFEITED! ^7You won the ^3%d CR ^7pot!", g_cantinaGames.pzOpponentName, pot );
 	}
 }
 
@@ -4188,7 +4188,7 @@ void SCR_Pazaak_PlayCard( int cardIdx ) {
 	if ( g_cantinaGames.pzPlayerScore > 20 ) {
 		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1Score is %d (BUST)! ^7End turn or play another card.", g_cantinaGames.pzPlayerScore );
 	} else if ( g_cantinaGames.pzPlayerScore == 20 ) {
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2⭐ 20 POINTS! ^7Press [S] or [1] to Stand!" );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2[20 POINTS!] ^7Press [S] or [1] to Stand!" );
 	} else {
 		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^7Played %s%d (Score: ^2%d^7). Press [Space] End Turn or [S] Stand.", c->val >= 0 ? "+" : "", c->val, g_cantinaGames.pzPlayerScore );
 	}
@@ -4229,7 +4229,7 @@ void SCR_Pazaak_EndTurn( void ) {
 
 	if ( g_cantinaGames.pzPlayerScore > 20 ) {
 		g_cantinaGames.pzOppSetsWon++;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1💀 BUST (%d)! ^7%s takes the set!", g_cantinaGames.pzPlayerScore, g_cantinaGames.pzOpponentName );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1[BUST] BUST (%d)! ^7%s takes the set!", g_cantinaGames.pzPlayerScore, g_cantinaGames.pzOpponentName );
 		SCR_Pazaak_CheckMatchOver();
 		return;
 	}
@@ -4269,7 +4269,7 @@ static void SCR_Pazaak_DealPlayerTurn( void ) {
 
 	if ( g_cantinaGames.pzPlayerBoardCount == 9 && g_cantinaGames.pzPlayerScore <= 20 ) {
 		g_cantinaGames.pzPlayerSetsWon++;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3⭐ 9-CARD FULL GRID AUTO-WIN! ^2Won the set!^7" );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3[AUTO-WIN] 9-CARD FULL GRID! ^2Won the set!^7" );
 		SCR_Pazaak_CheckMatchOver();
 		return;
 	}
@@ -4277,7 +4277,7 @@ static void SCR_Pazaak_DealPlayerTurn( void ) {
 	if ( g_cantinaGames.pzPlayerScore > 20 ) {
 		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1Total is %d (BUST)! ^7Play a minus side card [1-4] or forfeit set.", g_cantinaGames.pzPlayerScore );
 	} else if ( g_cantinaGames.pzPlayerScore == 20 ) {
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2⭐ 20 POINTS! ^7Press [S] or [1] to Stand!" );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2[20 POINTS!] ^7Press [S] or [1] to Stand!" );
 	} else {
 		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^7Drew ^2%d ^7(Score: ^2%d^7). Play card [1-4], [Space] End Turn, [S] Stand.", c, g_cantinaGames.pzPlayerScore );
 	}
@@ -4312,7 +4312,7 @@ static void SCR_Pazaak_OpponentTurn( void ) {
 
 	if ( g_cantinaGames.pzOppScore > 20 ) {
 		g_cantinaGames.pzPlayerSetsWon++;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🎉 %s BUSTED (%d)! ^7You won the set!", g_cantinaGames.pzOpponentName, g_cantinaGames.pzOppScore );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2[WIN] %s BUSTED (%d)! ^7You won the set!", g_cantinaGames.pzOpponentName, g_cantinaGames.pzOppScore );
 		SCR_Pazaak_CheckMatchOver();
 		return;
 	}
@@ -4335,21 +4335,21 @@ static void SCR_Pazaak_ResolveSet( void ) {
 	int o = g_cantinaGames.pzOppScore;
 
 	if ( p > 20 && o > 20 ) {
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3🤝 TIE SET (%d vs %d). Both busted.", p, o );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3[TIE] TIE SET (%d vs %d). Both busted.", p, o );
 	} else if ( p > 20 ) {
 		g_cantinaGames.pzOppSetsWon++;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1💀 BUST (%d vs %d). ^7%s takes the set.", p, o, g_cantinaGames.pzOpponentName );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1[BUST] BUST (%d vs %d). ^7%s takes the set.", p, o, g_cantinaGames.pzOpponentName );
 	} else if ( o > 20 ) {
 		g_cantinaGames.pzPlayerSetsWon++;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🎉 OPPONENT BUST (%d vs %d)! ^7You take the set!", p, o );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2[WIN] OPPONENT BUST (%d vs %d)! ^7You take the set!", p, o );
 	} else if ( p > o ) {
 		g_cantinaGames.pzPlayerSetsWon++;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2🎉 SET WON (%d vs %d)! ^7You take the set!", p, o );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^2[WIN] SET WON (%d vs %d)! ^7You take the set!", p, o );
 	} else if ( o > p ) {
 		g_cantinaGames.pzOppSetsWon++;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1❌ SET LOST (%d vs %d). ^7%s takes the set.", p, o, g_cantinaGames.pzOpponentName );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1[LOSS] SET LOST (%d vs %d). ^7%s takes the set.", p, o, g_cantinaGames.pzOpponentName );
 	} else {
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3🤝 TIE SET (%d vs %d). Score equal.", p, o );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3[TIE] TIE SET (%d vs %d). Score equal.", p, o );
 	}
 
 	SCR_Pazaak_CheckMatchOver();
@@ -4365,10 +4365,10 @@ static void SCR_Pazaak_CheckMatchOver( void ) {
 		} else {
 			CL_AddReliableCommand( va( "rpg_gameresult 2 0 %d", winAmt ), qfalse );
 		}
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3🏆 MATCH VICTORY (3-%d)! ^2Won +%d Credits! ^7Press [Space] for New Match.", g_cantinaGames.pzOppSetsWon, winAmt );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^3[VICTORY] MATCH VICTORY (3-%d)! ^2Won +%d Credits! ^7Press [Space] for New Match.", g_cantinaGames.pzOppSetsWon, winAmt );
 	} else if ( g_cantinaGames.pzOppSetsWon >= 3 ) {
 		g_cantinaGames.pzInMatch = qfalse;
-		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1❌ MATCH DEFEAT (%d-3). ^7Lost %d Credits. Press [Space] for New Match.", g_cantinaGames.pzPlayerSetsWon, g_cantinaGames.pzBet );
+		Com_sprintf( g_cantinaGames.pzStatusMsg, sizeof( g_cantinaGames.pzStatusMsg ), "^1[DEFEAT] MATCH DEFEAT (%d-3). ^7Lost %d Credits. Press [Space] for New Match.", g_cantinaGames.pzPlayerSetsWon, g_cantinaGames.pzBet );
 	} else {
 		SCR_Pazaak_StartNewSet();
 	}
@@ -4378,13 +4378,6 @@ static void SCR_DrawPazaakMiniCard( float x, float y, float w, float h, int val,
 	if ( isUsed ) {
 		vec4_t usedBg = { 0.05f, 0.08f, 0.12f, 0.40f };
 		vec4_t usedBorder = { 0.20f, 0.25f, 0.35f, 0.40f };
-		SCR_DrawRoundedGlassPanel( x, y, w, h, 3.0f, usedBg, usedBorder );
-		SCR_DrawVirtualString( x + w * 0.5f - 4.0f, y + h * 0.5f - 4.0f, 3.2f, "^0-", NULL );
-		return;
-	}
-
-	if ( isSideCard ) {
-		// Blue (+) or Red (-) modifier pill card
 		qboolean isNeg = (val < 0) ? qtrue : qfalse;
 		vec4_t pillBg = { isNeg ? 0.65f : 0.10f, isNeg ? 0.12f : 0.45f, isNeg ? 0.18f : 0.85f, 0.95f };
 		vec4_t pillBorder = { isFlip ? 1.0f : 0.8f, isFlip ? 0.85f : 0.9f, isFlip ? 0.2f : 1.0f, 1.0f };
@@ -4702,14 +4695,14 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		qboolean hTab0 = (qboolean)(mx >= winX + 25.0f && mx <= winX + 25.0f + tabW && my >= tabY && my <= tabY + tabH);
 		vec4_t t0Bg = { 0.08f, 0.20f, 0.35f, (g_cantinaGames.pzTab == 0) ? 0.90f : (hTab0 ? 0.60f : 0.30f) };
 		SCR_DrawRoundedGlassPanel( winX + 25.0f, tabY, tabW, tabH, 3.0f, t0Bg, (g_cantinaGames.pzTab == 0) ? pzBorder : NULL );
-		const char *tab0Title = g_cantinaGames.pzInMatch ? va( "^2[ ⚔ MATCH: vs %s ]", g_cantinaGames.pzOpponentName ) : "^2[ 🤖 SOLO TABLE vs DROID ]";
+		const char *tab0Title = g_cantinaGames.pzInMatch ? va( "^2[ MATCH: vs %s ]", g_cantinaGames.pzOpponentName ) : "^2[ SOLO TABLE vs DROID ]";
 		SCR_DrawVirtualString( winX + 35.0f, tabY + 4.0f, 4.2f, (g_cantinaGames.pzTab == 0) ? tab0Title : va( "^7%s", tab0Title ), whiteColor );
 
 		// Tab 1 Button
 		qboolean hTab1 = (qboolean)(mx >= winX + 285.0f && mx <= winX + 285.0f + tabW && my >= tabY && my <= tabY + tabH);
 		vec4_t t1Bg = { 0.08f, 0.20f, 0.35f, (g_cantinaGames.pzTab == 1) ? 0.90f : (hTab1 ? 0.60f : 0.30f) };
 		SCR_DrawRoundedGlassPanel( winX + 285.0f, tabY, tabW, tabH, 3.0f, t1Bg, (g_cantinaGames.pzTab == 1) ? pzBorder : NULL );
-		SCR_DrawVirtualString( winX + 295.0f, tabY + 4.0f, 4.2f, (g_cantinaGames.pzTab == 1) ? "^3[ 👥 ONLINE PLAYERS & CHALLENGES ]" : "^7[ 👥 ONLINE PLAYERS & CHALLENGES ]", whiteColor );
+		SCR_DrawVirtualString( winX + 295.0f, tabY + 4.0f, 4.2f, (g_cantinaGames.pzTab == 1) ? "^3[ ONLINE PLAYERS & CHALLENGES ]" : "^7[ ONLINE PLAYERS & CHALLENGES ]", whiteColor );
 
 		SCR_FillRect( winX + 15.0f, winY + 52.0f, winW - 30.0f, 1.0f, pzBorder );
 
@@ -4749,10 +4742,12 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 			int onlineIds[MAX_CLIENTS];
 			int onlineTotal = 0;
 			int myClientNum = cl.snap.ps.clientNum;
-			int csBase = CS_PLAYERS;
+			int csBase = SCR_GetPlayersCSBase();
 			for ( int i = 0; i < MAX_CLIENTS; i++ ) {
+				if ( i + csBase >= MAX_CONFIGSTRINGS ) break;
 				if ( !cl.gameState.stringOffsets[ csBase + i ] ) continue;
 				const char *cInfo = cl.gameState.stringData + cl.gameState.stringOffsets[ csBase + i ];
+				if ( !cInfo || !cInfo[0] ) continue;
 				char nameBuf[64];
 				Q_strncpyz( nameBuf, Info_ValueForKey( cInfo, "n" ), sizeof( nameBuf ) );
 				if ( !nameBuf[0] || i == myClientNum ) continue;
