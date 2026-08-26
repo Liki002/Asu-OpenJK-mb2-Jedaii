@@ -1910,11 +1910,55 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "chat \"^1Usage: !setwinmsg <message>\"");
     }
     return qtrue;
-  } else if (!Q_stricmp(cmdSpace, "!giveitem") || !Q_stricmp(cmdSpace, "!givegun") || !Q_stricmp(cmdSpace, "!giveall") || !Q_stricmp(cmdSpace, "!giveguns") ||
-             !Q_stricmp(cmdSpace, "!yeet") || !Q_stricmp(cmdSpace, "!slap") ||
-             !Q_stricmp(cmdSpace, "!giveforce") || !Q_stricmp(cmdSpace, "!grantforce") ||
-             !Q_stricmp(cmdSpace, "!godforce") || !Q_stricmp(cmdSpace, "!infforce") || !Q_stricmp(cmdSpace, "!speed")) {
-    SV_SendServerCommand(cl, "chat \"^1Command disabled on this server to comply with MovieBattles II ToS.\"");
+  } else if (!Q_stricmp(cmdSpace, "!giveitem")) {
+    char target[64], item[64];
+    int amount = 1;
+    if (sscanf(chatText, "%*s %63s %63s %d", target, item, &amount) >= 2) {
+      SV_Ranked_Cmd_AdminGiveItem(cl, target, item, amount);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !giveitem <player> <itemKey> <amount>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!givegun")) {
+    char target[64], gun[64];
+    if (sscanf(chatText, "%*s %63s %63s", target, gun) == 2) {
+      SV_Ranked_Cmd_AdminGiveGun(cl, target, gun);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !givegun <player> <gunName>\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!giveall") || !Q_stricmp(cmdSpace, "!giveguns")) {
+    char target[64];
+    target[0] = '\0';
+    sscanf(chatText, "%*s %63s", target);
+    SV_Ranked_Cmd_AdminGiveAll(cl, target);
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!yeet") || !Q_stricmp(cmdSpace, "!slap")) {
+    SV_Ranked_Cmd_Yeet(cl, chatText);
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!giveforce") || !Q_stricmp(cmdSpace, "!grantforce")) {
+    char target[64], power[64];
+    int level = 3;
+    if (sscanf(chatText, "%*s %63s %63s %d", target, power, &level) >= 2) {
+      SV_Ranked_Cmd_GiveForce(cl, target, power, level);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !giveforce <player> <power> [level: 1-3] (Powers: lightning, grip, drain, heal, rage, protect, absorb, push, pull, mindtrick, speed, seeing, all)\"");
+    }
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!godforce") || !Q_stricmp(cmdSpace, "!infforce")) {
+    char target[64];
+    target[0] = '\0';
+    sscanf(chatText, "%*s %63s", target);
+    SV_Ranked_Cmd_GodForce(cl, target);
+    return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!speed")) {
+    char target[64];
+    float mult = 1.0f;
+    if (sscanf(chatText, "%*s %63s %f", target, &mult) >= 1) {
+      SV_Ranked_Cmd_Speed(cl, target, mult);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !speed <player> <multiplier>\"");
+    }
     return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!freeze")) {
     char target[64];
@@ -2538,9 +2582,16 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "print \"^1!givecredits <name> <n> ^7Grant credits (alias !gc)\n\"");
       SV_SendServerCommand(cl, "print \"^1!setelo <name> <n>      ^7Set player Elo\n\"");
       SV_SendServerCommand(cl, "print \"^1!setrank <name> <rank>  ^7Set player rank title\n\"");
+      SV_SendServerCommand(cl, "print \"^1!giveitem <name> <itm> <n> ^7Grant shop item\n\"");
+      SV_SendServerCommand(cl, "print \"^1!givegun <name> <gun>   ^7Grant player weapon\n\"");
+      SV_SendServerCommand(cl, "print \"^1!giveall [name]         ^7Grant ALL weapons & max ammo\n\"");
+      SV_SendServerCommand(cl, "print \"^1!yeet <name>            ^7Yeet player across room (alias !slap)\n\"");
       SV_SendServerCommand(cl, "print \"^1!freeze / !unfreeze <n> ^7Freeze / Unfreeze player\n\"");
       SV_SendServerCommand(cl, "print \"^1!bring <name>           ^7Teleport player to you\n\"");
       SV_SendServerCommand(cl, "print \"^1!goto <name>            ^7Teleport to player\n\"");
+      SV_SendServerCommand(cl, "print \"^1!giveforce <name> <pwr> [lvl] ^7Grant force power\n\"");
+      SV_SendServerCommand(cl, "print \"^1!godforce [name]        ^7Toggle infinite force (alias !infforce)\n\"");
+      SV_SendServerCommand(cl, "print \"^1!speed <name> <mult>    ^7Set movement speed\n\"");
       SV_SendServerCommand(cl, "print \"^1!jail <name> <min>      ^7Jail/mute player\n\"");
       SV_SendServerCommand(cl, "print \"^1!unjail <name>          ^7Clear jail/probation\n\"");
       SV_SendServerCommand(cl, "print \"^1!forcepotato/!stoppotato^7Start/Stop Hot Potato\n\"");
@@ -2548,7 +2599,6 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     }
 
     SV_SendServerCommand(cl, "print \"^5=============================\n\n\"");
-    return qtrue;
     return qtrue;
   }
 
