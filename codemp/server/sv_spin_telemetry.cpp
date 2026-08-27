@@ -26,7 +26,8 @@ typedef struct {
   int forcePowersKnown;
   int forcePowerLevel[18];
   vec3_t entModelScale;
-  vec3_t stateModelScale;
+  int psModelScale;
+  int stateModelScale;
   int pm_type;
   int pm_flags;
   int holdableItems;
@@ -156,9 +157,10 @@ void SV_SpinTelemetry_OnSpinCommand(client_t *cl) {
   tr->forcePower = ps->fd.forcePower;
   tr->forcePowersKnown = ps->fd.forcePowersKnown;
   for (int fp = 0; fp < 18; fp++) tr->forcePowerLevel[fp] = ps->fd.forcePowerLevel[fp];
+  tr->psModelScale = ps->iModelScale;
   if (ent) {
     VectorCopy(ent->modelScale, tr->entModelScale);
-    VectorCopy(ent->s.modelScale, tr->stateModelScale);
+    tr->stateModelScale = ent->s.iModelScale;
   }
   tr->pm_type = ps->pm_type;
   tr->pm_flags = ps->pm_flags;
@@ -172,9 +174,9 @@ void SV_SpinTelemetry_OnSpinCommand(client_t *cl) {
                        tr->health, tr->maxHealth, tr->armor, tr->weaponsMask, tr->saberLength);
   SV_SpinTelemetry_Log("  ^7[Baseline] Viewheight: ^2%d^7 | Speed: ^5%.1f^7 | Gravity: ^3%d^7 | Vel: (^5%.1f, %.1f, %.1f^7)",
                        tr->viewheight, tr->speed, tr->gravity, tr->velocity[0], tr->velocity[1], tr->velocity[2]);
-  SV_SpinTelemetry_Log("  ^7[Baseline] ModelScale: ent(^2%.2f, %.2f, %.2f^7) s.modelScale(^2%.2f, %.2f, %.2f^7)",
+  SV_SpinTelemetry_Log("  ^7[Baseline] ModelScale: ent(^2%.2f, %.2f, %.2f^7) ps->iModelScale: ^5%d%%^7 | s.iModelScale: ^5%d%%",
                        tr->entModelScale[0], tr->entModelScale[1], tr->entModelScale[2],
-                       tr->stateModelScale[0], tr->stateModelScale[1], tr->stateModelScale[2]);
+                       tr->psModelScale, tr->stateModelScale);
   SV_SpinTelemetry_Log("  ^7[Baseline] Force: ^5%d^7 | ForcePowersKnown: ^60x%04X^7 | PM_Type: ^3%d^7 | PM_Flags: ^30x%04X",
                        tr->forcePower, tr->forcePowersKnown, tr->pm_type, tr->pm_flags);
   SV_SpinTelemetry_Log("^5========================================================================^7");
@@ -260,6 +262,13 @@ void SV_SpinTelemetry_Frame(void) {
     }
 
     // Check Entity / Model Scale
+    if (ps->iModelScale != tr->psModelScale) {
+      SV_SpinTelemetry_Log("^6[SPIN-DIFF: MODEL SCALE (ps->iModelScale)] %d%% -> %d%% (Scale factor: %.2fx)",
+                           tr->psModelScale, ps->iModelScale, (float)ps->iModelScale / 100.0f);
+      tr->psModelScale = ps->iModelScale;
+      tr->diffCount++;
+    }
+
     if (ent) {
       if (fabsf(ent->modelScale[0] - tr->entModelScale[0]) > 0.02f ||
           fabsf(ent->modelScale[1] - tr->entModelScale[1]) > 0.02f ||
@@ -271,13 +280,10 @@ void SV_SpinTelemetry_Frame(void) {
         tr->diffCount++;
       }
 
-      if (fabsf(ent->s.modelScale[0] - tr->stateModelScale[0]) > 0.02f ||
-          fabsf(ent->s.modelScale[1] - tr->stateModelScale[1]) > 0.02f ||
-          fabsf(ent->s.modelScale[2] - tr->stateModelScale[2]) > 0.02f) {
-        SV_SpinTelemetry_Log("^6[SPIN-DIFF: MODEL SCALE (ent->s.modelScale)] (%.2f, %.2f, %.2f) -> (%.2f, %.2f, %.2f)",
-                             tr->stateModelScale[0], tr->stateModelScale[1], tr->stateModelScale[2],
-                             ent->s.modelScale[0], ent->s.modelScale[1], ent->s.modelScale[2]);
-        VectorCopy(ent->s.modelScale, tr->stateModelScale);
+      if (ent->s.iModelScale != tr->stateModelScale) {
+        SV_SpinTelemetry_Log("^6[SPIN-DIFF: MODEL SCALE (ent->s.iModelScale)] %d%% -> %d%%",
+                             tr->stateModelScale, ent->s.iModelScale);
+        tr->stateModelScale = ent->s.iModelScale;
         tr->diffCount++;
       }
     }
