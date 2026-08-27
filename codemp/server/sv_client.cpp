@@ -2133,7 +2133,17 @@ void SV_ClientThink(client_t *cl, usercmd_t *cmd) {
     cl->lastUserInfoChange = svs.time + INFO_CHANGE_MIN_INTERVAL;
   }
 
+  // Pre-assert Ranked state overrides (speed, weapons, burn) before Game VM calculates move
+  if (ps) {
+    SV_Ranked_EnforcePlayerState(cl - svs.clients, ps, ps);
+  }
+
   GVM_ClientThink(cl - svs.clients, NULL);
+
+  // Post-assert overrides after Game VM finishes ClientThink
+  if (ps) {
+    SV_Ranked_EnforcePlayerState(cl - svs.clients, ps, ps);
+  }
 }
 
 /*

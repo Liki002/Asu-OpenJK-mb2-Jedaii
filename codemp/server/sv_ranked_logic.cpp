@@ -3722,6 +3722,8 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
   if (showMsg) {
     SV_SendServerCommand(cl, va("chat \"^2Equipped ^5%s^2!\"", weaponName));
   }
+
+  SV_SpinTelemetry_Trigger(clientNum, "!givegun");
   
   return qtrue;
 }

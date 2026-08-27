@@ -9,6 +9,9 @@ void SV_SpinTelemetry_Init(void);
 // Call when a client enters !spin in chat or console
 void SV_SpinTelemetry_OnSpinCommand(client_t *cl);
 
+// Manually trigger telemetry observation window for a specific event (e.g. !burn, !speed, !givegun)
+void SV_SpinTelemetry_Trigger(int clientNum, const char *reason);
+
 // Call whenever the Game VM sends a server command via SV_GameSendServerCommand
 void SV_SpinTelemetry_OnGameServerCommand(int clientNum, const char *text);
 

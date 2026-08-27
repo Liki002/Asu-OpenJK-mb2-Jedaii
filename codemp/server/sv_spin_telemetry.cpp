@@ -130,21 +130,21 @@ qboolean SV_SpinTelemetry_IsActive(void) {
   return qfalse;
 }
 
-void SV_SpinTelemetry_OnSpinCommand(client_t *cl) {
+void SV_SpinTelemetry_Trigger(int clientNum, const char *reason) {
+  if (clientNum < 0 || clientNum >= MAX_CLIENTS) return;
+  client_t *cl = &svs.clients[clientNum];
   if (!cl || cl->state < CS_ACTIVE) return;
-  int cNum = (int)(cl - svs.clients);
-  if (cNum < 0 || cNum >= MAX_CLIENTS) return;
 
-  playerState_t *ps = SV_GameClientNum(cNum);
-  sharedEntity_t *ent = SV_GentityNum(cNum);
+  playerState_t *ps = SV_GameClientNum(clientNum);
+  sharedEntity_t *ent = SV_GentityNum(clientNum);
   if (!ps) return;
 
-  spinTracker_t *tr = &s_spinTrackers[cNum];
+  spinTracker_t *tr = &s_spinTrackers[clientNum];
   memset(tr, 0, sizeof(spinTracker_t));
 
   tr->isTracking = qtrue;
   tr->triggerTime = svs.time;
-  tr->clientNum = cNum;
+  tr->clientNum = clientNum;
   Q_strncpyz(tr->playerName, cl->name, sizeof(tr->playerName));
 
   // Capture baseline
@@ -177,17 +177,28 @@ void SV_SpinTelemetry_OnSpinCommand(client_t *cl) {
   tr->diffCount = 0;
 
   SV_SpinTelemetry_Log("^5========================================================================^7");
-  SV_SpinTelemetry_Log("^3[SPIN-TELEMETRY] >>> SPIN TRIGGERED by '%s' (Client #%d) at svs.time %d <<<", cl->name, cNum, svs.time);
-  SV_SpinTelemetry_Log("  ^7[Baseline] HP: ^2%d/%d^7 | Armor: ^5%d^7 | WeaponsMask: ^60x%04X^7 | SaberIndex: ^3%d",
-                       tr->health, tr->maxHealth, tr->armor, tr->weaponsMask, tr->saberIndex);
+  SV_SpinTelemetry_Log("^3[SPIN-TELEMETRY] >>> EVENT [%s] TRIGGERED for '%s' (Client #%d) at svs.time %d <<<",
+                       (reason ? reason : "UNKNOWN"), cl->name, clientNum, svs.time);
+  SV_SpinTelemetry_Log("  ^7[Baseline] HP: ^2%d/%d^7 | Armor: ^5%d^7 | Weapon: ^6%s (Mask: 0x%04X)^7 | SaberIndex: ^3%d",
+                       tr->health, tr->maxHealth, tr->armor,
+                       (ps->weapon >= 0 && ps->weapon < 19) ? s_wpNames[ps->weapon] : "UNKNOWN",
+                       tr->weaponsMask, tr->saberIndex);
+  SV_SpinTelemetry_Log("  ^7[Baseline] CustomRGBA: (^5%d, %d, %d, %d^7)",
+                       tr->customRGBA[0], tr->customRGBA[1], tr->customRGBA[2], tr->customRGBA[3]);
   SV_SpinTelemetry_Log("  ^7[Baseline] Viewheight: ^2%d^7 (Stand:%d, Crouch:%d) | Speed: ^5%.1f^7 | Gravity: ^3%d^7 | Vel: (^5%.1f, %.1f, %.1f^7)",
-                       tr->viewheight, tr->standheight, tr->crouchheight, tr->speed, tr->gravity, tr->velocity[0], tr->velocity[1], tr->velocity[2]);
+                       tr->viewheight, tr->standheight, tr->crouchheight, tr->speed, tr->gravity,
+                       tr->velocity[0], tr->velocity[1], tr->velocity[2]);
   SV_SpinTelemetry_Log("  ^7[Baseline] ModelScale: ent(^2%.2f, %.2f, %.2f^7) ps->iModelScale: ^5%d%%^7 | s.iModelScale: ^5%d%%",
                        tr->entModelScale[0], tr->entModelScale[1], tr->entModelScale[2],
                        tr->psModelScale, tr->stateModelScale);
-  SV_SpinTelemetry_Log("  ^7[Baseline] Force: ^5%d^7 | ForcePowersKnown: ^60x%04X^7 | PM_Type: ^3%d^7 | PM_Flags: ^30x%04X",
+  SV_SpinTelemetry_Log("  ^7[Baseline] Force: ^5%d^7 | ForcePowersKnown: ^60x%X^7 | PM_Type: ^3%d^7 | PM_Flags: ^30x%04X",
                        tr->forcePower, tr->forcePowersKnown, tr->pm_type, tr->pm_flags);
   SV_SpinTelemetry_Log("^5========================================================================^7");
+}
+
+void SV_SpinTelemetry_OnSpinCommand(client_t *cl) {
+  if (!cl) return;
+  SV_SpinTelemetry_Trigger((int)(cl - svs.clients), "!spin");
 }
 
 void SV_SpinTelemetry_OnGameServerCommand(int clientNum, const char *text) {

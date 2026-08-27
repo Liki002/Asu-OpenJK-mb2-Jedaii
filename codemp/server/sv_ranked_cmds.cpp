@@ -2,6 +2,7 @@
 #include "server.h"
 #include "sv_ranked_db.h"
 #include "sv_ranked_logic.h"
+#include "sv_spin_telemetry.h"
 #include <math.h>
 
 typedef struct {
@@ -934,6 +935,7 @@ void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier) {
   SV_SendServerCommand(NULL, va("chat \"^2Speed for ^1%s^2 set to ^5%.1fx ^2by High Admin ^1%s^2!\"", targetCl->name, multiplier, cl->name));
   SV_Ranked_Log("ADMIN: High Admin %s set speed for %s to %.1fx", cl->name, targetCl->name, multiplier);
   Com_Printf("[RANKED ADMIN] High Admin %s set speed for %s to %.1fx\n", cl->name, targetCl->name, multiplier);
+  SV_SpinTelemetry_Trigger(targetClient, "!speed");
 }
 
 /*
@@ -977,6 +979,7 @@ void SV_Ranked_Cmd_Burn(client_t *cl, const char *target, int durationSec) {
   SV_SendServerCommand(targetCl, "cp \"Oh no! You were caught on fire.. be careful!\"");
   SV_Ranked_Log("ADMIN: High Admin %s burned %s for %ds", cl->name, targetCl->name, durationSec);
   Com_Printf("[RANKED ADMIN] High Admin %s set %s on fire for %ds\n", cl->name, targetCl->name, durationSec);
+  SV_SpinTelemetry_Trigger(targetClient, "!burn");
 }
 
 
