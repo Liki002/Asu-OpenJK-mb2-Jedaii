@@ -926,8 +926,11 @@ void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier) {
   sv_rankedPlayers[targetClient].speedMultiplier = multiplier;
   if (ps) {
     ps->speed = 225.0f * multiplier;
+    ps->basespeed = (int)(225.0f * multiplier);
   }
 
+  SV_SendServerCommand(targetCl, va("tinfo 1 %d 6", targetClient));
+  SV_SendServerCommand(targetCl, va("cp \"Your speed has been set to %.1fx!\"", multiplier));
   SV_SendServerCommand(NULL, va("chat \"^2Speed for ^1%s^2 set to ^5%.1fx ^2by High Admin ^1%s^2!\"", targetCl->name, multiplier, cl->name));
   SV_Ranked_Log("ADMIN: High Admin %s set speed for %s to %.1fx", cl->name, targetCl->name, multiplier);
   Com_Printf("[RANKED ADMIN] High Admin %s set speed for %s to %.1fx\n", cl->name, targetCl->name, multiplier);
@@ -962,11 +965,13 @@ void SV_Ranked_Cmd_Burn(client_t *cl, const char *target, int durationSec) {
   if (durationSec > 30) durationSec = 30;
 
   sv_rankedPlayers[targetClient].burnExpireTime = svs.time + (durationSec * 1000);
-  sv_rankedPlayers[targetClient].burnNextDamageTime = svs.time + 100;
+  sv_rankedPlayers[targetClient].burnNextDamageTime = svs.time + 250;
 
   ps->pm_flags |= 0x0010; // MBII Flame flag
   ps->speed = 157.5f;     // MBII 30% Burn Slowdown
+  ps->basespeed = 157;
 
+  SV_SendServerCommand(targetCl, va("tinfo 1 %d 6", targetClient));
   SV_SendServerCommand(NULL, va("print \"^1[BURN]: ^7The flames engulfed ^1%s^7 by High Admin ^1%s^7!\n\"", targetCl->name, cl->name));
   SV_SendServerCommand(NULL, va("chat \"^1[BURN]: ^7%s was set ON FIRE for %d seconds!\"", targetCl->name, durationSec));
   SV_SendServerCommand(targetCl, "cp \"Oh no! You were caught on fire.. be careful!\"");

@@ -3639,11 +3639,8 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
   Cvar_Set2("g_duelWeaponDisable", "0", 0, qtrue);
   Cvar_Set2("g_weaponDisable", "0", 0, qtrue);
 
-  ps->trueJedi = qfalse;
-  ps->trueNonJedi = qtrue;
-
-  // Strip saber so player holds the gun instead of saber
-  ps->stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+  // Ensure saber is kept intact
+  ps->stats[STAT_WEAPONS] |= (1 << WP_SABER);
 
   // Grant weapon bit in the playerState bitmask
   ps->stats[STAT_WEAPONS] |= (1 << wp);
@@ -3651,7 +3648,8 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
   // Set MBII customRGBA weapon bits and ammo
   switch (wp) {
     case WP_BRYAR_PISTOL:
-      ps->customRGBA[1] |= 4;   // MB2 Pistol bit
+      ps->customRGBA[1] |= 4;
+      ps->customRGBA[2] |= 2048; // MB2 Pistol bit
       ps->ammo[WP_BRYAR_PISTOL] = 300;
       break;
     case WP_BLASTER:
@@ -3667,7 +3665,7 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
       ps->ammo[WP_BOWCASTER] = 100;
       break;
     case WP_REPEATER:
-      ps->customRGBA[1] |= 32768; // MB2 Repeater bit
+      ps->customRGBA[1] |= 65536; // MB2 Repeater bit
       ps->ammo[WP_REPEATER] = 300;
       break;
     case WP_DEMP2:
@@ -3688,7 +3686,7 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
       ps->ammo[WP_CONCUSSION] = 3;
       break;
     case WP_THERMAL:
-      ps->customRGBA[2] |= 64; // MB2 Thermal Detonator bit
+      ps->customRGBA[1] |= 1073741824; // MB2 Thermal Detonator bit
       ps->ammo[WP_THERMAL] = 3;
       break;
     case WP_TRIP_MINE:
@@ -3717,11 +3715,12 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
   ps->weapon = wp;
   ps->weaponstate = WEAPON_RAISING;
 
-  // Force client weapon selection command
+  // Broadcast MBII team/class info update so client inventory refreshes
+  SV_SendServerCommand(cl, va("tinfo 1 %d 6", clientNum));
   SV_SendServerCommand(cl, va("weapon %d", wp));
 
   if (showMsg) {
-    SV_SendServerCommand(cl, va("chat \"^2Equipped ^5%s ^2(Saber Stripped)!\"", weaponName));
+    SV_SendServerCommand(cl, va("chat \"^2Equipped ^5%s^2!\"", weaponName));
   }
   
   return qtrue;
@@ -3738,6 +3737,13 @@ void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerS
   rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
   if (!r) return;
 
+  // If player is dead, clear active volatile effects
+  if (worldPs->stats[STAT_HEALTH] <= 0) {
+    r->burnExpireTime = 0;
+    r->burnNextDamageTime = 0;
+    return;
+  }
+
   // 1. Burn Effect
   if (r->burnExpireTime > svs.time && worldPs->stats[STAT_HEALTH] > 0) {
     framePs->pm_flags |= 0x0010; // MBII Flame flag
@@ -3747,9 +3753,9 @@ void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerS
     framePs->basespeed = 157;
     worldPs->basespeed = 157;
 
-    // Periodic burn damage: 1 HP every 100ms
+    // Periodic burn damage: 1 HP every 250ms
     if (svs.time >= r->burnNextDamageTime) {
-      r->burnNextDamageTime = svs.time + 100;
+      r->burnNextDamageTime = svs.time + 250;
       if (worldPs->stats[STAT_HEALTH] > 1) {
         worldPs->stats[STAT_HEALTH] -= 1;
         framePs->stats[STAT_HEALTH] = worldPs->stats[STAT_HEALTH];
@@ -3786,16 +3792,12 @@ void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerS
     worldPs->basespeed = (int)spd;
   }
 
-  // 3. Granted Weapons & MBII customRGBA
+  // 3. Granted Weapons & MBII customRGBA (Keeping Saber)
   if (r->grantedWeaponsMask != 0) {
     framePs->stats[STAT_WEAPONS] |= r->grantedWeaponsMask;
     worldPs->stats[STAT_WEAPONS] |= r->grantedWeaponsMask;
-    framePs->stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
-    worldPs->stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
-    framePs->trueJedi = qfalse;
-    framePs->trueNonJedi = qtrue;
-    worldPs->trueJedi = qfalse;
-    worldPs->trueNonJedi = qtrue;
+    framePs->stats[STAT_WEAPONS] |= (1 << WP_SABER);
+    worldPs->stats[STAT_WEAPONS] |= (1 << WP_SABER);
 
     // Apply MBII customRGBA weapon bits
     int wp = r->lastGrantedWeapon;
@@ -3803,6 +3805,8 @@ void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerS
       case WP_BRYAR_PISTOL:
         framePs->customRGBA[1] |= 4;
         worldPs->customRGBA[1] |= 4;
+        framePs->customRGBA[2] |= 2048;
+        worldPs->customRGBA[2] |= 2048;
         framePs->ammo[WP_BRYAR_PISTOL] = 300;
         worldPs->ammo[WP_BRYAR_PISTOL] = 300;
         break;
@@ -3825,8 +3829,8 @@ void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerS
         worldPs->ammo[WP_BOWCASTER] = 100;
         break;
       case WP_REPEATER:
-        framePs->customRGBA[1] |= 32768;
-        worldPs->customRGBA[1] |= 32768;
+        framePs->customRGBA[1] |= 65536;
+        worldPs->customRGBA[1] |= 65536;
         framePs->ammo[WP_REPEATER] = 300;
         worldPs->ammo[WP_REPEATER] = 300;
         break;
@@ -3857,8 +3861,8 @@ void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerS
         worldPs->ammo[WP_CONCUSSION] = 3;
         break;
       case WP_THERMAL:
-        framePs->customRGBA[2] |= 64;
-        worldPs->customRGBA[2] |= 64;
+        framePs->customRGBA[1] |= 1073741824;
+        worldPs->customRGBA[1] |= 1073741824;
         framePs->ammo[WP_THERMAL] = 3;
         worldPs->ammo[WP_THERMAL] = 3;
         break;
