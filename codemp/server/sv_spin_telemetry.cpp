@@ -17,8 +17,12 @@ typedef struct {
   int armor;
   int weaponsMask;
   int ammo[16];
-  float saberLength;
+  int saberIndex;
+  int saberHolstered;
   int viewheight;
+  int standheight;
+  int crouchheight;
+  int customRGBA[4];
   float speed;
   int gravity;
   vec3_t velocity;
@@ -149,8 +153,12 @@ void SV_SpinTelemetry_OnSpinCommand(client_t *cl) {
   tr->armor = ps->stats[STAT_ARMOR];
   tr->weaponsMask = ps->stats[STAT_WEAPONS];
   for (int w = 0; w < 16; w++) tr->ammo[w] = ps->ammo[w];
-  tr->saberLength = ps->saberLength;
+  tr->saberIndex = ps->saberIndex;
+  tr->saberHolstered = ps->saberHolstered;
   tr->viewheight = ps->viewheight;
+  tr->standheight = ps->standheight;
+  tr->crouchheight = ps->crouchheight;
+  for (int c = 0; c < 4; c++) tr->customRGBA[c] = ps->customRGBA[c];
   tr->speed = ps->speed;
   tr->gravity = ps->gravity;
   VectorCopy(ps->velocity, tr->velocity);
@@ -170,10 +178,10 @@ void SV_SpinTelemetry_OnSpinCommand(client_t *cl) {
 
   SV_SpinTelemetry_Log("^5========================================================================^7");
   SV_SpinTelemetry_Log("^3[SPIN-TELEMETRY] >>> SPIN TRIGGERED by '%s' (Client #%d) at svs.time %d <<<", cl->name, cNum, svs.time);
-  SV_SpinTelemetry_Log("  ^7[Baseline] HP: ^2%d/%d^7 | Armor: ^5%d^7 | WeaponsMask: ^60x%04X^7 | SaberLength: ^3%.1f",
-                       tr->health, tr->maxHealth, tr->armor, tr->weaponsMask, tr->saberLength);
-  SV_SpinTelemetry_Log("  ^7[Baseline] Viewheight: ^2%d^7 | Speed: ^5%.1f^7 | Gravity: ^3%d^7 | Vel: (^5%.1f, %.1f, %.1f^7)",
-                       tr->viewheight, tr->speed, tr->gravity, tr->velocity[0], tr->velocity[1], tr->velocity[2]);
+  SV_SpinTelemetry_Log("  ^7[Baseline] HP: ^2%d/%d^7 | Armor: ^5%d^7 | WeaponsMask: ^60x%04X^7 | SaberIndex: ^3%d",
+                       tr->health, tr->maxHealth, tr->armor, tr->weaponsMask, tr->saberIndex);
+  SV_SpinTelemetry_Log("  ^7[Baseline] Viewheight: ^2%d^7 (Stand:%d, Crouch:%d) | Speed: ^5%.1f^7 | Gravity: ^3%d^7 | Vel: (^5%.1f, %.1f, %.1f^7)",
+                       tr->viewheight, tr->standheight, tr->crouchheight, tr->speed, tr->gravity, tr->velocity[0], tr->velocity[1], tr->velocity[2]);
   SV_SpinTelemetry_Log("  ^7[Baseline] ModelScale: ent(^2%.2f, %.2f, %.2f^7) ps->iModelScale: ^5%d%%^7 | s.iModelScale: ^5%d%%",
                        tr->entModelScale[0], tr->entModelScale[1], tr->entModelScale[2],
                        tr->psModelScale, tr->stateModelScale);
@@ -252,12 +260,12 @@ void SV_SpinTelemetry_Frame(void) {
       }
     }
 
-    // Check Saber Length
-    if (fabsf(ps->saberLength - tr->saberLength) > 0.5f) {
-      float factor = (tr->saberLength > 0.0f) ? (ps->saberLength / tr->saberLength) : 1.0f;
-      SV_SpinTelemetry_Log("^3[SPIN-DIFF: SABER LENGTH] ps->saberLength changed: %.2f -> %.2f (Scale Factor: %.2fx)",
-                           tr->saberLength, ps->saberLength, factor);
-      tr->saberLength = ps->saberLength;
+    // Check Saber Index / Holster state
+    if (ps->saberIndex != tr->saberIndex || ps->saberHolstered != tr->saberHolstered) {
+      SV_SpinTelemetry_Log("^3[SPIN-DIFF: SABER STATE] SaberIndex: %d -> %d | SaberHolstered: %d -> %d",
+                           tr->saberIndex, ps->saberIndex, tr->saberHolstered, ps->saberHolstered);
+      tr->saberIndex = ps->saberIndex;
+      tr->saberHolstered = ps->saberHolstered;
       tr->diffCount++;
     }
 
@@ -288,11 +296,25 @@ void SV_SpinTelemetry_Frame(void) {
       }
     }
 
-    // Check Viewheight (Size change)
-    if (ps->viewheight != tr->viewheight) {
-      SV_SpinTelemetry_Log("^3[SPIN-DIFF: VIEWHEIGHT] ps->viewheight changed: %d -> %d (Player height altered!)",
-                           tr->viewheight, ps->viewheight);
+    // Check Viewheight & Stand/Crouch height (Size change)
+    if (ps->viewheight != tr->viewheight || ps->standheight != tr->standheight || ps->crouchheight != tr->crouchheight) {
+      SV_SpinTelemetry_Log("^3[SPIN-DIFF: HEIGHTS] ps->viewheight: %d -> %d | Stand: %d -> %d | Crouch: %d -> %d",
+                           tr->viewheight, ps->viewheight,
+                           tr->standheight, ps->standheight,
+                           tr->crouchheight, ps->crouchheight);
       tr->viewheight = ps->viewheight;
+      tr->standheight = ps->standheight;
+      tr->crouchheight = ps->crouchheight;
+      tr->diffCount++;
+    }
+
+    // Check Custom RGBA (Color / Glow / Effect tint)
+    if (ps->customRGBA[0] != tr->customRGBA[0] || ps->customRGBA[1] != tr->customRGBA[1] ||
+        ps->customRGBA[2] != tr->customRGBA[2] || ps->customRGBA[3] != tr->customRGBA[3]) {
+      SV_SpinTelemetry_Log("^5[SPIN-DIFF: CUSTOM RGBA TINT] (%d, %d, %d, %d) -> (%d, %d, %d, %d)",
+                           tr->customRGBA[0], tr->customRGBA[1], tr->customRGBA[2], tr->customRGBA[3],
+                           ps->customRGBA[0], ps->customRGBA[1], ps->customRGBA[2], ps->customRGBA[3]);
+      for (int c = 0; c < 4; c++) tr->customRGBA[c] = ps->customRGBA[c];
       tr->diffCount++;
     }
 
