@@ -337,6 +337,8 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/server/sv_ranked_logic.cpp"
 		"${MPDir}/server/sv_ranked_logic.h"
 		"${MPDir}/server/sv_ranked_cmds.cpp"
+		"${MPDir}/server/sv_spin_telemetry.cpp"
+		"${MPDir}/server/sv_spin_telemetry.h"
 		)
 	source_group("server" FILES ${MPEngineAndDedServerFiles})
 	set(MPEngineAndDedFiles ${MPEngineAndDedFiles} ${MPEngineAndDedServerFiles})

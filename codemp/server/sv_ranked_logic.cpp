@@ -3,6 +3,7 @@
 #include "server.h"
 #include "sv_gameapi.h"
 #include "sv_ranked_db.h"
+#include "sv_spin_telemetry.h"
 #include <math.h>
 #include <ctype.h>
 #include "../game/bg_weapons.h"
@@ -3180,6 +3181,7 @@ void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex) {
 
 // Called every SV_Frame — drives the 10-second potato tick and trivia
 void SV_Ranked_Logic_Frame(void) {
+  SV_SpinTelemetry_Frame();
   SV_Ranked_SaveAccountsIfDirty(qfalse);
   SV_Ranked_Trivia_Frame();
   SV_Ranked_Vote_Frame();

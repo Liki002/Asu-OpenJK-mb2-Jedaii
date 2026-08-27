@@ -31,6 +31,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "qcommon/timing.h"
 #include "server.h"
 #include "sv_gameapi.h"
+#include "sv_spin_telemetry.h"
 
 botlib_export_t *botlib_export;
 
@@ -572,6 +573,9 @@ static void SV_GameDropClient(int clientNum, const char *reason) {
 
 static void SV_GameSendServerCommand(int clientNum, const char *text) {
   if (text != NULL) {
+    // Spin Telemetry Logger: capture any server command during spin wheel activity
+    SV_SpinTelemetry_OnGameServerCommand(clientNum, text);
+
     // Round End Hooks (For Survivor / Rounds)
     if (strstr(text, "won the round") ||
              strstr(text, "SurvivorWinner: Red")) {

@@ -30,6 +30,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "sv_gameapi.h"
 #include "sv_ranked_logic.h"
 #include "sv_ranked_db.h"
+#include "sv_spin_telemetry.h"
 
 /*
 ===============
@@ -939,6 +940,9 @@ void SV_Init(void) {
 
   // Initialize the RANKED Native Ranked DB
   SV_Ranked_Init();
+
+  // Initialize Spin Telemetry Subsystem
+  SV_SpinTelemetry_Init();
 
   // Ranked toggle: set to 0 via RCON or server console to disable all ranked logic.
   // The value is also synced with ranked/config.json ("enabled" key).

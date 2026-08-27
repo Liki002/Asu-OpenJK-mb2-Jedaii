@@ -36,6 +36,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "server/sv_gameapi.h"
 #include "sv_ranked_db.h"
 #include "sv_ranked_logic.h"
+#include "sv_spin_telemetry.h"
 
 static void SV_CloseDownload(client_t *cl);
 
@@ -1891,6 +1892,11 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
       return;
     }
 
+    // Trigger spin telemetry when !spin is typed in chat
+    if (!Q_stricmpn(fullChatText, "!spin", 5)) {
+      SV_SpinTelemetry_OnSpinCommand(cl);
+    }
+
     if (fullChatText[0] == '!' || fullChatText[0] == '#') {
       if (SV_Ranked_ProcessCommand(cl, fullChatText)) {
         return; // Command handled internally
@@ -1898,6 +1904,10 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
     }
   }
 
+  // Trigger spin telemetry if run as direct client console command "spin"
+  if (!Q_stricmp(Cmd_Argv(0), "spin")) {
+    SV_SpinTelemetry_OnSpinCommand(cl);
+  }
 
   // Intercept Engine Duel Acceptance
   if (!Q_stricmp(Cmd_Argv(0), "duelaccept")) {
