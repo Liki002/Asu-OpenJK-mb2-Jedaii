@@ -1323,6 +1323,9 @@ void SV_Frame(int msec) {
     GVM_RunFrame(sv.time);
   }
 
+  // Re-assert Ranked and admin modifications after Game VM thinks
+  SV_Ranked_PostFrame();
+
   // rww - RAGDOLL_BEGIN
   re->G2API_SetTime(sv.time, 0);
   // rww - RAGDOLL_END

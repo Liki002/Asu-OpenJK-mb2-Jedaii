@@ -54,8 +54,9 @@ void SV_Ranked_ProcessRoundStart(void);
 void SV_Ranked_HotPotatoDisconnect(int clientNum);
 void SV_Ranked_HotPotatoHandleKill(int killerId, int victimId);
 void SV_Ranked_Vote_Frame(void);
-void SV_Ranked_MapChange(void);
 qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean showMsg);
+void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerState_t *worldPs);
+void SV_Ranked_PostFrame(void);
 
 // RPG Client Data Sync
 void SV_Ranked_SyncClientRPG(client_t *cl);

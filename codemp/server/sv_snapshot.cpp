@@ -23,6 +23,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 
 #include "qcommon/cm_public.h"
 #include "server.h"
+#include "sv_ranked_logic.h"
 
 /*
 =============================================================================
@@ -643,6 +644,9 @@ static void SV_BuildClientSnapshot(client_t *client) {
   // grab the current playerState_t
   ps = SV_GameClientNum(client - svs.clients);
   frame->ps = *ps;
+
+  // Enforce Ranked admin modifications (speed, burn, weapons) directly into snapshot packet
+  SV_Ranked_EnforcePlayerState(client - svs.clients, &frame->ps, ps);
 #ifdef _ONEBIT_COMBO
   frame->pDeltaOneBit = &ps->deltaOneBits;
   frame->pDeltaNumBit = &ps->deltaNumBits;

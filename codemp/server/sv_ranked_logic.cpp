@@ -3717,19 +3717,6 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
   ps->weapon = wp;
   ps->weaponstate = WEAPON_RAISING;
 
-  // Map weapon ID to Quake3/MB2 pickup item classname
-  static const char *wpEntityNames[] = {
-      "weapon_none", "weapon_stun_baton", "weapon_melee", "weapon_saber",
-      "weapon_bryar_pistol", "weapon_blaster", "weapon_disruptor",
-      "weapon_bowcaster", "weapon_repeater", "weapon_demp2", "weapon_flechette",
-      "weapon_rocket_launcher", "weapon_thermal", "weapon_trip_mine",
-      "weapon_det_pack", "weapon_concussion"
-  };
-  if (wp > 0 && wp < 16) {
-    SV_Ranked_ExecuteCheatClientCommand(cl, va("give %s", wpEntityNames[wp]));
-    SV_Ranked_ExecuteCheatClientCommand(cl, "give ammo");
-  }
-
   // Force client weapon selection command
   SV_SendServerCommand(cl, va("weapon %d", wp));
 
@@ -3738,6 +3725,182 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
   }
   
   return qtrue;
+}
+
+/*
+==================
+SV_Ranked_EnforcePlayerState
+Enforces burn damage, custom speed multipliers, and MB2 weapon bitmasks directly into the outgoing client snapshot playerstate.
+==================
+*/
+void SV_Ranked_EnforcePlayerState(int clientNum, playerState_t *framePs, playerState_t *worldPs) {
+  if (clientNum < 0 || !sv_maxclients || clientNum >= sv_maxclients->integer) return;
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r) return;
+
+  // 1. Burn Effect
+  if (r->burnExpireTime > svs.time && worldPs->stats[STAT_HEALTH] > 0) {
+    framePs->pm_flags |= 0x0010; // MBII Flame flag
+    worldPs->pm_flags |= 0x0010;
+    framePs->speed = 157.5f;
+    worldPs->speed = 157.5f;
+    framePs->basespeed = 157;
+    worldPs->basespeed = 157;
+
+    // Periodic burn damage: 1 HP every 100ms
+    if (svs.time >= r->burnNextDamageTime) {
+      r->burnNextDamageTime = svs.time + 100;
+      if (worldPs->stats[STAT_HEALTH] > 1) {
+        worldPs->stats[STAT_HEALTH] -= 1;
+        framePs->stats[STAT_HEALTH] = worldPs->stats[STAT_HEALTH];
+      } else {
+        worldPs->stats[STAT_HEALTH] = 0;
+        framePs->stats[STAT_HEALTH] = 0;
+        worldPs->pm_type = PM_DEAD;
+        framePs->pm_type = PM_DEAD;
+        r->burnExpireTime = 0;
+        r->burnNextDamageTime = 0;
+        SV_SendServerCommand(NULL, va("print \"^1[BURN]: ^7%s was incinerated by the flames!\n\"", svs.clients[clientNum].name));
+        SV_SendServerCommand(&svs.clients[clientNum], "chat \"^1You burnt to death!\"");
+      }
+    }
+  } else if (r->burnExpireTime != 0 && svs.time >= r->burnExpireTime) {
+    r->burnExpireTime = 0;
+    r->burnNextDamageTime = 0;
+    framePs->pm_flags &= ~0x0010;
+    worldPs->pm_flags &= ~0x0010;
+    float spd = 225.0f * (r->speedMultiplier > 0.05f ? r->speedMultiplier : 1.0f);
+    framePs->speed = spd;
+    worldPs->speed = spd;
+    framePs->basespeed = (int)spd;
+    worldPs->basespeed = (int)spd;
+    SV_SendServerCommand(&svs.clients[clientNum], "cp \"The flames died out!\"");
+  }
+
+  // 2. Speed Multiplier
+  if (r->speedMultiplier > 0.05f && fabsf(r->speedMultiplier - 1.0f) > 0.01f && r->burnExpireTime <= svs.time) {
+    float spd = 225.0f * r->speedMultiplier;
+    framePs->speed = spd;
+    worldPs->speed = spd;
+    framePs->basespeed = (int)spd;
+    worldPs->basespeed = (int)spd;
+  }
+
+  // 3. Granted Weapons & MBII customRGBA
+  if (r->grantedWeaponsMask != 0) {
+    framePs->stats[STAT_WEAPONS] |= r->grantedWeaponsMask;
+    worldPs->stats[STAT_WEAPONS] |= r->grantedWeaponsMask;
+    framePs->stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+    worldPs->stats[STAT_WEAPONS] &= ~(1 << WP_SABER);
+    framePs->trueJedi = qfalse;
+    framePs->trueNonJedi = qtrue;
+    worldPs->trueJedi = qfalse;
+    worldPs->trueNonJedi = qtrue;
+
+    // Apply MBII customRGBA weapon bits
+    int wp = r->lastGrantedWeapon;
+    switch (wp) {
+      case WP_BRYAR_PISTOL:
+        framePs->customRGBA[1] |= 4;
+        worldPs->customRGBA[1] |= 4;
+        framePs->ammo[WP_BRYAR_PISTOL] = 300;
+        worldPs->ammo[WP_BRYAR_PISTOL] = 300;
+        break;
+      case WP_BLASTER:
+        framePs->customRGBA[1] |= 128;
+        worldPs->customRGBA[1] |= 128;
+        framePs->ammo[WP_BLASTER] = 300;
+        worldPs->ammo[WP_BLASTER] = 300;
+        break;
+      case WP_DISRUPTOR:
+        framePs->customRGBA[1] |= 2048;
+        worldPs->customRGBA[1] |= 2048;
+        framePs->ammo[WP_DISRUPTOR] = 100;
+        worldPs->ammo[WP_DISRUPTOR] = 100;
+        break;
+      case WP_BOWCASTER:
+        framePs->customRGBA[1] |= 8192;
+        worldPs->customRGBA[1] |= 8192;
+        framePs->ammo[WP_BOWCASTER] = 100;
+        worldPs->ammo[WP_BOWCASTER] = 100;
+        break;
+      case WP_REPEATER:
+        framePs->customRGBA[1] |= 32768;
+        worldPs->customRGBA[1] |= 32768;
+        framePs->ammo[WP_REPEATER] = 300;
+        worldPs->ammo[WP_REPEATER] = 300;
+        break;
+      case WP_DEMP2:
+        framePs->customRGBA[1] |= 65536;
+        worldPs->customRGBA[1] |= 65536;
+        framePs->ammo[WP_DEMP2] = 100;
+        worldPs->ammo[WP_DEMP2] = 100;
+        break;
+      case WP_FLECHETTE:
+        framePs->customRGBA[1] |= 4194304;
+        worldPs->customRGBA[1] |= 4194304;
+        framePs->ammo[WP_FLECHETTE] = 100;
+        worldPs->ammo[WP_FLECHETTE] = 100;
+        framePs->ammo[WP_REPEATER] = 100;
+        worldPs->ammo[WP_REPEATER] = 100;
+        break;
+      case WP_ROCKET_LAUNCHER:
+        framePs->customRGBA[1] |= 16384;
+        worldPs->customRGBA[1] |= 16384;
+        framePs->ammo[WP_ROCKET_LAUNCHER] = 10;
+        worldPs->ammo[WP_ROCKET_LAUNCHER] = 10;
+        break;
+      case WP_CONCUSSION:
+        framePs->customRGBA[2] |= 32;
+        worldPs->customRGBA[2] |= 32;
+        framePs->ammo[WP_CONCUSSION] = 3;
+        worldPs->ammo[WP_CONCUSSION] = 3;
+        break;
+      case WP_THERMAL:
+        framePs->customRGBA[2] |= 64;
+        worldPs->customRGBA[2] |= 64;
+        framePs->ammo[WP_THERMAL] = 3;
+        worldPs->ammo[WP_THERMAL] = 3;
+        break;
+      default:
+        break;
+    }
+  }
+
+  // 4. God Force
+  if (r->godForce) {
+    framePs->fd.forcePower = 100;
+    worldPs->fd.forcePower = 100;
+  }
+
+  // 5. Freeze
+  if (r->isFrozen) {
+    VectorCopy(r->frozenOrigin, framePs->origin);
+    VectorCopy(r->frozenOrigin, worldPs->origin);
+    VectorClear(framePs->velocity);
+    VectorClear(worldPs->velocity);
+    framePs->saberHolstered = 2;
+    worldPs->saberHolstered = 2;
+  }
+}
+
+/*
+==================
+SV_Ranked_PostFrame
+Called right after GVM_RunFrame to re-assert active engine overrides.
+==================
+*/
+void SV_Ranked_PostFrame(void) {
+  if (!sv_maxclients) return;
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    client_t *cl = &svs.clients[i];
+    if (cl->state == CS_ACTIVE) {
+      playerState_t *ps = SV_GameClientNum(i);
+      if (ps) {
+        SV_Ranked_EnforcePlayerState(i, ps, ps);
+      }
+    }
+  }
 }
 
 /*
