@@ -3224,6 +3224,26 @@ void SV_Ranked_Logic_Frame(void) {
             ps->fd.forcePower = 0;
             ps->saberHolstered = 2;
           }
+          if (sv_rankedPlayers[i].burnExpireTime > svs.time && ps->stats[STAT_HEALTH] > 0) {
+            ps->pm_flags |= 0x0010; // MBII Flame / Burning flag
+            ps->speed = 157.5f;     // MBII 30% Burn Slowdown
+
+            if (svs.time >= sv_rankedPlayers[i].burnNextDamageTime) {
+              sv_rankedPlayers[i].burnNextDamageTime = svs.time + 100; // 1 HP drain every 100ms
+              ps->stats[STAT_HEALTH] -= 1;
+              if (ps->stats[STAT_HEALTH] <= 0) {
+                ps->stats[STAT_HEALTH] = 0;
+                SV_SendServerCommand(NULL, va("print \"^1[BURN]: ^7%s was incinerated by the flames!\n\"", cl->name));
+              }
+            }
+          } else if (sv_rankedPlayers[i].burnExpireTime != 0 && svs.time >= sv_rankedPlayers[i].burnExpireTime) {
+            // Burn expired
+            sv_rankedPlayers[i].burnExpireTime = 0;
+            sv_rankedPlayers[i].burnNextDamageTime = 0;
+            ps->pm_flags &= ~0x0010;
+            ps->speed = 225.0f * (sv_rankedPlayers[i].speedMultiplier > 0.05f ? sv_rankedPlayers[i].speedMultiplier : 1.0f);
+            SV_SendServerCommand(cl, "cp \"The flames died out!\"");
+          }
           if (sv_rankedPlayers[i].grantedWeaponsMask != 0) {
             ps->trueJedi = qfalse;
             ps->trueNonJedi = qtrue;
@@ -3249,13 +3269,8 @@ void SV_Ranked_Logic_Frame(void) {
             }
           }
           if (sv_rankedPlayers[i].speedMultiplier > 1.01f || sv_rankedPlayers[i].speedMultiplier < 0.99f) {
-            float horizSpeed = sqrtf(ps->velocity[0] * ps->velocity[0] + ps->velocity[1] * ps->velocity[1]);
-            float targetSpeed = 250.0f * sv_rankedPlayers[i].speedMultiplier;
-            if (horizSpeed > 30.0f && horizSpeed < targetSpeed) {
-              float scale = targetSpeed / horizSpeed;
-              if (scale > 1.35f) scale = 1.35f;
-              ps->velocity[0] *= scale;
-              ps->velocity[1] *= scale;
+            if (sv_rankedPlayers[i].burnExpireTime <= svs.time) {
+              ps->speed = 225.0f * sv_rankedPlayers[i].speedMultiplier;
             }
           }
           if (sv_rankedPlayers[i].livesActive) {
@@ -3632,6 +3647,61 @@ qboolean SV_Ranked_GiveWeapon(client_t *cl, const char *weaponName, qboolean sho
 
   // Grant weapon bit in the playerState bitmask
   ps->stats[STAT_WEAPONS] |= (1 << wp);
+
+  // Set MBII customRGBA weapon bits and ammo
+  switch (wp) {
+    case WP_BRYAR_PISTOL:
+      ps->customRGBA[1] |= 4;   // MB2 Pistol bit
+      ps->ammo[WP_BRYAR_PISTOL] = 300;
+      break;
+    case WP_BLASTER:
+      ps->customRGBA[1] |= 128; // MB2 E11 Blaster bit
+      ps->ammo[WP_BLASTER] = 300;
+      break;
+    case WP_DISRUPTOR:
+      ps->customRGBA[1] |= 2048; // MB2 Disruptor bit
+      ps->ammo[WP_DISRUPTOR] = 100;
+      break;
+    case WP_BOWCASTER:
+      ps->customRGBA[1] |= 8192; // MB2 Bowcaster bit
+      ps->ammo[WP_BOWCASTER] = 100;
+      break;
+    case WP_REPEATER:
+      ps->customRGBA[1] |= 32768; // MB2 Repeater bit
+      ps->ammo[WP_REPEATER] = 300;
+      break;
+    case WP_DEMP2:
+      ps->customRGBA[1] |= 65536; // MB2 DEMP2 bit
+      ps->ammo[WP_DEMP2] = 100;
+      break;
+    case WP_FLECHETTE:
+      ps->customRGBA[1] |= 4194304; // MB2 Flechette bit
+      ps->ammo[WP_FLECHETTE] = 100;
+      ps->ammo[WP_REPEATER] = 100;
+      break;
+    case WP_ROCKET_LAUNCHER:
+      ps->customRGBA[1] |= 16384; // MB2 Rocket Launcher bit
+      ps->ammo[WP_ROCKET_LAUNCHER] = 10;
+      break;
+    case WP_CONCUSSION:
+      ps->customRGBA[2] |= 32; // MB2 Concussion Grenade bit
+      ps->ammo[WP_CONCUSSION] = 3;
+      break;
+    case WP_THERMAL:
+      ps->customRGBA[2] |= 64; // MB2 Thermal Detonator bit
+      ps->ammo[WP_THERMAL] = 3;
+      break;
+    case WP_TRIP_MINE:
+      ps->customRGBA[2] |= 128; // MB2 Trip Mine bit
+      ps->ammo[WP_TRIP_MINE] = 3;
+      break;
+    case WP_DET_PACK:
+      ps->customRGBA[2] |= 256; // MB2 Det Pack bit
+      ps->ammo[WP_DET_PACK] = 3;
+      break;
+    default:
+      break;
+  }
   
   // Fill the ammo pool for this weapon and general ammo pool
   if (ammoIdx != AMMO_NONE) {

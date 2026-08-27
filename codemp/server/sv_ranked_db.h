@@ -169,7 +169,7 @@ void SV_Ranked_Cmd_AdminFreeze(client_t *cl, const char *target);
 void SV_Ranked_Cmd_AdminUnfreeze(client_t *cl, const char *target);
 void SV_Ranked_Cmd_Bring(client_t *cl, const char *target);
 void SV_Ranked_Cmd_Goto(client_t *cl, const char *target);
-void SV_Ranked_Cmd_Burn(client_t *cl, const char *target);
+void SV_Ranked_Cmd_Burn(client_t *cl, const char *target, int durationSec = 6);
 void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier);
 
 // Daily Quest System

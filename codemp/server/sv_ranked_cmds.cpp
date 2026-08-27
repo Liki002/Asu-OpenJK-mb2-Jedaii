@@ -916,18 +916,62 @@ void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier) {
   if (multiplier <= 0.05f) {
     multiplier = 1.0f;
   }
+  if (multiplier > 3.0f) {
+    multiplier = 3.0f;
+  }
 
   client_t *targetCl = &svs.clients[targetClient];
   playerState_t *ps = SV_GameClientNum(targetClient);
 
   sv_rankedPlayers[targetClient].speedMultiplier = multiplier;
   if (ps) {
-    ps->speed = 250.0f * multiplier;
+    ps->speed = 225.0f * multiplier;
   }
 
   SV_SendServerCommand(NULL, va("chat \"^2Speed for ^1%s^2 set to ^5%.1fx ^2by High Admin ^1%s^2!\"", targetCl->name, multiplier, cl->name));
   SV_Ranked_Log("ADMIN: High Admin %s set speed for %s to %.1fx", cl->name, targetCl->name, multiplier);
   Com_Printf("[RANKED ADMIN] High Admin %s set speed for %s to %.1fx\n", cl->name, targetCl->name, multiplier);
+}
+
+/*
+==================
+SV_Ranked_Cmd_Burn
+Sets target player ON FIRE using MB2 burn mechanics.
+==================
+*/
+void SV_Ranked_Cmd_Burn(client_t *cl, const char *target, int durationSec) {
+  if (!SV_Ranked_IsHighAdmin(cl)) {
+    SV_SendServerCommand(cl, "chat \"^1You do not have permission to use this command (requires Admin Level 1).\"");
+    return;
+  }
+
+  int targetClient = SV_Ranked_FindPlayerByNameOrId(target);
+  if (targetClient < 0) {
+    SV_SendServerCommand(cl, "chat \"^1Player not found.\"");
+    return;
+  }
+
+  client_t *targetCl = &svs.clients[targetClient];
+  playerState_t *ps = SV_GameClientNum(targetClient);
+  if (!ps || ps->pm_type == PM_SPECTATOR || ps->stats[STAT_HEALTH] <= 0) {
+    SV_SendServerCommand(cl, "chat \"^1Target is not alive or is in spectator mode.\"");
+    return;
+  }
+
+  if (durationSec <= 0) durationSec = 6;
+  if (durationSec > 30) durationSec = 30;
+
+  sv_rankedPlayers[targetClient].burnExpireTime = svs.time + (durationSec * 1000);
+  sv_rankedPlayers[targetClient].burnNextDamageTime = svs.time + 100;
+
+  ps->pm_flags |= 0x0010; // MBII Flame flag
+  ps->speed = 157.5f;     // MBII 30% Burn Slowdown
+
+  SV_SendServerCommand(NULL, va("print \"^1[BURN]: ^7The flames engulfed ^1%s^7 by High Admin ^1%s^7!\n\"", targetCl->name, cl->name));
+  SV_SendServerCommand(NULL, va("chat \"^1[BURN]: ^7%s was set ON FIRE for %d seconds!\"", targetCl->name, durationSec));
+  SV_SendServerCommand(targetCl, "cp \"Oh no! You were caught on fire.. be careful!\"");
+  SV_Ranked_Log("ADMIN: High Admin %s burned %s for %ds", cl->name, targetCl->name, durationSec);
+  Com_Printf("[RANKED ADMIN] High Admin %s set %s on fire for %ds\n", cl->name, targetCl->name, durationSec);
 }
 
 
@@ -1960,6 +2004,15 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "chat \"^1Usage: !speed <player> <multiplier>\"");
     }
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!burn") || !Q_stricmp(cmdSpace, "!ignite")) {
+    char target[64];
+    int duration = 6;
+    if (sscanf(chatText, "%*s %63s %d", target, &duration) >= 1) {
+      SV_Ranked_Cmd_Burn(cl, target, duration);
+    } else {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !burn <player> [seconds: 1-30]\"");
+    }
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!freeze")) {
     char target[64];
     if (sscanf(chatText, "%*s %63s", target) == 1) {
@@ -2592,6 +2645,7 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_SendServerCommand(cl, "print \"^1!giveforce <name> <pwr> [lvl] ^7Grant force power\n\"");
       SV_SendServerCommand(cl, "print \"^1!godforce [name]        ^7Toggle infinite force (alias !infforce)\n\"");
       SV_SendServerCommand(cl, "print \"^1!speed <name> <mult>    ^7Set movement speed\n\"");
+      SV_SendServerCommand(cl, "print \"^1!burn <name> [seconds]  ^7Set player on fire\n\"");
       SV_SendServerCommand(cl, "print \"^1!jail <name> <min>      ^7Jail/mute player\n\"");
       SV_SendServerCommand(cl, "print \"^1!unjail <name>          ^7Clear jail/probation\n\"");
       SV_SendServerCommand(cl, "print \"^1!forcepotato/!stoppotato^7Start/Stop Hot Potato\n\"");
