@@ -7,6 +7,46 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 
 ---
 
+### Session: 2026-10-01 — Server Connect Crash Fix, Reliable Chat Parsing & Stability Overhaul
+
+#### 1. Server Connection Crash Guard
+- **Fixed `FX_WorldToScreen` NULL-Pointer Dereference**: Added defensive validation for `theFxHelper.refdef` and positive FOV (`fov_x > 0`, `fov_y > 0`) in `codemp/client/FxPrimitives.cpp`. Previously, joining a server triggered 3D screen calculations before the 3D scene was initialized, resulting in a fatal segmentation fault when loading into game servers.
+- **Client Overlay State Guards**: Added `cls.cgameStarted` and `cl.snap.valid` checks to overhead icon functions (`SCR_DrawPartyOverheadIcons`, `SCR_DrawHotPotatoOverheadIcon`, `SCR_DrawInspectOverlay`) in `codemp/client/cl_scrn.cpp`.
+
+#### 2. Chat & Command System Improvements
+- **Non-Destructive Server Tokenizer**: Replaced global `Cmd_TokenizeString` in `party_info` parsing (`codemp/client/cl_parse.cpp`) with isolated `COM_Parse`. This prevents network packet updates from overwriting active user chat commands and eliminates "eaten" chat messages.
+- **Connection-State Chat Preservation**: Updated `Message_Key` in `codemp/client/cl_keys.cpp` to permit chat transmission in all connected states (`>= CA_CONNECTED`), preventing dropped messages during server loading, spectator transitions, or intermissions.
+
+---
+
+### Session: 2026-08-26 — Lagometer Unchoke, High-Tier ELO Decay & Non-Blocking Database
+
+#### 1. Solid Green Lagometer (Zero Choke)
+- **Unchoked Snapshot Delivery**: Hardcoded unchoked snapshot delivery in `codemp/server/sv_snapshot.cpp` to guarantee 100% green lagometer and eliminate packet delivery choking.
+- **Rate-Throttling Removal**: Removed `SNAPFLAG_RATE_DELAYED` restrictions.
+
+#### 2. Non-Blocking Debounced Database
+- **Zero-Latency Saves**: Transitioned player stats, rank data, and inventory saving to debounced asynchronous writes in `sv_ranked_db.cpp`, completely eliminating tickrate hitching upon kill events.
+
+#### 3. Competitive Rank Symmetry & Decay
+- **High-Tier ELO Balance**: Refined win/loss point gains for top-tier players.
+- **Diamond+ Inactivity Decay**: Added automated weekly rating decay for inactive Diamond+ ranked players to maintain competitive leaderboard integrity.
+
+---
+
+### Session: 2026-08-20 — Cantina Games Hub, Pazaak 20, Blackjack 21 & Party System
+
+#### 1. Star Wars Pazaak 20 & Canto Bight Blackjack 21
+- **Multiplayer Pazaak 20**: Full multiplayer wagering system (`!pazaak challenge <name> <bet>`, `!pazaak accept`), 52-card custom deck, side deck modifiers, stand/end turn mechanics, and UI rendering.
+- **Canto Bight Blackjack 21**: Interactive blackjack table with animated 3D chip stacks and real-time dealer logic.
+- **Cantina Games Hub (`!games`)**: Unified menu to launch casino and cantina mini-games.
+
+#### 2. Party & Team System
+- **Party Hub (`!party`, `!p`)**: Create and manage parties with custom colors, shared scores, party health/armor/force/BP indicators, and dedicated party chat styled in yellow.
+- **Live BP Telemetry**: Real-time duel Block Points (BP) tracking and status telemetry.
+
+---
+
 ### Session: 2026-06-13 — Exempt NPCs from Duel Culling & Fix Bone Remapping
 
 This session focused on fixing two major NPC-related issues: invisible NPCs and disappearing NPCs on spawning.
