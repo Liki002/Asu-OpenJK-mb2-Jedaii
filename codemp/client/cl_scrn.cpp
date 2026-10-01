@@ -2707,6 +2707,7 @@ SCR_DrawHotPotatoOverheadIcon
 */
 void SCR_DrawHotPotatoOverheadIcon( void ) {
 	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cls.cgameStarted ) return;
 	if ( g_hotPotatoHolder < 0 ) return;
 	if ( !cl.snap.valid ) return;
 
@@ -3700,6 +3701,8 @@ static qhandle_t s_hShieldPics[8] = { 0 };
 
 void SCR_DrawPartyOverheadIcons( void ) {
 	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cls.cgameStarted ) return;
+	if ( !cl.snap.valid ) return;
 	if ( !g_rpgParty.active ) return;
 	if ( g_rpgParty.memberCount <= 0 ) return;
 

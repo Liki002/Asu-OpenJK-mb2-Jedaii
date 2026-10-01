@@ -813,7 +813,7 @@ void Message_Key( int key ) {
 	}
 
 	if ( key == A_ENTER || key == A_KP_ENTER ) {
-		if ( chatField.buffer[0] && cls.state == CA_ACTIVE ) {
+		if ( chatField.buffer[0] && cls.state >= CA_CONNECTED ) {
 			char safeChatBuf[MAX_STRING_CHARS];
 			Q_strncpyz( safeChatBuf, chatField.buffer, sizeof( safeChatBuf ) );
 			for ( char *p = safeChatBuf; *p; p++ ) {

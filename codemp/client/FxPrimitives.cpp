@@ -2172,6 +2172,11 @@ bool CFlash::Update( void )
 
 bool FX_WorldToScreen(vec3_t worldCoord, float *x, float *y)
 {
+	if ( !theFxHelper.refdef || theFxHelper.refdef->fov_x <= 0.0f || theFxHelper.refdef->fov_y <= 0.0f )
+	{
+		return false;
+	}
+
 	int	xcenter, ycenter;
 	vec3_t	local, transformed;
 	vec3_t	vfwd, vright, vup;

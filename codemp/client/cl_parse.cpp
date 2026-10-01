@@ -1070,30 +1070,45 @@ void CL_ParseCommandString( msg_t *msg ) {
 		g_rpgParty.active = qfalse;
 		g_rpgParty.memberCount = 0;
 	} else if ( !Q_strncmp( s, "party_info", 10 ) ) {
-		Cmd_TokenizeString( s );
-		int argc = Cmd_Argc();
-		if ( argc >= 5 ) {
-			Q_strncpyz( g_rpgParty.teamName, Cmd_Argv( 1 ), sizeof( g_rpgParty.teamName ) );
-			int colIdx = atoi( Cmd_Argv( 2 ) );
+		const char *text_p = s;
+		char *token;
+		token = COM_Parse( &text_p ); // skip "party_info"
+		token = COM_Parse( &text_p );
+		if ( token && token[0] ) {
+			Q_strncpyz( g_rpgParty.teamName, token, sizeof( g_rpgParty.teamName ) );
+			token = COM_Parse( &text_p );
+			int colIdx = token ? atoi( token ) : 0;
 			g_rpgParty.teamColorIdx = ( colIdx >= 0 && colIdx < 8 ) ? colIdx : 0;
-			g_rpgParty.score = atoi( Cmd_Argv( 3 ) );
-			int cnt = atoi( Cmd_Argv( 4 ) );
+			token = COM_Parse( &text_p );
+			g_rpgParty.score = token ? atoi( token ) : 0;
+			token = COM_Parse( &text_p );
+			int cnt = token ? atoi( token ) : 0;
 			if ( cnt < 0 ) cnt = 0;
 			if ( cnt > MAX_PARTY_MEMBERS ) cnt = MAX_PARTY_MEMBERS;
 			g_rpgParty.memberCount = cnt;
 
-			int argIdx = 5;
-			for ( int i = 0; i < cnt && argIdx + 8 <= argc; i++ ) {
+			for ( int i = 0; i < cnt && text_p && *text_p; i++ ) {
 				rpgPartyMember_t *m = &g_rpgParty.members[i];
-				m->clientNum = atoi( Cmd_Argv( argIdx++ ) );
-				Q_strncpyz( m->name, Cmd_Argv( argIdx++ ), sizeof( m->name ) );
-				m->level = atoi( Cmd_Argv( argIdx++ ) );
-				m->health = atoi( Cmd_Argv( argIdx++ ) );
-				m->maxHealth = atoi( Cmd_Argv( argIdx++ ) );
-				m->fp = atoi( Cmd_Argv( argIdx++ ) );
-				m->maxFP = atoi( Cmd_Argv( argIdx++ ) );
-				m->bp = atoi( Cmd_Argv( argIdx++ ) );
-				m->maxBP = atoi( Cmd_Argv( argIdx++ ) );
+				token = COM_Parse( &text_p );
+				if ( !token || !token[0] ) break;
+				m->clientNum = atoi( token );
+				token = COM_Parse( &text_p );
+				if ( !token ) break;
+				Q_strncpyz( m->name, token, sizeof( m->name ) );
+				token = COM_Parse( &text_p );
+				m->level = token ? atoi( token ) : 1;
+				token = COM_Parse( &text_p );
+				m->health = token ? atoi( token ) : 100;
+				token = COM_Parse( &text_p );
+				m->maxHealth = token ? atoi( token ) : 100;
+				token = COM_Parse( &text_p );
+				m->fp = token ? atoi( token ) : 100;
+				token = COM_Parse( &text_p );
+				m->maxFP = token ? atoi( token ) : 100;
+				token = COM_Parse( &text_p );
+				m->bp = token ? atoi( token ) : 100;
+				token = COM_Parse( &text_p );
+				m->maxBP = token ? atoi( token ) : 100;
 				if ( m->maxHealth <= 0 ) m->maxHealth = 100;
 				if ( m->maxFP <= 0 ) m->maxFP = 100;
 				if ( m->maxBP <= 0 ) m->maxBP = 100;
