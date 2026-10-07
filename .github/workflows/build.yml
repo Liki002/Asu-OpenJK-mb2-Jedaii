@@ -2,7 +2,7 @@ name: build
 
 on:
   push:
-    branches: [rpg-hud-sync]
+    branches: [rpg-hud-sync, ranked-clean]
   workflow_dispatch:
 
 jobs:
