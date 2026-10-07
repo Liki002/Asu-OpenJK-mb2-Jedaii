@@ -19,6 +19,7 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam);
 // Name Updating
 void SV_Ranked_UpdateDisplayName(int clientNum, const char* newName);
 qboolean SV_Ranked_IsNameInvalidOrOffensive(const char *name);
+void SV_Ranked_GetLogUsername(int clientNum, char *out, int outSize);
 
 // Party live HP heartbeat
 void SV_Ranked_Party_Heartbeat(void);

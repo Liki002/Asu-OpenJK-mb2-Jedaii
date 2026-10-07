@@ -604,6 +604,10 @@ void SV_Ranked_Init(void) {
   SV_Ranked_SaveConfig(); // Force save to update active_mode for API
 
   Cvar_Get("sv_ranked_debug", "0", CVAR_ARCHIVE);
+  Cvar_Get("sv_ranked_sync_host", "51.195.219.239", CVAR_ARCHIVE);
+  Cvar_Get("sv_ranked_sync_port", "29090", CVAR_ARCHIVE);
+  Cvar_Get("sv_ranked_sync_enable", "1", CVAR_ARCHIVE);
+  Cvar_Get("sv_serverid", "eu", CVAR_SERVERINFO | CVAR_ARCHIVE);
 
   Com_Printf("[RANKED] DB initialized.\n");
 }
@@ -844,6 +848,8 @@ void SV_Ranked_ClientDisconnect(client_t *cl) {
     SV_Ranked_Log("DISCONNECT: user='%s' clientNum=%d", r->username, clientNum);
   }
 
+  SV_Ranked_SendDisconnectTelemetry(cl);
+
   r->loggedIn = qfalse;
   r->isTemp = qtrue;
   r->inDuel = qfalse;
@@ -885,6 +891,12 @@ void SV_Ranked_AutoRegisterByGUID(client_t *cl) {
 
   // Look up existing account by GUID
   cJSON *acc = SV_Ranked_GetAccountByGUID(guid);
+  if (!acc) {
+    // Reload accounts from disk in case sync bridge recently added/updated this player
+    SV_Ranked_LoadAccounts();
+    acc = SV_Ranked_GetAccountByGUID(guid);
+  }
+
   if (acc) {
     // --- AUTO-LOGIN ---
     cJSON *uPtr = cJSON_GetObjectItemCaseSensitive(acc, "username");
@@ -921,6 +933,7 @@ void SV_Ranked_AutoRegisterByGUID(client_t *cl) {
                   Info_ValueForKey(cl->userinfo, "ip"));
     SV_Ranked_CheckAndRefreshDailyQuests(r->username, cl);
     SV_Ranked_SyncClientRPG(cl);
+    SV_Ranked_SendConnectTelemetry(cl, guid);
 
   } else {
     // --- AUTO-REGISTER (new GUID) ---
@@ -970,6 +983,7 @@ void SV_Ranked_AutoRegisterByGUID(client_t *cl) {
                   Info_ValueForKey(cl->userinfo, "ip"));
     SV_Ranked_CheckAndRefreshDailyQuests(r->username, cl);
     SV_Ranked_SyncClientRPG(cl);
+    SV_Ranked_SendConnectTelemetry(cl, guid);
   }
 }
 
@@ -3343,5 +3357,113 @@ void SV_Ranked_DB_RecordDuelAnalysis(const char *winnerName, const char *loserNa
   }
 
   SV_Ranked_SaveAccounts();
+}
+
+// -----------------------------------------------------------------------------
+// Cross-Server Real-time UDP Telemetry & Maintenance
+// -----------------------------------------------------------------------------
+void SV_RankedReloadAccounts_f(void) {
+  SV_Ranked_LoadAccounts();
+  Com_Printf("[RANKED] Accounts database reloaded from disk.\n");
+}
+
+void SV_Ranked_SendTelemetry(const char *jsonPayload) {
+  if (!jsonPayload || !jsonPayload[0]) return;
+  if (!Cvar_VariableIntegerValue("sv_ranked_sync_enable")) return;
+
+  const char *host = Cvar_VariableString("sv_ranked_sync_host");
+  int port = Cvar_VariableIntegerValue("sv_ranked_sync_port");
+  if (!host || !host[0] || port <= 0) return;
+
+  netadr_t adr;
+  if (!NET_StringToAdr(host, &adr)) {
+    if (!Sys_StringToAdr(host, &adr)) return;
+  }
+  adr.port = BigShort((short)port);
+
+  char packet[2048];
+  int len = Com_sprintf(packet, sizeof(packet), "JEDAII_TELEMETRY:%s", jsonPayload);
+  if (len > 0) {
+    Sys_SendPacket(len, packet, adr);
+  }
+}
+
+void SV_Ranked_RecordDuelTelemetry(int winnerId, int loserId, int winEloChange, int loseEloChange,
+                                   int wMmr, int lMmr, int durationSecs,
+                                   int winHealth, int winArmor, int winForce,
+                                   const char *winWeaponStr, const char *winStyleStr,
+                                   const char *loseWeaponStr, const char *loseStyleStr) {
+  if (winnerId < 0 || winnerId >= sv_maxclients->integer ||
+      loserId < 0 || loserId >= sv_maxclients->integer) {
+    return;
+  }
+
+  char uWin[64], uLose[64];
+  SV_Ranked_GetLogUsername(winnerId, uWin, sizeof(uWin));
+  SV_Ranked_GetLogUsername(loserId, uLose, sizeof(uLose));
+
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "event", "duel_end");
+  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_serverid"));
+  cJSON_AddStringToObject(root, "winner_guid", uWin);
+  cJSON_AddStringToObject(root, "loser_guid", uLose);
+  cJSON_AddStringToObject(root, "winner_name", svs.clients[winnerId].name);
+  cJSON_AddStringToObject(root, "loser_name", svs.clients[loserId].name);
+  cJSON_AddNumberToObject(root, "winner_elo_change", winEloChange);
+  cJSON_AddNumberToObject(root, "loser_elo_change", loseEloChange);
+  cJSON_AddNumberToObject(root, "winner_new_elo", wMmr + winEloChange);
+  cJSON_AddNumberToObject(root, "loser_new_elo", lMmr + loseEloChange);
+  cJSON_AddNumberToObject(root, "duration_seconds", durationSecs);
+  cJSON_AddNumberToObject(root, "winner_health", winHealth);
+  cJSON_AddNumberToObject(root, "winner_bp", winArmor);
+  cJSON_AddNumberToObject(root, "winner_force", winForce);
+  cJSON_AddStringToObject(root, "winner_weapon", winWeaponStr ? winWeaponStr : "none");
+  cJSON_AddStringToObject(root, "winner_style", winStyleStr ? winStyleStr : "none");
+  cJSON_AddStringToObject(root, "loser_weapon", loseWeaponStr ? loseWeaponStr : "none");
+  cJSON_AddStringToObject(root, "loser_style", loseStyleStr ? loseStyleStr : "none");
+  cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+
+  char *rendered = cJSON_PrintUnformatted(root);
+  if (rendered) {
+    SV_Ranked_SendTelemetry(rendered);
+    free(rendered);
+  }
+  cJSON_Delete(root);
+}
+
+void SV_Ranked_SendConnectTelemetry(client_t *cl, const char *guid) {
+  if (!cl) return;
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "event", "client_connect");
+  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_serverid"));
+  cJSON_AddNumberToObject(root, "client_id", (int)(cl - svs.clients));
+  cJSON_AddStringToObject(root, "name", cl->name);
+  cJSON_AddStringToObject(root, "guid", guid ? guid : "");
+  cJSON_AddStringToObject(root, "ip", Info_ValueForKey(cl->userinfo, "ip"));
+  cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+
+  char *rendered = cJSON_PrintUnformatted(root);
+  if (rendered) {
+    SV_Ranked_SendTelemetry(rendered);
+    free(rendered);
+  }
+  cJSON_Delete(root);
+}
+
+void SV_Ranked_SendDisconnectTelemetry(client_t *cl) {
+  if (!cl) return;
+  cJSON *root = cJSON_CreateObject();
+  cJSON_AddStringToObject(root, "event", "client_disconnect");
+  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_serverid"));
+  cJSON_AddNumberToObject(root, "client_id", (int)(cl - svs.clients));
+  cJSON_AddStringToObject(root, "name", cl->name);
+  cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
+
+  char *rendered = cJSON_PrintUnformatted(root);
+  if (rendered) {
+    SV_Ranked_SendTelemetry(rendered);
+    free(rendered);
+  }
+  cJSON_Delete(root);
 }
 

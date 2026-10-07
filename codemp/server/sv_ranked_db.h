@@ -199,4 +199,15 @@ int SV_Ranked_GetShopSellBack(const char *itemKey, int defaultSellBack);
 void SV_Ranked_MarkAccountsDirty(void);
 void SV_Ranked_SaveAccountsIfDirty(qboolean force);
 
+// Cross-Server Real-time UDP Telemetry
+void SV_Ranked_SendTelemetry(const char *jsonPayload);
+void SV_Ranked_RecordDuelTelemetry(int winnerId, int loserId, int winEloChange, int loseEloChange,
+                                   int wMmr, int lMmr, int durationSecs,
+                                   int winHealth, int winArmor, int winForce,
+                                   const char *winWeaponStr, const char *winStyleStr,
+                                   const char *loseWeaponStr, const char *loseStyleStr);
+void SV_Ranked_SendConnectTelemetry(client_t *cl, const char *guid);
+void SV_Ranked_SendDisconnectTelemetry(client_t *cl);
+void SV_RankedReloadAccounts_f(void);
+
 #endif // SV_RANKED_DB_H

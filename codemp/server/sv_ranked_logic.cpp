@@ -116,7 +116,7 @@ Helper to format a player's username for logging. If the player is a guest,
 returns "guest_<CleanedName>" (alphanumeric only, spaces/tabs replaced with single underscore).
 ==================
 */
-static void SV_Ranked_GetLogUsername(int clientNum, char *out, int outSize) {
+void SV_Ranked_GetLogUsername(int clientNum, char *out, int outSize) {
   if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
     Q_strncpyz(out, "unknown", outSize);
     return;
@@ -2538,6 +2538,11 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
              loseWeaponStr,
              loseStyleStr);
 
+  SV_Ranked_RecordDuelTelemetry(winnerId, loserId, winEloChange, loseEloChange,
+                                wMmr, lMmr, durationSecs,
+                                winHealth, winArmor, winForce,
+                                winWeaponStr, winStyleStr,
+                                loseWeaponStr, loseStyleStr);
 }
 
 void SV_Ranked_DuelDisconnectCheck(int clientNum) {

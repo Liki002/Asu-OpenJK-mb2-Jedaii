@@ -2444,6 +2444,9 @@ void SV_AddOperatorCommands(void) {
                  "Reset a player's ranked password"); // RANKED
   Cmd_AddCommand("ranked_clearaccounts", SV_RankedClearAccounts_f,
                  "Wipes the ranked accounts database completely"); // RANKED
+  extern void SV_RankedReloadAccounts_f(void);
+  Cmd_AddCommand("ranked_reload", SV_RankedReloadAccounts_f,
+                 "Reloads the ranked accounts database from disk"); // RANKED
 
   // RANKED: Admin Utils
   // (Commands like sv_slap, sv_teleport removed for ToS Compliance)
