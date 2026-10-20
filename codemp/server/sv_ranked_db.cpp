@@ -607,7 +607,7 @@ void SV_Ranked_Init(void) {
   Cvar_Get("sv_ranked_sync_host", "51.195.219.239", CVAR_ARCHIVE);
   Cvar_Get("sv_ranked_sync_port", "29090", CVAR_ARCHIVE);
   Cvar_Get("sv_ranked_sync_enable", "1", CVAR_ARCHIVE);
-  Cvar_Get("sv_serverid", "eu", CVAR_SERVERINFO | CVAR_ARCHIVE);
+  Cvar_Get("sv_ranked_serverid", "eu", CVAR_ARCHIVE);
 
   Com_Printf("[RANKED] DB initialized.\n");
 }
@@ -3404,7 +3404,7 @@ void SV_Ranked_RecordDuelTelemetry(int winnerId, int loserId, int winEloChange, 
 
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "event", "duel_end");
-  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_serverid"));
+  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_ranked_serverid"));
   cJSON_AddStringToObject(root, "winner_guid", uWin);
   cJSON_AddStringToObject(root, "loser_guid", uLose);
   cJSON_AddStringToObject(root, "winner_name", svs.clients[winnerId].name);
@@ -3435,7 +3435,7 @@ void SV_Ranked_SendConnectTelemetry(client_t *cl, const char *guid) {
   if (!cl) return;
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "event", "client_connect");
-  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_serverid"));
+  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_ranked_serverid"));
   cJSON_AddNumberToObject(root, "client_id", (int)(cl - svs.clients));
   cJSON_AddStringToObject(root, "name", cl->name);
   cJSON_AddStringToObject(root, "guid", guid ? guid : "");
@@ -3454,7 +3454,7 @@ void SV_Ranked_SendDisconnectTelemetry(client_t *cl) {
   if (!cl) return;
   cJSON *root = cJSON_CreateObject();
   cJSON_AddStringToObject(root, "event", "client_disconnect");
-  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_serverid"));
+  cJSON_AddStringToObject(root, "server", Cvar_VariableString("sv_ranked_serverid"));
   cJSON_AddNumberToObject(root, "client_id", (int)(cl - svs.clients));
   cJSON_AddStringToObject(root, "name", cl->name);
   cJSON_AddNumberToObject(root, "timestamp", (double)time(NULL));
