@@ -1864,6 +1864,10 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
              !Q_stricmp(cmdSpace, "!inv") || !Q_stricmp(cmdSpace, "!i")) {
     SV_Ranked_Cmd_Inventory(cl);
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!collection") ||
+             !Q_stricmp(cmdSpace, "!col")) {
+    SV_Ranked_ShowCollection(cl);
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!buy")) {
     SV_Ranked_Cmd_Buy(cl, chatText);
     return qtrue;

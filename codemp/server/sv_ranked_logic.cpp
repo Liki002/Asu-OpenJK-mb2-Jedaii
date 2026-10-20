@@ -976,6 +976,9 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
   UpdateAccountStats(kState->username, killerName, 0, xpPerKill, 1, 0, weaponStr);
   UpdateAccountCredits(kState->username, creditsPerKill);
 
+  // Chance of a loot item (FA / Legends only; no-op in other modes)
+  SV_Ranked_RollLoot(killerId, victimId);
+
   const char *mappedWep = SV_Ranked_GetWeaponName(weaponStr);
 
   // Daily quest: kills
@@ -1310,6 +1313,9 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
     SV_Ranked_StopHotPotato(qfalse);
   }
   const char *modeStr = SV_Ranked_GetActiveMode();
+  // Full Authentic scenarios vary too much for a fixed rating: FA rounds still
+  // count wins/losses and pay credits, but never change Elo.
+  const qboolean noElo = (Q_stricmp(modeStr, "fa") == 0) ? qtrue : qfalse;
   Com_Printf("[RANKED] ====== ROUND END ======\n");
   Com_Printf("[RANKED] Winner team: %d | Mode: %s\n", winnerTeam, modeStr);
 
@@ -1423,8 +1429,10 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
 
     if (onWinningTeam) {
       // K/D-based Elo for winners (Open mode)
-      int frGain;
-      if (mState->roundDeaths > mState->roundKills) {
+      int frGain = 0;
+      if (noElo) {
+        SV_SendServerCommand(cl, "print \"^2VICTORY! ^7Your team won the round.\n\"");
+      } else if (mState->roundDeaths > mState->roundKills) {
         frGain = 5; // carried by team
         SV_SendServerCommand(
             cl,
@@ -1436,7 +1444,9 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
                              "print \"^2VICTORY! ^7Positive K/D! (+15 Elo)\n\"");
         Com_Printf("[RANKED] %s WIN (positive KD): +15 Elo\n", mState->username);
       }
-      AddEloToAccount(mState->username, frGain);
+      if (frGain != 0) {
+        AddEloToAccount(mState->username, frGain);
+      }
       IncrementWinLoss(mState->username, qtrue, cl);
       cJSON *crTeamWinPtr = SV_Ranked_GetSetting("credits_per_team_win");
       int crTeamWin = crTeamWinPtr ? crTeamWinPtr->valueint : 20;
@@ -1468,8 +1478,10 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
 
     } else {
       // Losers
-      int frLoss;
-      if (mState->roundKills > mState->roundDeaths) {
+      int frLoss = 0;
+      if (noElo) {
+        SV_SendServerCommand(cl, "chat \"^1DEFEAT. ^7Your team lost the round.\"");
+      } else if (mState->roundKills > mState->roundDeaths) {
         frLoss = 0;
         SV_SendServerCommand(cl, "chat \"^1DEFEAT. ^7Good fight — positive K/D "
                                  "saves your rank. (-0 Elo)\"");

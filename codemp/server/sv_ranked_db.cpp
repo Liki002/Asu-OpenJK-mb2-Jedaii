@@ -41,6 +41,70 @@ static const shopItem_t sv_shopItems[] = {
     {"win_msg", "^5Custom Win Msg ^7(Unlock !setwinmsg)", 20000, 0},
     {NULL, NULL, 0, 0}};
 
+// -----------------------------------------------------------------------------
+// Loot drops & collections (FA / Legends). Loot items are found by killing
+// players, never bought (price 0), and can be kept for a set or sold. Keys all
+// start with "loot_". sv_lootRarity / sv_lootSetIdx are parallel to
+// sv_lootItems (0 common, 1 uncommon, 2 rare, 3 legendary; set index or -1).
+// -----------------------------------------------------------------------------
+static const shopItem_t sv_lootItems[] = {
+    // Set 0: Rebel Alliance Kit
+    {"loot_reb_comlink", "^7Rebel Comlink", 0, 25},
+    {"loot_reb_ration", "^7Rebel Ration Pack", 0, 25},
+    {"loot_reb_helmet", "^2Rebel Pilot Helmet", 0, 90},
+    {"loot_reb_medal", "^5Alliance Medal of Honor", 0, 300},
+    // Set 1: Imperial Cache
+    {"loot_imp_keycard", "^7Imperial Keycard", 0, 25},
+    {"loot_imp_scrap", "^7Imperial Armor Scrap", 0, 25},
+    {"loot_imp_cap", "^2Imperial Officer's Cap", 0, 90},
+    {"loot_imp_codecyl", "^5Star Destroyer Codecylinder", 0, 300},
+    // Set 2: Jedi Order Relics
+    {"loot_jedi_holorec", "^7Jedi Holo-Recording", 0, 30},
+    {"loot_jedi_remote", "^7Training Remote", 0, 30},
+    {"loot_jedi_kyber", "^2Kyber Crystal Shard", 0, 100},
+    {"loot_jedi_robe", "^5Council Master's Robe", 0, 350},
+    // Set 3: Sith Artifacts
+    {"loot_sith_talisman", "^7Sith Talisman", 0, 30},
+    {"loot_sith_tomepage", "^7Torn Sith Tome Page", 0, 30},
+    {"loot_sith_amulet", "^2Sith Amulet", 0, 100},
+    {"loot_sith_core", "^5Holocron Core", 0, 350},
+    // Legendary (standalone)
+    {"loot_leg_hilt", "^3Hilt of a Forgotten Master", 0, 1200},
+    {"loot_leg_heart", "^3Heart of the Force", 0, 1500},
+    {"loot_leg_beskar", "^3Beskar Ingot", 0, 1000},
+    {"loot_leg_holocron", "^3Ancient Holocron", 0, 2000},
+    {NULL, NULL, 0, 0}};
+
+static const int sv_lootRarity[] = {0, 0, 1, 2, 0, 0, 1, 2, 0, 0, 1, 2,
+                                    0, 0, 1, 2, 3, 3, 3, 3};
+static const int sv_lootSetIdx[] = {0, 0, 0, 0, 1, 1, 1, 1, 2, 2,
+                                    2, 2, 3, 3, 3, 3, -1, -1, -1, -1};
+
+typedef struct lootSet_s {
+  const char *id;
+  const char *name;
+  const char *pieces[4];
+  int rewardCredits;
+} lootSet_t;
+
+static const lootSet_t sv_lootSets[] = {
+    {"rebel", "Rebel Alliance Kit",
+     {"loot_reb_comlink", "loot_reb_ration", "loot_reb_helmet", "loot_reb_medal"}, 400},
+    {"imperial", "Imperial Cache",
+     {"loot_imp_keycard", "loot_imp_scrap", "loot_imp_cap", "loot_imp_codecyl"}, 400},
+    {"jedi", "Jedi Order Relics",
+     {"loot_jedi_holorec", "loot_jedi_remote", "loot_jedi_kyber", "loot_jedi_robe"}, 450},
+    {"sith", "Sith Artifacts",
+     {"loot_sith_talisman", "loot_sith_tomepage", "loot_sith_amulet", "loot_sith_core"}, 450},
+    {NULL, NULL, {NULL, NULL, NULL, NULL}, 0}};
+
+static_assert(sizeof(sv_lootItems) / sizeof(sv_lootItems[0]) - 1 ==
+                  sizeof(sv_lootRarity) / sizeof(sv_lootRarity[0]),
+              "sv_lootRarity must match sv_lootItems");
+static_assert(sizeof(sv_lootItems) / sizeof(sv_lootItems[0]) - 1 ==
+                  sizeof(sv_lootSetIdx) / sizeof(sv_lootSetIdx[0]),
+              "sv_lootSetIdx must match sv_lootItems");
+
 cJSON *accountsDB = NULL; // exported (referenced by sv_ranked_logic/cmds)
 static cJSON *rankedConfig = NULL;
 
@@ -441,6 +505,16 @@ const char *SV_Ranked_GetActiveMode(void) {
   if (sv_gametype && (sv_gametype->integer == GT_DUEL ||
                       sv_gametype->integer == GT_POWERDUEL)) {
     return "duel";
+  }
+
+  // g_Authenticity follows the MBII mbmode numbers (0 Open, 2 FA, 3 Duel,
+  // 4 Legends). Open and Duel were confirmed on the EU server; FA and Legends
+  // get their own buckets so their stats/ELO no longer mix into Open.
+  if (auth == 2) {
+    return "fa";
+  }
+  if (auth == 4) {
+    return "legends";
   }
 
   return "open";
@@ -2228,12 +2302,219 @@ static const shopItem_t *FindShopItem(const char *key) {
     if (!Q_stricmp(sv_shopItems[i].key, key))
       return &sv_shopItems[i];
   }
+  // Loot items are sellable / listable like shop items but are not in the shop
+  for (int i = 0; sv_lootItems[i].key != NULL; i++) {
+    if (!Q_stricmp(sv_lootItems[i].key, key))
+      return &sv_lootItems[i];
+  }
   return NULL;
 }
 
 const char *SV_Ranked_GetItemDisplayName(const char *key) {
   const shopItem_t *item = FindShopItem(key);
   return item ? item->display : key;
+}
+
+// ============================================================
+//  LOOT DROPS & COLLECTIONS (FA / Legends)
+// ============================================================
+
+static const char *Ranked_RarityName(int rarity) {
+  switch (rarity) {
+  case 1:
+    return "^2Uncommon";
+  case 2:
+    return "^5Rare";
+  case 3:
+    return "^3LEGENDARY";
+  default:
+    return "^7Common";
+  }
+}
+
+// Returns the inventory object of an account, creating/repairing it if needed
+// (older accounts can have inventory stored as the string "{}").
+static cJSON *Ranked_GetInventoryObject(cJSON *acc) {
+  cJSON *inv = cJSON_GetObjectItemCaseSensitive(acc, "inventory");
+  if (inv && !cJSON_IsObject(inv)) {
+    cJSON_ReplaceItemInObject(acc, "inventory", cJSON_CreateObject());
+    inv = cJSON_GetObjectItemCaseSensitive(acc, "inventory");
+  }
+  if (!inv) {
+    inv = cJSON_AddObjectToObject(acc, "inventory");
+  }
+  return inv;
+}
+
+// Picks a random loot item index of the given rarity, or -1.
+static int Ranked_PickLootIndex(int rarity) {
+  int matches[32];
+  int n = 0;
+  for (int i = 0; sv_lootItems[i].key != NULL && n < 32; i++) {
+    if (sv_lootRarity[i] == rarity)
+      matches[n++] = i;
+  }
+  if (n == 0)
+    return -1;
+  return matches[rand() % n];
+}
+
+// Pays out each collection that has just become complete (once per account).
+static void Ranked_CheckSetCompletion(client_t *cl, rankedMatchState_t *r,
+                                      cJSON *acc) {
+  cJSON *inv = cJSON_GetObjectItemCaseSensitive(acc, "inventory");
+  if (!inv || !cJSON_IsObject(inv))
+    return;
+
+  for (int s = 0; sv_lootSets[s].id != NULL; s++) {
+    cJSON *done = cJSON_GetObjectItemCaseSensitive(acc, "collections_done");
+    if (done && cJSON_GetObjectItemCaseSensitive(done, sv_lootSets[s].id))
+      continue;
+
+    qboolean complete = qtrue;
+    for (int p = 0; p < 4; p++) {
+      cJSON *it = cJSON_GetObjectItemCaseSensitive(inv, sv_lootSets[s].pieces[p]);
+      if (!it || it->valueint <= 0) {
+        complete = qfalse;
+        break;
+      }
+    }
+    if (!complete)
+      continue;
+
+    if (!done)
+      done = cJSON_AddObjectToObject(acc, "collections_done");
+    cJSON_AddNumberToObject(done, sv_lootSets[s].id, 1);
+
+    UpdateAccountCredits(r->username, sv_lootSets[s].rewardCredits);
+    SV_SendServerCommand(cl, "cp \"^5COLLECTION COMPLETE!\n^7%s\"",
+                         sv_lootSets[s].name);
+    SV_SendServerCommand(
+        NULL, "chat \"^5COLLECTION COMPLETE! ^7%s ^7finished the ^3%s ^7set! ^3+%d Credits\"",
+        cl->name, sv_lootSets[s].name, sv_lootSets[s].rewardCredits);
+    SV_Ranked_Log("COLLECTION: %s completed '%s' (+%d credits)", r->username,
+                  sv_lootSets[s].name, sv_lootSets[s].rewardCredits);
+  }
+}
+
+/*
+==================
+SV_Ranked_RollLoot
+
+Chance for a loot item when a logged-in player kills another real player in
+FA or Legends. Settings (ranked config): loot_enabled (1), loot_drop_chance
+(percent, 10). Lucky Charm adds +50% to the chance. Kills on bots, kills on
+the same victim more than 4 times, and team kills never drop loot.
+==================
+*/
+void SV_Ranked_RollLoot(int killerId, int victimId) {
+  const char *mode = SV_Ranked_GetActiveMode();
+  if (Q_stricmp(mode, "fa") != 0 && Q_stricmp(mode, "legends") != 0)
+    return;
+
+  cJSON *enabled = SV_Ranked_GetSetting("loot_enabled");
+  if (enabled && cJSON_IsNumber(enabled) && enabled->valueint == 0)
+    return;
+
+  if (killerId < 0 || killerId >= sv_maxclients->integer || victimId < 0 ||
+      victimId >= sv_maxclients->integer || killerId == victimId)
+    return;
+
+  client_t *killerCl = &svs.clients[killerId];
+  client_t *victimCl = &svs.clients[victimId];
+  if (!killerCl->state || !victimCl->state)
+    return;
+  if (victimCl->netchan.remoteAddress.type == NA_BOT)
+    return;
+
+  rankedMatchState_t *k = &sv_rankedPlayers[killerId];
+  if (!k->loggedIn || !k->username[0])
+    return;
+  if (k->killsOnPlayers[victimId] > 4)
+    return;
+
+  cJSON *chancePtr = SV_Ranked_GetSetting("loot_drop_chance");
+  int chance = (chancePtr && cJSON_IsNumber(chancePtr)) ? chancePtr->valueint : 10;
+  if (k->activeLuckyCharm)
+    chance += chance / 2;
+  if (chance <= 0 || (rand() % 100) >= chance)
+    return;
+
+  int roll = rand() % 100;
+  int rarity = (roll < 60) ? 0 : (roll < 88) ? 1 : (roll < 98) ? 2 : 3;
+  int idx = Ranked_PickLootIndex(rarity);
+  if (idx < 0)
+    return;
+
+  cJSON *acc = SV_Ranked_GetAccount(k->username);
+  if (!acc)
+    return;
+
+  cJSON *inv = Ranked_GetInventoryObject(acc);
+  const shopItem_t *item = &sv_lootItems[idx];
+  cJSON *owned = cJSON_GetObjectItemCaseSensitive(inv, item->key);
+  if (owned)
+    cJSON_SetNumberValue(owned, owned->valueint + 1);
+  else
+    cJSON_AddNumberToObject(inv, item->key, 1);
+
+  SV_SendServerCommand(killerCl, "chat \"^3LOOT DROP! ^7%s ^7(%s^7)\"",
+                       item->display, Ranked_RarityName(rarity));
+  if (rarity >= 2) {
+    SV_SendServerCommand(NULL, "chat \"^3%s ^7found %s ^7(%s^7)!\"",
+                         killerCl->name, item->display, Ranked_RarityName(rarity));
+  }
+  SV_Ranked_Log("LOOT: %s found %s (rarity %d) mode=%s", k->username, item->key,
+                rarity, mode);
+
+  Ranked_CheckSetCompletion(killerCl, k, acc);
+  SV_Ranked_MarkAccountsDirty();
+}
+
+/*
+==================
+SV_Ranked_ShowCollection  (!collection)
+==================
+*/
+void SV_Ranked_ShowCollection(client_t *cl) {
+  int clientNum = cl - svs.clients;
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r->loggedIn) {
+    SV_SendServerCommand(cl, "chat \"^3You must be logged in to view your collections.\"");
+    return;
+  }
+
+  cJSON *acc = SV_Ranked_GetAccount(r->username);
+  if (!acc)
+    return;
+  cJSON *inv = cJSON_GetObjectItemCaseSensitive(acc, "inventory");
+  if (inv && !cJSON_IsObject(inv))
+    inv = NULL;
+  cJSON *done = cJSON_GetObjectItemCaseSensitive(acc, "collections_done");
+
+  SV_SendServerCommand(cl, "print \"\n^5=== Your Collections ===\n\"");
+  for (int s = 0; sv_lootSets[s].id != NULL; s++) {
+    int have = 0;
+    for (int p = 0; p < 4; p++) {
+      cJSON *it = inv ? cJSON_GetObjectItemCaseSensitive(inv, sv_lootSets[s].pieces[p]) : NULL;
+      if (it && it->valueint > 0)
+        have++;
+    }
+    qboolean isDone = (done && cJSON_GetObjectItemCaseSensitive(done, sv_lootSets[s].id)) ? qtrue : qfalse;
+    SV_SendServerCommand(cl, "print \"^3%s ^7[%d/4]%s\n\"", sv_lootSets[s].name,
+                         have, isDone ? " ^2COMPLETE" : "");
+    for (int p = 0; p < 4; p++) {
+      cJSON *it = inv ? cJSON_GetObjectItemCaseSensitive(inv, sv_lootSets[s].pieces[p]) : NULL;
+      if (it && it->valueint > 0) {
+        SV_SendServerCommand(cl, "print \"^7  - %s ^5x%d\n\"",
+                             SV_Ranked_GetItemDisplayName(sv_lootSets[s].pieces[p]),
+                             it->valueint);
+      } else {
+        SV_SendServerCommand(cl, "print \"^1  - ???\n\"");
+      }
+    }
+  }
+  SV_SendServerCommand(cl, "print \"^5Loot drops from kills in FA and Legends. Sell with ^3!sell <key>^5.\n\"");
 }
 
 // ===========================================================================
@@ -2911,6 +3192,12 @@ void SV_Ranked_ShopBuy(client_t *cl, const char *itemName) {
     return;
   }
 
+  // Loot items (price 0) can only be found, never bought
+  if (item->price <= 0) {
+    SV_SendServerCommand(cl, "chat \"^1That item is not for sale. Find it as loot in FA or Legends!\"");
+    return;
+  }
+
   cJSON *acc = SV_Ranked_GetAccount(r->username);
   if (!acc)
     return;
@@ -3037,6 +3324,13 @@ void SV_Ranked_ShopUse(client_t *cl, const char *itemName) {
 
   if (!owned || owned->valueint <= 0) {
     SV_SendServerCommand(cl, "chat \"^1You don't own any ^5%s^1.\"",
+                         item->display);
+    return;
+  }
+
+  // Collectibles are kept for sets or sold, never consumed by !use
+  if (!Q_stricmpn(item->key, "loot_", 5)) {
+    SV_SendServerCommand(cl, "chat \"%s ^7is a collectible. Keep it for your set (^3!collection^7) or ^3!sell^7 it.\"",
                          item->display);
     return;
   }

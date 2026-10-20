@@ -195,6 +195,10 @@ void SV_Ranked_RecordRecentDuel(const char *username, const char *opponentName, 
 int SV_Ranked_GetShopPrice(const char *itemKey, int defaultPrice);
 int SV_Ranked_GetShopSellBack(const char *itemKey, int defaultSellBack);
 
+// Loot drops and collections (FA / Legends)
+void SV_Ranked_RollLoot(int killerId, int victimId);
+void SV_Ranked_ShowCollection(client_t *cl);
+
 // Non-blocking Debounced Database Saving
 void SV_Ranked_MarkAccountsDirty(void);
 void SV_Ranked_SaveAccountsIfDirty(qboolean force);
