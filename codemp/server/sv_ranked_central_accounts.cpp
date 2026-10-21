@@ -36,6 +36,8 @@ std::string s_lastPush[MAXC];         // JSON last pushed for the account in thi
 int s_lastPushTime[MAXC];
 bool s_wantAccount[MAXC];             // connected, not logged in yet: fetch (or retry fetching) the account
 int s_retryAt[MAXC];
+bool s_inFlight[MAXC];                // a get/register for this slot is on the wire: do not start another
+int s_inFlightSince[MAXC];
 bool s_notifiedTemp[MAXC];
 bool s_inLegacyCall = false;
 int s_lastTick = 0;
@@ -163,9 +165,20 @@ void OnRegister(void *p, int ok, cJSON *res) {
     delete c;
     return;
   }
+  s_inFlight[c->n] = false;
+  if (sv_rankedPlayers[c->n].loggedIn) {
+    // already logged in (a duplicate request got here second): never replace the live account
+    if (good && Q_stricmp(sv_rankedPlayers[c->n].username, username->valuestring))
+      SendRelease(username->valuestring, "");
+    delete c;
+    return;
+  }
   if (!good) {
-    s_retryAt[c->n] = Sys_Milliseconds() + RETRY_INTERVAL_MS;
-    TellTemporary(c->n, "Could not create your account.");
+    const char *why = ErrorOf(res);
+    bool raced = !strcmp(why, "guid_bound") || !strcmp(why, "busy");   // someone else just created it: fetch again
+    s_wantAccount[c->n] = true;
+    s_retryAt[c->n] = Sys_Milliseconds() + (raced ? 300 : RETRY_INTERVAL_MS);
+    if (!raced) TellTemporary(c->n, "Could not create your account.");
     delete c;
     return;
   }
@@ -200,6 +213,15 @@ void OnGet(void *p, int ok, cJSON *res) {
     return;
   }
   int n = c->n;
+  s_inFlight[n] = false;
+
+  if (sv_rankedPlayers[n].loggedIn) {
+    // already logged in: ignore a late duplicate answer (it could carry an older copy of the account)
+    if (ok && username && cJSON_IsString(username) && Q_stricmp(sv_rankedPlayers[n].username, username->valuestring))
+      SendRelease(username->valuestring, "");
+    delete c;
+    return;
+  }
 
   if (ok && account && cJSON_IsObject(account) && username && cJSON_IsString(username)) {
     client_t *cl = &svs.clients[n];
@@ -223,6 +245,9 @@ void OnGet(void *p, int ok, cJSON *res) {
     if (!CentralCore_Request("register", f, OnRegister, next)) {
       delete next;
       s_retryAt[n] = Sys_Milliseconds() + RETRY_INTERVAL_MS;
+    } else {
+      s_inFlight[n] = true;
+      s_inFlightSince[n] = Sys_Milliseconds();
     }
     delete c;
     return;
@@ -250,6 +275,8 @@ void RequestAccount(int n) {
   const char *guid = PlayerGuid(cl);
   if (!guid || !guid[0])
     return;                                   // legacy code already told the player to /login manually
+  if (s_inFlight[n])
+    return;                                   // the answer to the previous request is still on its way
   if (!CentralCore_IsReady()) {
     s_retryAt[n] = Sys_Milliseconds() + RETRY_INTERVAL_MS;
     TellTemporary(n, "The account service is not reachable.");
@@ -265,6 +292,9 @@ void RequestAccount(int n) {
   if (!CentralCore_Request("get", f, OnGet, c)) {
     delete c;
     s_retryAt[n] = Sys_Milliseconds() + RETRY_INTERVAL_MS;
+  } else {
+    s_inFlight[n] = true;
+    s_inFlightSince[n] = Sys_Milliseconds();
   }
 }
 
@@ -370,6 +400,7 @@ void SV_Ranked_Central_OnClientConnect(client_t *cl) {
   s_notifiedTemp[n] = false;
   s_wantAccount[n] = true;
   s_retryAt[n] = 0;
+  s_inFlight[n] = false;
   RequestAccount(n);
 }
 
@@ -424,6 +455,8 @@ void SV_Ranked_Central_ReleasePlayer(int n) {
   if (n < 0 || n >= MAXC)
     return;
   s_wantAccount[n] = false;
+  s_inFlight[n] = false;
+  s_serial[n]++;                                // answers to requests of the player who left are ignored
   rankedMatchState_t *r = &sv_rankedPlayers[n];
   if (!r->loggedIn || !r->username[0])
     return;
@@ -533,6 +566,10 @@ void SV_Ranked_Central_Tick(void) {
   }
 
   for (int n = 0; n < sv_maxclients->integer && n < MAXC; ++n) {
+    if (s_inFlight[n] && now - s_inFlightSince[n] > 15000) {   // no answer for 15 s: forget it and try again
+      s_inFlight[n] = false;
+      s_serial[n]++;
+    }
     if (s_wantAccount[n] && svs.clients[n].state >= CS_CONNECTED && !sv_rankedPlayers[n].loggedIn && now >= s_retryAt[n])
       RequestAccount(n);
     else if (svs.clients[n].state < CS_CONNECTED)
