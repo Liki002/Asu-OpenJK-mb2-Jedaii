@@ -1864,6 +1864,27 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
   } else if (!Q_stricmp(cmdSpace, "!quests")) {
     SV_Ranked_ShowQuests(cl);
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!login") || !Q_stricmp(cmdSpace, "!register")) {
+    // same as the console command "login <user> <pass>", for players who do not use the console
+    char user[MAX_AUTH_STRING], pass[MAX_AUTH_STRING];
+    user[0] = pass[0] = '\0';
+    const char *p = strchr(chatText, ' ');
+    if (p) {
+      while (*p == ' ') p++;
+      int n = 0;
+      while (*p && *p != ' ' && n < (int)sizeof(user) - 1) user[n++] = *p++;
+      user[n] = '\0';
+      while (*p == ' ') p++;
+      n = 0;
+      while (*p && *p != ' ' && n < (int)sizeof(pass) - 1) pass[n++] = *p++;
+      pass[n] = '\0';
+    }
+    if (!user[0] || !pass[0]) {
+      SV_SendServerCommand(cl, "chat \"^1Usage: !login <username> <password>\"");
+      return qtrue;
+    }
+    SV_Ranked_LoginOrRegister(cl, user, pass);
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!logout")) {
     SV_Ranked_Logout(cl);
     return qtrue;
@@ -2508,6 +2529,7 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     SV_SendServerCommand(cl, "print \"\n^5[Account]\n\"");
     SV_SendServerCommand(cl, "print \"^2/login <user> <pass>    ^7Register or log in\n\"");
     SV_SendServerCommand(cl, "print \"^2/logout / !logout       ^7Log out\n\"");
+    SV_SendServerCommand(cl, "print \"^5!login <user> <pass>   ^7Log in (use your account on any server)\n\"");
     SV_SendServerCommand(cl, "print \"^5!changepassword/!passwd ^7Change password\n\"");
     SV_SendServerCommand(cl, "print \"^5!changeusername        ^7Change username\n\"");
     SV_SendServerCommand(cl, "print \"^3!details / !myinfo      ^7View account info\n\"");
