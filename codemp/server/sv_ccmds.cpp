@@ -2447,6 +2447,12 @@ void SV_AddOperatorCommands(void) {
   extern void SV_RankedReloadAccounts_f(void);
   Cmd_AddCommand("ranked_reload", SV_RankedReloadAccounts_f,
                  "Reloads the ranked accounts database from disk"); // RANKED
+  extern void SV_RankedCentralStatus_f(void);
+  extern void SV_RankedCentralPing_f(void);
+  Cmd_AddCommand("ranked_central_status", SV_RankedCentralStatus_f,
+                 "Shows the central account service connection state"); // RANKED
+  Cmd_AddCommand("ranked_central_ping", SV_RankedCentralPing_f,
+                 "Pings the central account service"); // RANKED
 
   // RANKED: Admin Utils
   // (Commands like sv_slap, sv_teleport removed for ToS Compliance)

@@ -1264,6 +1264,10 @@ void SV_Frame(int msec) {
   extern void SV_Ranked_Party_Heartbeat(void);
   SV_Ranked_Party_Heartbeat();
 
+  // Central account service connection (no-op unless sv_ranked_central_enable is 1)
+  extern void SV_Ranked_CentralFrame(void);
+  SV_Ranked_CentralFrame();
+
 
   // if time is about to hit the 32nd bit, kick all clients
   // and clear sv.time, rather

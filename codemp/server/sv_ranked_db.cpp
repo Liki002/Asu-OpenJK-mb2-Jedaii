@@ -683,10 +683,16 @@ void SV_Ranked_Init(void) {
   Cvar_Get("sv_ranked_sync_enable", "1", CVAR_ARCHIVE);
   Cvar_Get("sv_ranked_serverid", "eu", CVAR_ARCHIVE);
 
+  // Central account service client (off unless sv_ranked_central_enable is 1)
+  extern void SV_Ranked_CentralInit(void);
+  SV_Ranked_CentralInit();
+
   Com_Printf("[RANKED] DB initialized.\n");
 }
 
 void SV_Ranked_Shutdown(void) {
+  extern void SV_Ranked_CentralShutdown(void);
+  SV_Ranked_CentralShutdown();
   SV_Ranked_SaveAccounts();
   SV_Ranked_SaveConfig();
 
