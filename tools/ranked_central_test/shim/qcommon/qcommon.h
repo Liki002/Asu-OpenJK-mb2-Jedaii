@@ -33,3 +33,5 @@ void Huff_putBit(int bit, byte *fout, int *offset);
 void Huff_offsetTransmit(huff_t *huff, int ch, byte *fout, int *offset, int maxoffset);
 void Huff_addRef(huff_t *huff, byte ch);
 void Huff_Init(huffman_t *huff);
+int Huff_getBit(byte *fin, int *offset);
+void Huff_offsetReceive(node_t *node, int *ch, byte *fin, int *offset, int maxoffset);

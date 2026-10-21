@@ -3,7 +3,8 @@
 // (SV_ClientEnterWorld -> SV_Ranked_ClientConnect), and stays quiet afterwards.
 //
 // build: g++ -std=c++11 -I shim connect_client.cpp ../../codemp/qcommon/huffman.cpp -o connect_client
-// usage: ./connect_client <host> <port> <ja_guid> <name> <rcon_password> [hold_seconds]
+// usage: ./connect_client <host> <port> <ja_guid> <name> <rcon_password> [hold_seconds] ["cmd1;cmd2;..."]
+// Each command is sent as: say "<cmd>"  and the server commands (print/chat) that come back are printed as "CMD> ...".
 // The server needs sv_pure 0 (no "cp" pak checksum is sent).
 #include "qcommon/qcommon.h"
 #include <stdio.h>
@@ -12,6 +13,8 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <string>
+#include <map>
+#include <vector>
 
 #include "msg_hdata.inc"   // int msg_hData[256] (the engine's static message Huffman table)
 
@@ -34,6 +37,17 @@ struct Writer {
   int size() const { return (bit >> 3) + 1; }
 };
 
+struct Reader {
+  byte *d; int bit; int maxbits;
+  Reader(byte *data, int len) : d(data), bit(0), maxbits(len << 3) {}
+  int bits(int n) {   // same layout as MSG_ReadBits (non-OOB)
+    int value = 0, nb = 0;
+    if (n & 7) { nb = n & 7; for (int i = 0; i < nb; i++) value |= Huff_getBit(d, &bit) << i; n -= nb; }
+    for (int i = 0; i < n; i += 8) { int get = 0; Huff_offsetReceive(H.decompressor.tree, &get, d, &bit, maxbits); value |= get << (i + nb); }
+    return value;
+  }
+};
+
 static int g_sock;
 static sockaddr_in g_addr;
 
@@ -48,14 +62,21 @@ static std::string Rcon(const char *pw, const std::string &cmd) {
 }
 
 // Sends one client netchan packet: [seq][qport][payload], payload bytes from offset 12 xor-encoded like the engine does.
-static void SendNetchan(int seq, int qport, Writer &w, int challenge, int serverId, int msgAck) {
+static void SendNetchan(int seq, int qport, Writer &w, int challenge, int serverId, int msgAck, const std::string &relString = "") {
   byte pkt[2100];
   int n = w.size();
   memcpy(pkt, &seq, 4);
   pkt[4] = qport & 0xff; pkt[5] = (qport >> 8) & 0xff;
   memcpy(pkt + 6, w.d, n);
-  byte key = (byte)(challenge ^ serverId ^ msgAck);   // the acked server command string is empty this early
-  for (int i = 6 + 12; i < 6 + n; i++) pkt[i] ^= key;
+  byte key = (byte)(challenge ^ serverId ^ msgAck);
+  size_t idx = 0;   // key also depends on the last acked server command (like SV_Netchan_Decode)
+  for (int i = 6 + 12; i < 6 + n; i++) {
+    if (idx >= relString.size() || !relString[idx]) idx = 0;
+    byte ch = relString.empty() ? 0 : (byte)relString[idx];
+    if (ch == '%') key ^= '.' << (i & 1); else key ^= ch << (i & 1);
+    idx++;
+    pkt[i] ^= key;
+  }
   sendto(g_sock, pkt, 6 + n, 0, (sockaddr *)&g_addr, sizeof(g_addr));
 }
 
@@ -129,6 +150,87 @@ int main(int argc, char **argv) {
     w.bits(1, 1); w.bits(50, 8); w.bits(0, 1);   // serverTime +50, rest unchanged
     w.bits(5 /*clc_EOF*/, 8);
     SendNetchan(2, qport, w, serverChal, serverId, lastSeq);
+  }
+  // ---- optional chat commands; show what the server answers ----
+  std::string cmds = argc > 7 ? argv[7] : "";
+  std::map<int, std::string> serverCmds;   // reliable server commands seen so far, by sequence
+  int relAck = 0, seq = 3, cmdSeq = 0;
+  std::string lastCmd;                      // last client command the server has (key for its packets)
+  struct timeval q = {0, 50000};
+  setsockopt(g_sock, SOL_SOCKET, SO_RCVTIMEO, &q, sizeof(q));
+
+  auto pump = [&](int ms, const std::string &prevCmd) {
+    time_t endAt = time(NULL) + (ms + 999) / 1000;
+    int ticks = 0;
+    while (time(NULL) <= endAt) {
+      n = recv(g_sock, buf, sizeof(buf), 0);
+      if (n > 4) {
+        int ps; memcpy(&ps, buf, 4);
+        if (ps != -1 && !(ps & 0x80000000)) {
+          int pseq = ps & 0x7fffffff;
+          if (pseq > lastSeq) lastSeq = pseq;
+          const std::string *tries[2] = { &lastCmd, &prevCmd };
+          for (int t = 0; t < 2; t++) {
+            byte pl[8192]; int len = n - 4;
+            memcpy(pl, buf + 4, len);
+            byte key = (byte)(serverChal ^ pseq);
+            const std::string &lc = *tries[t];
+            size_t idx = 0;
+            for (int i = 4; i < len; i++) {
+              if (idx >= lc.size() || !lc[idx]) idx = 0;
+              byte ch = lc.empty() ? 0 : (byte)lc[idx];
+              if (ch == '%') key ^= '.' << (i & 1); else key ^= ch << (i & 1);
+              idx++;
+              pl[i] ^= key;
+            }
+            Reader r(pl, len);
+            r.bits(32);                       // reliableAcknowledge
+            int op = r.bits(8);
+            if (op < 1 || op > 8) continue;    // wrong key guess
+            while (op == 5 && r.bit < r.maxbits) {   // svc_serverCommand
+              int cs = r.bits(32);
+              std::string str;
+              for (int k = 0; k < 1024; k++) { int c = r.bits(8); if (!c) break; str += (char)c; }
+              if (!serverCmds.count(cs)) {
+                serverCmds[cs] = str;
+                if (str.compare(0, 5, "print") == 0 || str.compare(0, 4, "chat") == 0) printf("CMD> %s\n", str.c_str());
+              }
+              op = r.bits(8);
+            }
+            break;
+          }
+        }
+      }
+      // keep the connection fed: an empty usercmd every ~100ms, acking what we saw
+      if (++ticks % 2 == 0) {
+        while (serverCmds.count(relAck + 1)) relAck++;
+        Writer w;
+        w.bits(serverId, 32); w.bits(lastSeq, 32); w.bits(relAck, 32);
+        w.bits(2, 8); w.bits(1, 8); w.bits(1, 1); w.bits(50, 8); w.bits(0, 1); w.bits(5, 8);
+        SendNetchan(seq++, qport, w, serverChal, serverId, lastSeq, relAck > 0 ? serverCmds[relAck] : std::string());
+      }
+    }
+  };
+
+  pump(1200, "");
+  size_t pos = 0;
+  while (pos < cmds.size()) {
+    size_t semi = cmds.find(';', pos);
+    std::string c = cmds.substr(pos, semi == std::string::npos ? std::string::npos : semi - pos);
+    pos = semi == std::string::npos ? cmds.size() : semi + 1;
+    if (c.empty()) continue;
+    while (serverCmds.count(relAck + 1)) relAck++;
+    std::string text = "say \"" + c + "\"";
+    Writer w;
+    w.bits(serverId, 32); w.bits(lastSeq, 32); w.bits(relAck, 32);
+    w.bits(4 /*clc_clientCommand*/, 8); w.bits(++cmdSeq, 32);
+    for (size_t k = 0; k <= text.size(); k++) w.bits(k < text.size() ? (byte)text[k] : 0, 8);
+    w.bits(5, 8);
+    SendNetchan(seq++, qport, w, serverChal, serverId, lastSeq, relAck > 0 ? serverCmds[relAck] : std::string());
+    std::string prev = lastCmd;
+    lastCmd = text;
+    printf("SENT> %s\n", c.c_str());
+    pump(2500, prev);
   }
   sleep(hold);
   return 0;
