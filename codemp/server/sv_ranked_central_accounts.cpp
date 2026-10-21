@@ -651,6 +651,7 @@ void RunDisplay(const Waiter &w) {
   client_t *cl = &svs.clients[w.n];
   switch (w.kind) {
     case CENTRAL_TOP_ELO: SV_Ranked_ShowTop(cl); break;
+    case CENTRAL_TOP_ELO_ALL: SV_Ranked_ShowTopAll(cl); break;
     case CENTRAL_TOP_CREDITS: SV_Ranked_ShowTopCredits(cl); break;
     case CENTRAL_TOP_POTATO: SV_Ranked_ShowTopPotato(cl); break;
     case CENTRAL_TOP_WANTED: SV_Ranked_ShowWanted(cl); break;
@@ -769,7 +770,9 @@ int SV_Ranked_Central_TopRows(client_t *cl, int kind, const char *mode, const ch
   *rowsOut = NULL;
   if (n < 0 || n >= MAXC)
     return -1;
-  std::string key = std::string(mode) + "|" + field;
+  // leaderboards are per region (EU: ranked/HQ/BG, US) unless the player asked for everybody
+  const char *region = (kind == CENTRAL_TOP_ELO_ALL) ? "all" : "auto";
+  std::string key = std::string(mode) + "|" + field + "|" + region;
   TopEntry *e = FindTop(key);
   if (!e) {
     if ((int)s_top.size() >= MAX_TOP_KEYS) return -1;
@@ -783,6 +786,7 @@ int SV_Ranked_Central_TopRows(client_t *cl, int kind, const char *mode, const ch
     cJSON *f = cJSON_CreateObject();
     cJSON_AddStringToObject(f, "mode", mode);
     cJSON_AddStringToObject(f, "field", field);
+    cJSON_AddStringToObject(f, "region", region);
     cJSON_AddNumberToObject(f, "limit", 10);
     TopCtx *c = new TopCtx();
     c->key = key;

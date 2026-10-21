@@ -2096,14 +2096,14 @@ void SV_Ranked_InspectPlayer(client_t *cl, int targetClientNum) {
 SV_Ranked_ShowTop
 ==================
 */
-void SV_Ranked_ShowTop(client_t *cl) {
+static void Ranked_ShowTopImpl(client_t *cl, bool global) {
   if (!cl)
     return;
   const char *mode = SV_Ranked_GetActiveMode();
   std::vector<RankedListEntry> list;
   if (SV_Ranked_CentralEnabled()) {
     cJSON *rows = NULL;
-    int st = SV_Ranked_Central_TopRows(cl, CENTRAL_TOP_ELO, mode, "elo", &rows);
+    int st = SV_Ranked_Central_TopRows(cl, global ? CENTRAL_TOP_ELO_ALL : CENTRAL_TOP_ELO, mode, "elo", &rows);
     if (st == 0) return;   // shown again when the list arrives
     if (st < 0) { SV_SendServerCommand(cl, "chat \"^1The leaderboard is not available right now.\""); return; }
     list = Ranked_ListFromCentralRows(rows, true);
@@ -2115,8 +2115,8 @@ void SV_Ranked_ShowTop(client_t *cl) {
     return;
   }
 
-  SV_SendServerCommand(cl, "print \"\n^5--- ^7TOP 10 PLAYERS (^3%s^7) ^5---\n\"",
-                       mode);
+  SV_SendServerCommand(cl, "print \"\n^5--- ^7TOP 10 PLAYERS (^3%s^7%s) ^5---\n\"",
+                       mode, (global && SV_Ranked_CentralEnabled()) ? ", all servers" : "");
   SV_SendServerCommand(cl, "print \"^2#  Name                             Elo    W/L      Ratio   Rank\n\"");
   SV_SendServerCommand(cl, "print \"^2-- ---------------------------- ------ -------- ------- -----------\n\"");
 
@@ -2242,6 +2242,9 @@ void SV_Ranked_ShowRankThresholds(client_t *cl) {
   SV_SendServerCommand(cl, "print \"  ^1Grand Master         ^5- ^23000 Elo+\n\"");
   SV_SendServerCommand(cl, "print \"^5=============================\n\n\"");
 }
+
+void SV_Ranked_ShowTop(client_t *cl) { Ranked_ShowTopImpl(cl, false); }
+void SV_Ranked_ShowTopAll(client_t *cl) { Ranked_ShowTopImpl(cl, true); }
 
 void SV_Ranked_ShowTopCredits(client_t *cl) {
   if (!cl)

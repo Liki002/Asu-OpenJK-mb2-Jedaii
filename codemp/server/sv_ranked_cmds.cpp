@@ -1845,6 +1845,9 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
              !Q_stricmp(cmdSpace, "!topelo")) {
     SV_Ranked_ShowTop(cl);
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!topall") || !Q_stricmp(cmdSpace, "!topglobal")) {
+    SV_Ranked_ShowTopAll(cl);
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!toppotato")) {
     SV_Ranked_ShowTopPotato(cl);
     return qtrue;
@@ -2516,7 +2519,8 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     SV_SendServerCommand(cl, "print \"^3!toggleranked / !tr     ^7Toggle Ranked/Casual mode\n\"");
     SV_SendServerCommand(cl, "print \"^3!rank / !r              ^7View rank & XP progress\n\"");
     SV_SendServerCommand(cl, "print \"^3!ranks                 ^7View all rank tiers\n\"");
-    SV_SendServerCommand(cl, "print \"^3!top / !t               ^7Top Elo Duelists\n\"");
+    SV_SendServerCommand(cl, "print \"^3!top / !t               ^7Top Elo Duelists (this region)\n\"");
+    SV_SendServerCommand(cl, "print \"^3!topall                  ^7Top Elo Duelists (all servers)\n\"");
     SV_SendServerCommand(cl, "print \"^3!topcredits / !topcr    ^7Top Wealthiest\n\"");
     SV_SendServerCommand(cl, "print \"^3!toppotato              ^7Top Hot Potato\n\"");
     SV_SendServerCommand(cl, "print \"^3!wanted / !w            ^7Most Wanted Bounty Targets\n\"");

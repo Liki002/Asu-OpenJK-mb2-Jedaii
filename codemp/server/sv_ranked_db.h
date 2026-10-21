@@ -142,6 +142,7 @@ void SV_Ranked_ShowStats(client_t *cl);
 void SV_Ranked_ShowStatsTarget(client_t *cl, const char *targetName);
 void SV_Ranked_InspectPlayer(client_t *cl, int targetClientNum);
 void SV_Ranked_ShowTop(client_t *cl);
+void SV_Ranked_ShowTopAll(client_t *cl);   // all servers (central mode); same as ShowTop otherwise
 void SV_Ranked_ShowRank(client_t *cl);
 void SV_Ranked_ShowRankThresholds(client_t *cl);
 void SV_Ranked_ShowTopCredits(client_t *cl);

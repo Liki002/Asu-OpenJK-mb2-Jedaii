@@ -23,7 +23,7 @@ void SV_Ranked_Central_Drain(void);
 
 // leaderboards / offline lookups / rename
 struct cJSON;
-enum { CENTRAL_TOP_ELO = 0, CENTRAL_TOP_CREDITS, CENTRAL_TOP_POTATO, CENTRAL_TOP_WANTED };
+enum { CENTRAL_TOP_ELO = 0, CENTRAL_TOP_CREDITS, CENTRAL_TOP_POTATO, CENTRAL_TOP_WANTED, CENTRAL_TOP_ELO_ALL };
 int SV_Ranked_Central_TopRows(struct client_s *cl, int kind, const char *mode, const char *field, struct cJSON **rowsOut);
 int SV_Ranked_Central_Lookup(struct client_s *cl, const char *name, struct cJSON **out);
 void SV_Ranked_Central_Rename(struct client_s *cl, const char *newName);
