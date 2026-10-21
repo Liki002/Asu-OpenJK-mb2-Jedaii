@@ -938,7 +938,15 @@ void SV_Ranked_Cmd_Speed(client_t *cl, const char *target, float multiplier) {
 // Parse `!wanted` — show top 5 players by duel win streak + live bounty
 static void SV_Ranked_Cmd_Wanted(client_t *cl) {
   extern cJSON *accountsDB;
-  if (!accountsDB || !accountsDB->child) {
+  cJSON *centralRows = NULL;
+  if (SV_Ranked_CentralEnabled()) {
+    int st = SV_Ranked_Central_TopRows(cl, CENTRAL_TOP_WANTED, "duel", "streak", &centralRows);
+    if (st == 0) return;   // shown again when the list arrives
+    if (st < 0) {
+      SV_SendServerCommand(cl, "chat \"^1The wanted list is not available right now.\"");
+      return;
+    }
+  } else if (!accountsDB || !accountsDB->child) {
     SV_SendServerCommand(cl, "chat \"^1No player data found.\"");
     return;
   }
@@ -954,11 +962,12 @@ static void SV_Ranked_Cmd_Wanted(client_t *cl) {
   int topCount = 0;
   Com_Memset(top, 0, sizeof(top));
 
-  cJSON *player = accountsDB->child;
+  cJSON *player = centralRows ? centralRows->child : accountsDB->child;
   while (player) {
-    cJSON *modesObj  = cJSON_GetObjectItemCaseSensitive(player, "modes");
+    cJSON *modesObj  = centralRows ? NULL : cJSON_GetObjectItemCaseSensitive(player, "modes");
     cJSON *duelData  = modesObj ? cJSON_GetObjectItemCaseSensitive(modesObj, "duel") : NULL;
-    cJSON *streakPtr = duelData ? cJSON_GetObjectItemCaseSensitive(duelData, "streak") : NULL;
+    cJSON *streakPtr = centralRows ? cJSON_GetObjectItemCaseSensitive(player, "value")
+                                   : (duelData ? cJSON_GetObjectItemCaseSensitive(duelData, "streak") : NULL);
     cJSON *namePtr   = cJSON_GetObjectItemCaseSensitive(player, "displayName");
     cJSON *userPtr   = cJSON_GetObjectItemCaseSensitive(player, "username");
     if (!namePtr || !namePtr->valuestring || !namePtr->valuestring[0]) {
@@ -1021,6 +1030,8 @@ static void SV_Ranked_Cmd_Wanted(client_t *cl) {
   }
   SV_SendServerCommand(cl, "bounty_open 1");
 }
+
+void SV_Ranked_ShowWanted(client_t *cl) { SV_Ranked_Cmd_Wanted(cl); }
 
 // Parse `!inventory` — show owned items from JSON account
 void SV_Ranked_Cmd_Inventory(client_t *cl) {
@@ -1474,11 +1485,6 @@ static void SV_Ranked_Cmd_ChangeUsername(client_t *cl, const char *chatText) {
         cl, "chat \"^3You must be logged in to change your username.\"");
     return;
   }
-  if (SV_Ranked_CentralEnabled()) {
-    SV_SendServerCommand(cl, "chat \"^3Changing the username is not available yet.\"");
-    return;
-  }
-
   const char *arg = strchr(chatText, ' ');
   if (!arg) {
     SV_SendServerCommand(cl,
@@ -1506,6 +1512,11 @@ static void SV_Ranked_Cmd_ChangeUsername(client_t *cl, const char *chatText) {
 
   if (!Q_stricmp(newKey, r->username)) {
     SV_SendServerCommand(cl, "chat \"^1New username is the same as current.\"");
+    return;
+  }
+
+  if (SV_Ranked_CentralEnabled()) {
+    SV_Ranked_Central_Rename(cl, newKey);   // the service checks the name is free and renames the stored account
     return;
   }
 

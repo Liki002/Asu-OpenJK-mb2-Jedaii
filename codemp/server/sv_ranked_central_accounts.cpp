@@ -10,6 +10,7 @@
 //
 // If the service is unreachable the player stays on a temporary account (not persisted) and the fetch is retried.
 
+#include <ctype.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -555,5 +556,267 @@ void SV_Ranked_Central_Tick(void) {
     } else {
       cJSON_Delete(list);
     }
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Step 3: leaderboards (cached `top`), offline lookups and rename.
+// ---------------------------------------------------------------------------------------------------------
+
+namespace {
+
+const int TOP_CACHE_MS = 20000;
+const int LOOKUP_CACHE_MS = 60000;
+const int MAX_TOP_KEYS = 12;
+
+struct TopEntry {
+  std::string key;      // "mode|field"
+  cJSON *rows;          // array of rows from the service
+  int time;
+  bool inFlight;
+  TopEntry() : rows(NULL), time(0), inFlight(false) {}
+};
+std::vector<TopEntry> s_top;
+
+struct Waiter {
+  int n;
+  unsigned serial;
+  int kind;             // CENTRAL_TOP_*, or -1 for a lookup
+  std::string key;      // top key, or the name typed for a lookup
+  std::string lookupKey;
+};
+std::vector<Waiter> s_waiters;
+
+struct LookupEntry {
+  std::string name;
+  cJSON *account;       // NULL = the service has no such account
+  int time;
+  LookupEntry() : account(NULL), time(0) {}
+};
+std::vector<LookupEntry> s_lookups;
+
+struct TopCtx { std::string key; };
+struct LookupCtx { std::string name; };
+
+TopEntry *FindTop(const std::string &key) {
+  for (size_t i = 0; i < s_top.size(); ++i)
+    if (s_top[i].key == key) return &s_top[i];
+  return NULL;
+}
+
+bool WaiterAlive(const Waiter &w) {
+  return w.n >= 0 && w.n < MAXC && s_serial[w.n] == w.serial && svs.clients[w.n].state >= CS_CONNECTED;
+}
+
+void RunDisplay(const Waiter &w) {
+  if (!WaiterAlive(w))
+    return;
+  client_t *cl = &svs.clients[w.n];
+  switch (w.kind) {
+    case CENTRAL_TOP_ELO: SV_Ranked_ShowTop(cl); break;
+    case CENTRAL_TOP_CREDITS: SV_Ranked_ShowTopCredits(cl); break;
+    case CENTRAL_TOP_POTATO: SV_Ranked_ShowTopPotato(cl); break;
+    case CENTRAL_TOP_WANTED: SV_Ranked_ShowWanted(cl); break;
+    default: break;
+  }
+}
+
+void OnTop(void *p, int ok, cJSON *res) {
+  TopCtx *c = (TopCtx *)p;
+  TopEntry *e = FindTop(c->key);
+  cJSON *rows = res ? cJSON_GetObjectItemCaseSensitive(res, "rows") : NULL;
+  if (e) {
+    e->inFlight = false;
+    if (ok && rows && cJSON_IsArray(rows)) {
+      if (e->rows) cJSON_Delete(e->rows);
+      e->rows = cJSON_Duplicate(rows, 1);
+      e->time = Sys_Milliseconds();
+    }
+  }
+  // answer everybody waiting for this list (they find it in the cache now, or are told it is unavailable)
+  std::vector<Waiter> mine, rest;
+  for (size_t i = 0; i < s_waiters.size(); ++i) {
+    if (s_waiters[i].kind >= 0 && s_waiters[i].key == c->key) mine.push_back(s_waiters[i]);
+    else rest.push_back(s_waiters[i]);
+  }
+  s_waiters.swap(rest);
+  for (size_t i = 0; i < mine.size(); ++i) {
+    if (e && e->rows) RunDisplay(mine[i]);
+    else if (WaiterAlive(mine[i]))
+      SV_SendServerCommand(&svs.clients[mine[i].n], "chat \"^1The leaderboard is not available right now.\"");
+  }
+  delete c;
+}
+
+void OnLookup(void *p, int ok, cJSON *res) {
+  LookupCtx *c = (LookupCtx *)p;
+  cJSON *account = (ok && res) ? cJSON_GetObjectItemCaseSensitive(res, "account") : NULL;
+  if (ok) {
+    LookupEntry *e = NULL;
+    for (size_t i = 0; i < s_lookups.size(); ++i)
+      if (s_lookups[i].name == c->name) { e = &s_lookups[i]; break; }
+    if (!e) {
+      s_lookups.push_back(LookupEntry());
+      e = &s_lookups.back();
+      e->name = c->name;
+    }
+    if (e->account) cJSON_Delete(e->account);
+    e->account = (account && cJSON_IsObject(account)) ? cJSON_Duplicate(account, 1) : NULL;
+    e->time = Sys_Milliseconds();
+    if (s_lookups.size() > 64) {       // keep it small: drop the oldest
+      size_t oldest = 0;
+      for (size_t i = 1; i < s_lookups.size(); ++i)
+        if (s_lookups[i].time < s_lookups[oldest].time) oldest = i;
+      if (s_lookups[oldest].account) cJSON_Delete(s_lookups[oldest].account);
+      s_lookups.erase(s_lookups.begin() + oldest);
+    }
+  }
+  std::vector<Waiter> mine, rest;
+  for (size_t i = 0; i < s_waiters.size(); ++i) {
+    if (s_waiters[i].kind < 0 && s_waiters[i].lookupKey == c->name) mine.push_back(s_waiters[i]);
+    else rest.push_back(s_waiters[i]);
+  }
+  s_waiters.swap(rest);
+  for (size_t i = 0; i < mine.size(); ++i) {
+    const Waiter &w = mine[i];
+    if (!WaiterAlive(w)) continue;
+    if (!ok) SV_SendServerCommand(&svs.clients[w.n], "chat \"^1The account service is not reachable.\"");
+    else SV_Ranked_ShowStatsTarget(&svs.clients[w.n], w.key.c_str());   // answered from the cache this time
+  }
+  delete c;
+}
+
+struct RenameCtx {
+  int n;
+  unsigned serial;
+  char oldName[MAX_AUTH_STRING];
+  char newName[MAX_AUTH_STRING];
+};
+
+void OnRename(void *p, int ok, cJSON *res) {
+  RenameCtx *c = (RenameCtx *)p;
+  const char *err = ErrorOf(res);
+  if (c->n < 0 || c->n >= MAXC || s_serial[c->n] != c->serial || svs.clients[c->n].state < CS_CONNECTED) {
+    delete c;
+    return;
+  }
+  client_t *cl = &svs.clients[c->n];
+  rankedMatchState_t *r = &sv_rankedPlayers[c->n];
+  if (ok && r->loggedIn && !Q_stricmp(r->username, c->oldName)) {
+    cJSON *detached = accountsDB ? cJSON_DetachItemFromObject(accountsDB, c->oldName) : NULL;
+    if (detached) {
+      cJSON_DeleteItemFromObject(detached, "username");
+      cJSON_AddStringToObject(detached, "username", c->newName);
+      cJSON_AddItemToObject(accountsDB, c->newName, detached);
+    }
+    Q_strncpyz(r->username, c->newName, sizeof(r->username));
+    s_lastPush[c->n].clear();
+    SV_SendServerCommand(cl, "chat \"^2Username changed to ^7%s^2!\"", c->newName);
+    SV_Ranked_Log("RENAME: client %d renamed '%s' to '%s'", c->n, c->oldName, c->newName);
+  } else if (!strcmp(err, "exists")) {
+    SV_SendServerCommand(cl, "chat \"^1Username '^7%s^1' is already taken.\"", c->newName);
+  } else if (!strcmp(err, "bad_username")) {
+    SV_SendServerCommand(cl, "chat \"^1Invalid username. Use only letters, numbers, _, -\"");
+  } else {
+    SV_SendServerCommand(cl, "chat \"^1Could not change the username right now. Try again.\"");
+  }
+  delete c;
+}
+
+}  // namespace
+
+// Rows for a leaderboard. 1 = *rowsOut set (borrowed, valid until the next frame), 0 = requested, the list is shown
+// again when it arrives, -1 = unavailable.
+int SV_Ranked_Central_TopRows(client_t *cl, int kind, const char *mode, const char *field, cJSON **rowsOut) {
+  int n = (int)(cl - svs.clients);
+  *rowsOut = NULL;
+  if (n < 0 || n >= MAXC)
+    return -1;
+  std::string key = std::string(mode) + "|" + field;
+  TopEntry *e = FindTop(key);
+  if (!e) {
+    if ((int)s_top.size() >= MAX_TOP_KEYS) return -1;
+    s_top.push_back(TopEntry());
+    e = &s_top.back();
+    e->key = key;
+  }
+  int now = Sys_Milliseconds();
+  bool stale = !e->rows || now - e->time > TOP_CACHE_MS || now < e->time;
+  if (stale && !e->inFlight) {
+    cJSON *f = cJSON_CreateObject();
+    cJSON_AddStringToObject(f, "mode", mode);
+    cJSON_AddStringToObject(f, "field", field);
+    cJSON_AddNumberToObject(f, "limit", 10);
+    TopCtx *c = new TopCtx();
+    c->key = key;
+    if (CentralCore_Request("top", f, OnTop, c)) e->inFlight = true;
+    else delete c;
+  }
+  if (e->rows) {
+    *rowsOut = e->rows;
+    return 1;
+  }
+  if (!e->inFlight)
+    return -1;
+  Waiter w;
+  w.n = n; w.serial = s_serial[n]; w.kind = kind; w.key = key;
+  s_waiters.push_back(w);
+  SV_SendServerCommand(cl, "print \"^5[RANKED] ^7Loading...\n\"");
+  return 0;
+}
+
+// Offline account by name for !stats. 1 = *out set (borrowed), 0 = looking it up, -1 = no such account / unavailable.
+int SV_Ranked_Central_Lookup(client_t *cl, const char *name, cJSON **out) {
+  int n = (int)(cl - svs.clients);
+  *out = NULL;
+  if (n < 0 || n >= MAXC || !name || !name[0])
+    return -1;
+  std::string key(name);
+  for (size_t i = 0; i < key.size(); ++i) key[i] = (char)tolower((unsigned char)key[i]);
+  int now = Sys_Milliseconds();
+  for (size_t i = 0; i < s_lookups.size(); ++i) {
+    if (s_lookups[i].name != key) continue;
+    if (now - s_lookups[i].time <= LOOKUP_CACHE_MS && now >= s_lookups[i].time) {
+      *out = s_lookups[i].account;
+      return s_lookups[i].account ? 1 : -1;
+    }
+    break;
+  }
+  cJSON *f = cJSON_CreateObject();
+  cJSON_AddStringToObject(f, "name", key.c_str());
+  LookupCtx *c = new LookupCtx();
+  c->name = key;
+  if (!CentralCore_Request("lookup", f, OnLookup, c)) {
+    delete c;
+    return -1;
+  }
+  Waiter w;
+  w.n = n; w.serial = s_serial[n]; w.kind = -1; w.key = name; w.lookupKey = key;
+  s_waiters.push_back(w);
+  return 0;
+}
+
+// !changeusername in central mode: the service renames the stored account, then the cache is re-keyed.
+void SV_Ranked_Central_Rename(client_t *cl, const char *newName) {
+  int n = (int)(cl - svs.clients);
+  if (n < 0 || n >= MAXC)
+    return;
+  rankedMatchState_t *r = &sv_rankedPlayers[n];
+  if (!r->loggedIn || !r->username[0])
+    return;
+  SV_Ranked_Central_FlushAccounts(qtrue);   // make sure the service has the latest data before it moves
+  RenameCtx *c = new RenameCtx();
+  memset(c, 0, sizeof(*c));
+  c->n = n;
+  c->serial = s_serial[n];
+  Q_strncpyz(c->oldName, r->username, sizeof(c->oldName));
+  Q_strncpyz(c->newName, newName, sizeof(c->newName));
+  Q_strlwr(c->newName);
+  cJSON *f = cJSON_CreateObject();
+  cJSON_AddStringToObject(f, "username", c->oldName);
+  cJSON_AddStringToObject(f, "newUsername", c->newName);
+  if (!CentralCore_Request("rename", f, OnRename, c)) {
+    delete c;
+    SV_SendServerCommand(cl, "chat \"^1The account service is not reachable. Try again in a moment.\"");
   }
 }

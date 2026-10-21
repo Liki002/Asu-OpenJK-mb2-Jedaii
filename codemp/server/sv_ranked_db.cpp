@@ -1394,6 +1394,38 @@ struct RankedListEntry {
   float ratio = 0.0f;
 };
 
+// Leaderboard rows delivered by the central service (see SV_Ranked_Central_TopRows), already sorted.
+static std::vector<RankedListEntry> Ranked_ListFromCentralRows(cJSON *rows, bool withRank) {
+  std::vector<RankedListEntry> list;
+  for (cJSON *row = rows ? rows->child : NULL; row; row = row->next) {
+    cJSON *u = cJSON_GetObjectItemCaseSensitive(row, "username");
+    cJSON *d = cJSON_GetObjectItemCaseSensitive(row, "displayName");
+    cJSON *v = cJSON_GetObjectItemCaseSensitive(row, "value");
+    cJSON *w = cJSON_GetObjectItemCaseSensitive(row, "wins");
+    cJSON *l = cJSON_GetObjectItemCaseSensitive(row, "losses");
+    cJSON *lv = cJSON_GetObjectItemCaseSensitive(row, "level");
+    cJSON *ro = cJSON_GetObjectItemCaseSensitive(row, "rankOverride");
+    RankedListEntry e;
+    e.key = (u && cJSON_IsString(u) && u->valuestring) ? u->valuestring : "";
+    e.displayName = (d && cJSON_IsString(d) && d->valuestring && d->valuestring[0]) ? d->valuestring : e.key;
+    e.value = v ? v->valueint : 0;
+    e.wins = w ? w->valueint : 0;
+    e.losses = l ? l->valueint : 0;
+    e.level = lv ? lv->valueint : 1;
+    if (withRank) {
+      cJSON *fake = cJSON_CreateObject();
+      if (ro && cJSON_IsString(ro) && ro->valuestring && ro->valuestring[0])
+        cJSON_AddStringToObject(fake, "custom_rank_override", ro->valuestring);
+      e.rankTitle = SV_Ranked_GetTitle(e.value, fake);
+      cJSON_Delete(fake);
+    }
+    if (e.losses > 0) e.ratio = (float)e.wins / (float)e.losses;
+    else if (e.wins > 0) e.ratio = (float)e.wins;
+    list.push_back(e);
+  }
+  return list;
+}
+
 static std::vector<RankedListEntry>
 Ranked_BuildListByModeField(const char *mode, const char *field) {
   std::vector<RankedListEntry> list;
@@ -1816,6 +1848,12 @@ void SV_Ranked_ShowStatsTarget(client_t *cl, const char *targetName) {
     acc = SV_Ranked_GetAccount(targetName);
   }
 
+  // central mode: accounts of players that are not on this server live on the service
+  if (!acc && SV_Ranked_CentralEnabled()) {
+    int st = SV_Ranked_Central_Lookup(cl, targetName, &acc);
+    if (st == 0) return;   // shown again when the lookup answers
+  }
+
   if (!acc) {
     SV_SendServerCommand(
         cl, "chat \"^1Player '^7%s^1' not found in database.\"", targetName);
@@ -2062,7 +2100,16 @@ void SV_Ranked_ShowTop(client_t *cl) {
   if (!cl)
     return;
   const char *mode = SV_Ranked_GetActiveMode();
-  auto list = Ranked_BuildListByModeField(mode, "elo");
+  std::vector<RankedListEntry> list;
+  if (SV_Ranked_CentralEnabled()) {
+    cJSON *rows = NULL;
+    int st = SV_Ranked_Central_TopRows(cl, CENTRAL_TOP_ELO, mode, "elo", &rows);
+    if (st == 0) return;   // shown again when the list arrives
+    if (st < 0) { SV_SendServerCommand(cl, "chat \"^1The leaderboard is not available right now.\""); return; }
+    list = Ranked_ListFromCentralRows(rows, true);
+  } else {
+    list = Ranked_BuildListByModeField(mode, "elo");
+  }
   if (list.empty()) {
     SV_SendServerCommand(cl, "chat \"^3No accounts in DB yet.\"");
     return;
@@ -2199,7 +2246,16 @@ void SV_Ranked_ShowRankThresholds(client_t *cl) {
 void SV_Ranked_ShowTopCredits(client_t *cl) {
   if (!cl)
     return;
-  auto list = Ranked_BuildListByAccountField("credits");
+  std::vector<RankedListEntry> list;
+  if (SV_Ranked_CentralEnabled()) {
+    cJSON *rows = NULL;
+    int st = SV_Ranked_Central_TopRows(cl, CENTRAL_TOP_CREDITS, "duel", "credits", &rows);
+    if (st == 0) return;
+    if (st < 0) { SV_SendServerCommand(cl, "chat \"^1The leaderboard is not available right now.\""); return; }
+    list = Ranked_ListFromCentralRows(rows, false);
+  } else {
+    list = Ranked_BuildListByAccountField("credits");
+  }
   if (list.empty()) {
     SV_SendServerCommand(cl, "chat \"^3No accounts in DB yet.\"");
     return;
@@ -2220,7 +2276,16 @@ void SV_Ranked_ShowTopCredits(client_t *cl) {
 void SV_Ranked_ShowTopPotato(client_t *cl) {
   if (!cl)
     return;
-  auto list = Ranked_BuildListByAccountField("max_potato_ticks");
+  std::vector<RankedListEntry> list;
+  if (SV_Ranked_CentralEnabled()) {
+    cJSON *rows = NULL;
+    int st = SV_Ranked_Central_TopRows(cl, CENTRAL_TOP_POTATO, "duel", "max_potato_ticks", &rows);
+    if (st == 0) return;
+    if (st < 0) { SV_SendServerCommand(cl, "chat \"^1The leaderboard is not available right now.\""); return; }
+    list = Ranked_ListFromCentralRows(rows, false);
+  } else {
+    list = Ranked_BuildListByAccountField("max_potato_ticks");
+  }
   if (list.empty()) {
     SV_SendServerCommand(cl, "chat \"^3No accounts in DB yet.\"");
     return;

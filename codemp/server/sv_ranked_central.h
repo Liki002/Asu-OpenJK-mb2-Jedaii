@@ -21,6 +21,13 @@ void SV_Ranked_Central_ReleasePlayer(int clientNum);
 void SV_Ranked_Central_FlushAccounts(qboolean force);
 void SV_Ranked_Central_Drain(void);
 
+// leaderboards / offline lookups / rename
+struct cJSON;
+enum { CENTRAL_TOP_ELO = 0, CENTRAL_TOP_CREDITS, CENTRAL_TOP_POTATO, CENTRAL_TOP_WANTED };
+int SV_Ranked_Central_TopRows(struct client_s *cl, int kind, const char *mode, const char *field, struct cJSON **rowsOut);
+int SV_Ranked_Central_Lookup(struct client_s *cl, const char *name, struct cJSON **out);
+void SV_Ranked_Central_Rename(struct client_s *cl, const char *newName);
+
 void SV_RankedCentralStatus_f(void);
 void SV_RankedCentralPing_f(void);
 

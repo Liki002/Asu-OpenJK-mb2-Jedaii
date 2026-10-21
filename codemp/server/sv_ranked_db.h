@@ -146,6 +146,7 @@ void SV_Ranked_ShowRank(client_t *cl);
 void SV_Ranked_ShowRankThresholds(client_t *cl);
 void SV_Ranked_ShowTopCredits(client_t *cl);
 void SV_Ranked_ShowTopPotato(client_t *cl);
+void SV_Ranked_ShowWanted(client_t *cl);
 void SV_Ranked_ShowQuests(client_t *cl);
 void SV_Ranked_ShowPartyStudio(client_t *cl);
 void SV_Ranked_PartyChat(client_t *cl, const char *msg);
