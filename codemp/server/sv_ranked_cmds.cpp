@@ -1,6 +1,7 @@
 #include "cJSON.h"
 #include "server.h"
 #include "sv_ranked_db.h"
+#include "sv_ranked_central.h"
 #include "sv_ranked_logic.h"
 #include <math.h>
 
@@ -1446,6 +1447,11 @@ static void SV_Ranked_Cmd_ChangePassword(client_t *cl, const char *chatText) {
     return;
   }
 
+  if (SV_Ranked_CentralEnabled()) {
+    SV_Ranked_Central_ChangePassword(cl, arg);   // the service stores a hash and answers the player
+    return;
+  }
+
   cJSON *acc = SV_Ranked_GetAccount(r->username);
   if (acc) {
     cJSON *passObj = cJSON_GetObjectItemCaseSensitive(acc, "password");
@@ -1466,6 +1472,10 @@ static void SV_Ranked_Cmd_ChangeUsername(client_t *cl, const char *chatText) {
   if (!r->loggedIn || r->isTemp) {
     SV_SendServerCommand(
         cl, "chat \"^3You must be logged in to change your username.\"");
+    return;
+  }
+  if (SV_Ranked_CentralEnabled()) {
+    SV_SendServerCommand(cl, "chat \"^3Changing the username is not available yet.\"");
     return;
   }
 

@@ -47,6 +47,12 @@ void SV_Ranked_CentralFrame(void) {
     CentralCore_Enable(sv_ranked_central_enable->integer);
   }
   CentralCore_Frame();
+  SV_Ranked_Central_Tick();
+}
+
+// True when the central mode is switched on (whether or not the service is reachable right now).
+qboolean SV_Ranked_CentralEnabled(void) {
+  return (sv_ranked_central_enable && sv_ranked_central_enable->integer) ? qtrue : qfalse;
 }
 
 // True when the central service is the account store right now (enabled and connected).

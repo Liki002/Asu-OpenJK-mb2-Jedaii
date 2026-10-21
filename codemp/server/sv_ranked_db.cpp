@@ -1,4 +1,5 @@
 #include "sv_ranked_db.h"
+#include "sv_ranked_central.h"
 #include "cJSON.h"
 #include "game/bg_public.h"
 #include "qcommon/qcommon.h"
@@ -521,6 +522,12 @@ const char *SV_Ranked_GetActiveMode(void) {
 }
 
 void SV_Ranked_LoadAccounts(void) {
+  if (SV_Ranked_CentralEnabled()) {
+    // central mode: the cache only holds accounts checked out to this server, never read from disk
+    if (!accountsDB)
+      accountsDB = cJSON_CreateObject();
+    return;
+  }
   void *buf = NULL;
   long len = FS_ReadFile(RANKED_ACCOUNTS_PATH, &buf);
   if (len <= 0 || !buf) {
@@ -558,6 +565,10 @@ void SV_Ranked_SaveAccountsIfDirty(qboolean force) {
 }
 
 void SV_Ranked_SaveAccounts(void) {
+  if (SV_Ranked_CentralEnabled()) {
+    SV_Ranked_Central_FlushAccounts(qfalse);   // push changed accounts to the service, no accounts.json
+    return;
+  }
   if (!accountsDB)
     return;
 
@@ -692,6 +703,8 @@ void SV_Ranked_Init(void) {
 
 void SV_Ranked_Shutdown(void) {
   extern void SV_Ranked_CentralShutdown(void);
+  if (SV_Ranked_CentralEnabled())
+    SV_Ranked_Central_Drain();   // release whoever is still logged in and let the packets go out
   SV_Ranked_CentralShutdown();
   SV_Ranked_SaveAccounts();
   SV_Ranked_SaveConfig();
@@ -760,6 +773,11 @@ void SV_Ranked_LoginOrRegister(client_t *cl, const char *username,
       !Ranked_IsValidAuthString(password)) {
     SV_SendServerCommand(cl, "chat \"^1Invalid username/password. Use only "
                              "letters/numbers and _.-\"");
+    return;
+  }
+
+  if (SV_Ranked_CentralEnabled() && !SV_Ranked_Central_InLegacyCall()) {
+    SV_Ranked_Central_Login(cl, username, password);   // verified by the service, then re-enters here
     return;
   }
 
@@ -888,6 +906,8 @@ void SV_Ranked_Logout(client_t *cl) {
     SV_SendServerCommand(cl, "chat \"^3You are not logged in.\"");
     return;
   }
+  if (SV_Ranked_CentralEnabled())
+    SV_Ranked_Central_ReleasePlayer(clientNum);
   r->loggedIn = qfalse;
   r->isTemp = qtrue;
   r->username[0] = '\0';
@@ -930,6 +950,9 @@ void SV_Ranked_ClientDisconnect(client_t *cl) {
 
   SV_Ranked_SendDisconnectTelemetry(cl);
 
+  if (SV_Ranked_CentralEnabled())
+    SV_Ranked_Central_ReleasePlayer(clientNum);   // final snapshot + free the account for other servers
+
   r->loggedIn = qfalse;
   r->isTemp = qtrue;
   r->inDuel = qfalse;
@@ -963,6 +986,11 @@ void SV_Ranked_AutoRegisterByGUID(client_t *cl) {
   if (!guid || !guid[0]) {
     SV_SendServerCommand(cl, "print \"^5[RANKED] ^3No GUID detected. Login "
                              "manually: /login <user> <pass>\n\"");
+    return;
+  }
+
+  if (SV_Ranked_CentralEnabled() && !SV_Ranked_Central_InLegacyCall()) {
+    SV_Ranked_Central_OnClientConnect(cl);   // fetches/creates the account, then re-enters here
     return;
   }
 
@@ -3600,6 +3628,10 @@ void SV_RankedResetPass_f(void) {
 }
 
 void SV_RankedClearAccounts_f(void) {
+  if (SV_Ranked_CentralEnabled()) {
+    Com_Printf("[RANKED] ranked_clearaccounts is disabled in central mode (accounts live on the service).\n");
+    return;
+  }
   if (accountsDB) {
     cJSON_Delete(accountsDB);
     accountsDB = NULL;

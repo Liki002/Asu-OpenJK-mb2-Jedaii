@@ -337,6 +337,7 @@ if(BuildMPEngine OR BuildMPDed)
 		"${MPDir}/server/sv_ranked_logic.cpp"
 		"${MPDir}/server/sv_ranked_logic.h"
 		"${MPDir}/server/sv_ranked_cmds.cpp"
+		"${MPDir}/server/sv_ranked_central_accounts.cpp"
 		"${MPDir}/server/sv_ranked_central.cpp"
 		"${MPDir}/server/sv_ranked_central.h"
 		"${MPDir}/server/sv_ranked_central_core.cpp"
