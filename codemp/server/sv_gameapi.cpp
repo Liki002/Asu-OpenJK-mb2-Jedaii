@@ -3338,10 +3338,19 @@ void SV_InitGame(qboolean restart) {
   client_t *cl = NULL;
 #ifdef DEDICATED
   cvar_t *g_log = Cvar_Get("g_log", "games.log", CVAR_NONE, "");
+  // PineRiver panel servers point RTV/RTM at the log file named by g_log in server.cfg (server.log).
+  // With sv_keepGLog 1 the configured name survives the game module reload, like it does on the stock MBII engine.
+  cvar_t *keepGLog = Cvar_Get("sv_keepGLog", "0", CVAR_NONE, "Keep the configured g_log across game module reloads");
+  char keptGLog[MAX_QPATH] = "";
 
-  if (g_log)
+  if (g_log) {
+    if (keepGLog && keepGLog->integer)
+      Q_strncpyz(keptGLog, g_log->string, sizeof(keptGLog));
     Cvar_Unset(g_log); // unset this when reloading game module...
+  }
   g_log = NULL;
+  if (keptGLog[0])
+    Cvar_Get("g_log", keptGLog, CVAR_NONE, "");
 
   svs.gameLoggingEnabled = qfalse;
 #endif
