@@ -2,6 +2,9 @@
 #include "duel_cull.h"
 
 static qboolean isPlayer(sharedEntity_t *ent) {
+	if (!ent)
+		return qfalse;
+
 	if (ent->s.eType == ET_PLAYER)
 		return qtrue;
 
@@ -9,6 +12,9 @@ static qboolean isPlayer(sharedEntity_t *ent) {
 }
 
 static qboolean isNPC(sharedEntity_t *ent) {
+	if (!ent)
+		return qfalse;
+
 	if (ent->s.eType == ET_NPC)
 		return qtrue;
 
@@ -16,6 +22,9 @@ static qboolean isNPC(sharedEntity_t *ent) {
 }
 
 static qboolean isMover(sharedEntity_t *ent) {
+	if (!ent)
+		return qfalse;
+
 	if (ent->s.eType == ET_MOVER)
 		return qtrue;
 
@@ -23,6 +32,9 @@ static qboolean isMover(sharedEntity_t *ent) {
 }
 
 sharedEntity_t *flatten(sharedEntity_t *ent) {
+	if (!ent)
+		return NULL;
+
 	//Com_Printf("flatten\n");
 	if (ent->s.eType == ET_MISSILE) {
 		//Com_Printf("ET_MISSILE\n");
@@ -70,18 +82,32 @@ sharedEntity_t *flatten(sharedEntity_t *ent) {
 }
 
 static playerState_t *GetPS(sharedEntity_t *ent) {
+	if (!ent)
+		return NULL;
+
 	return SV_GameClientNum(ent->s.number);
 }
 
 static qboolean isDueling(sharedEntity_t *ent) {
-	if (isPlayer(flatten(ent)) && GetPS(flatten(ent))->duelInProgress)
-		return qtrue;
+	sharedEntity_t *flat = flatten(ent);
+	if (flat && isPlayer(flat)) {
+		playerState_t *ps = GetPS(flat);
+		if (ps && ps->duelInProgress)
+			return qtrue;
+	}
 
 	return qfalse;
 }
 
 static qboolean isActor(sharedEntity_t *ent) {
-	if (!isMover(ent) && (isPlayer(flatten(ent)) || isNPC(flatten(ent))))
+	if (!ent)
+		return qfalse;
+
+	sharedEntity_t *flat = flatten(ent);
+	if (!flat)
+		return qfalse;
+
+	if (!isMover(ent) && (isPlayer(flat) || isNPC(flat)))
 		return qtrue;
 
 	return qfalse;
@@ -91,15 +117,24 @@ static qboolean isDuelOpponent(sharedEntity_t *A, sharedEntity_t *B) { //wtf voi
 	auto a = flatten(A);
 	auto b = flatten(B);
 
-	if (isDueling(a) && isDueling(b) && (a == b || a->playerState->duelIndex == SV_NumForGentity(b)))
-		return qtrue;
+	if (!a || !b)
+		return qfalse;
+
+	if (isDueling(a) && isDueling(b)) {
+		playerState_t *ps = GetPS(a);
+		if (a == b || (ps && ps->duelIndex == SV_NumForGentity(b)))
+			return qtrue;
+	}
 
 	return qfalse;
 }
 
 int DuelCull(sharedEntity_t *ent, sharedEntity_t *touch) { //figure something out for smooth collision?
 
-	if (!sv_snapShotDuelCull->integer)
+	if (!sv_snapShotDuelCull || !sv_snapShotDuelCull->integer)
+		return 0;
+
+	if (!ent || !touch)
 		return 0;
 
 	if (isNPC(flatten(ent)) || isNPC(flatten(touch))) {

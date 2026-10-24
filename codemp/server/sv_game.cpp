@@ -46,6 +46,10 @@ int	SV_NumForGentity( sharedEntity_t *ent ) {
 sharedEntity_t *SV_GentityNum( int num ) {
 	sharedEntity_t *ent;
 
+	if ( num < 0 || num >= MAX_GENTITIES ) {
+		num = ENTITYNUM_NONE;
+	}
+
 	ent = (sharedEntity_t *)((byte *)sv.gentities + sv.gentitySize*(num));
 
 	return ent;
@@ -53,6 +57,10 @@ sharedEntity_t *SV_GentityNum( int num ) {
 
 playerState_t *SV_GameClientNum( int num ) {
 	playerState_t	*ps;
+
+	if ( num < 0 || num >= MAX_CLIENTS ) {
+		num = 0;
+	}
 
 	ps = (playerState_t *)((byte *)sv.gameClients + sv.gameClientSize*(num));
 

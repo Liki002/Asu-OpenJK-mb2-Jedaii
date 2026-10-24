@@ -547,18 +547,18 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 
 	num = SV_AreaEntities( clip->boxmins, clip->boxmaxs, touchlist, MAX_GENTITIES);
 
-	if ( clip->passEntityNum != ENTITYNUM_NONE ) {
+	if ( clip->passEntityNum != ENTITYNUM_NONE && clip->passEntityNum >= 0 && clip->passEntityNum < MAX_GENTITIES ) {
 		passOwnerNum = ( SV_GentityNum( clip->passEntityNum ) )->r.ownerNum;
-		if ( passOwnerNum == ENTITYNUM_NONE ) {
+		if ( passOwnerNum < 0 || passOwnerNum >= MAX_GENTITIES || passOwnerNum == ENTITYNUM_NONE ) {
 			passOwnerNum = -1;
+		}
+
+		if ( SV_GentityNum(clip->passEntityNum)->r.svFlags & SVF_OWNERNOTSHARED )
+		{
+			thisOwnerShared = 0;
 		}
 	} else {
 		passOwnerNum = -1;
-	}
-
-	if ( SV_GentityNum(clip->passEntityNum)->r.svFlags & SVF_OWNERNOTSHARED )
-	{
-		thisOwnerShared = 0;
 	}
 
 	for ( i=0 ; i<num ; i++ ) {
@@ -611,7 +611,7 @@ static void SV_ClipMoveToEntities( moveclip_t *clip ) {
 			continue;
 		}
 
-		if (DuelCull(SV_GentityNum(clip->passEntityNum), touch)) {
+		if (clip->passEntityNum != ENTITYNUM_NONE && clip->passEntityNum >= 0 && clip->passEntityNum < MAX_GENTITIES && DuelCull(SV_GentityNum(clip->passEntityNum), touch)) {
 			continue;
 		}
 
@@ -825,6 +825,10 @@ Ghoul2 Insert End
 */
 	moveclip_t	clip;
 	int			i;
+
+	if ( passEntityNum < 0 || passEntityNum >= MAX_GENTITIES ) {
+		passEntityNum = ENTITYNUM_NONE;
+	}
 
 	if ( !mins ) {
 		mins = vec3_origin;
