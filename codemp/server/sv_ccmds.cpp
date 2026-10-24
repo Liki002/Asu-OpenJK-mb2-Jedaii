@@ -2359,6 +2359,20 @@ static void SV_Unlimited_f(void) {
              cl->isUnlimited ? "ON" : "OFF");
 }
 
+static void SV_Ranked_Cmd_Assist_f(void) {
+  if (Cmd_Argc() < 2) return;
+  int assistId = atoi(Cmd_Argv(1));
+  int victimId = (Cmd_Argc() > 2) ? atoi(Cmd_Argv(2)) : -1;
+  extern void SV_Ranked_ProcessAssist(int assistId, int victimId);
+  SV_Ranked_ProcessAssist(assistId, victimId);
+}
+
+static void SV_Ranked_Cmd_ObjComplete_f(void) {
+  if (Cmd_Argc() < 2) return;
+  int clientId = atoi(Cmd_Argv(1));
+  extern void SV_Ranked_ProcessObjectiveComplete(int clientNum);
+  SV_Ranked_ProcessObjectiveComplete(clientId);
+}
 
 void SV_AddOperatorCommands(void) {
   static qboolean initialized;
@@ -2453,6 +2467,11 @@ void SV_AddOperatorCommands(void) {
                  "Shows the central account service connection state"); // RANKED
   Cmd_AddCommand("ranked_central_ping", SV_RankedCentralPing_f,
                  "Pings the central account service"); // RANKED
+
+  Cmd_AddCommand("ranked_assist", SV_Ranked_Cmd_Assist_f,
+                 "Record an assist event for a player"); // RANKED
+  Cmd_AddCommand("ranked_objcomplete", SV_Ranked_Cmd_ObjComplete_f,
+                 "Record an objective completion event for a player"); // RANKED
 
   // RANKED: Admin Utils
   // (Commands like sv_slap, sv_teleport removed for ToS Compliance)

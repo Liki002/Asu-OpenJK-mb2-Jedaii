@@ -31,6 +31,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "qcommon/timing.h"
 #include "server.h"
 #include "sv_gameapi.h"
+#include "sv_ranked_logic.h"
 
 botlib_export_t *botlib_export;
 
@@ -72,6 +73,9 @@ char *GVM_ClientConnect(int clientNum, qboolean firstTime, qboolean isBot) {
 }
 
 void GVM_ClientBegin(int clientNum) {
+  if (clientNum >= 0 && clientNum < sv_maxclients->integer) {
+    sv_rankedPlayers[clientNum].roundSpawns++;
+  }
   if (gvm->isLegacy) {
     VM_Call(gvm, GAME_CLIENT_BEGIN, clientNum);
     return;
@@ -559,8 +563,6 @@ static void SV_LocateGameData(sharedEntity_t *gEnts, int numGEntities,
   sv.gameClientSize = sizeofGameClient;
 }
 
-#include "sv_ranked_logic.h"
-
 static void SV_GameDropClient(int clientNum, const char *reason) {
   if (clientNum < 0 || clientNum >= sv_maxclients->integer) {
     return;
@@ -585,6 +587,9 @@ static void SV_GameSendServerCommand(int clientNum, const char *text) {
     // but NOT when they just score kills (avoids counting raw game score)
     else if (strstr(text, "completed the objective")) {
       Com_Printf("[RANKED] Objective completed event detected\n");
+      if (clientNum >= 0 && clientNum < sv_maxclients->integer) {
+        SV_Ranked_ProcessObjectiveComplete(clientNum);
+      }
       const char *quote = strchr(text, '"');
       if (quote) {
         SV_SendServerCommand(NULL, "svprint %s", quote);
@@ -2181,6 +2186,16 @@ intptr_t SV_GameSystemCalls(intptr_t *args) {
       } else {
         Com_Printf("[RANKED] Kill line parse FAILED: %s", gmsg);
       }
+    } else if (gmsg && strstr(gmsg, " completed the objective!")) {
+      // Line format: "%s (ID: %d) (IP: %s) completed the objective!"
+      const char *idPtr = strstr(gmsg, "(ID: ");
+      if (idPtr) {
+        int objClientNum = -1;
+        if (sscanf(idPtr, "(ID: %d)", &objClientNum) == 1 && objClientNum >= 0 && objClientNum < sv_maxclients->integer) {
+          Com_Printf("[RANKED] Parsed Objective Completion: clientNum=%d (%s)\n", objClientNum, svs.clients[objClientNum].name);
+          SV_Ranked_ProcessObjectiveComplete(objClientNum);
+        }
+      }
     } else if (strstr(gmsg, "red:") && strstr(gmsg, "blue:")) {
       const char *redMatch = strstr(gmsg, "red:");
       const char *blueMatch = strstr(gmsg, "blue:");
@@ -3439,6 +3454,15 @@ static void QDECL SV_GamePrint(const char *msg, ...) {
       }
       SV_Ranked_ProcessKill(killerId, victimId, mod, wep, vname);
     }
+  } else if (strstr(text, " completed the objective!")) {
+      const char *idPtr = strstr(text, "(ID: ");
+      if (idPtr) {
+        int objClientNum = -1;
+        if (sscanf(idPtr, "(ID: %d)", &objClientNum) == 1 && objClientNum >= 0 && objClientNum < sv_maxclients->integer) {
+          Com_Printf("[RANKED] Parsed Objective Completion (native): clientNum=%d (%s)\n", objClientNum, svs.clients[objClientNum].name);
+          SV_Ranked_ProcessObjectiveComplete(objClientNum);
+        }
+      }
   } else {
       const char *redMatch = strstr(text, "red:");
       const char *blueMatch = strstr(text, "blue:");

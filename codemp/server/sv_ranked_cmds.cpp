@@ -2134,7 +2134,11 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     playerState_t *myPs = SV_GameClientNum(cNum);
     int myHp = myPs ? myPs->stats[STAT_HEALTH] : 0;
     int myFp = myPs ? myPs->fd.forcePower : 0;
-    int myBp = (myPs && myPs->jetpackFuel > 0) ? myPs->jetpackFuel : (r->lastBP > 0 ? r->lastBP : (myPs ? myPs->stats[STAT_ARMOR] : 100));
+    int myBp = SV_Ranked_GetPlayerBP(cNum);
+
+    char myBpStr[64];
+    if (myBp == 0) Com_sprintf(myBpStr, sizeof(myBpStr), "^10 (GUARD BROKEN!)");
+    else Com_sprintf(myBpStr, sizeof(myBpStr), "^5%d", myBp);
 
     if (r->inDuel && r->duelOpponent >= 0 && r->duelOpponent < sv_maxclients->integer && svs.clients[r->duelOpponent].state >= CS_ACTIVE) {
       int oppId = r->duelOpponent;
@@ -2142,12 +2146,16 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       playerState_t *oppPs = SV_GameClientNum(oppId);
       int oppHp = oppPs ? oppPs->stats[STAT_HEALTH] : 0;
       int oppFp = oppPs ? oppPs->fd.forcePower : 0;
-      int oppBp = (oppPs && oppPs->jetpackFuel > 0) ? oppPs->jetpackFuel : (sv_rankedPlayers[oppId].lastBP > 0 ? sv_rankedPlayers[oppId].lastBP : (oppPs ? oppPs->stats[STAT_ARMOR] : 100));
+      int oppBp = SV_Ranked_GetPlayerBP(oppId);
 
-      SV_SendServerCommand(cl, va("chat \"^3[OPPONENT] ^5%s ^7- ^1HP: %d ^7| ^5BP: %d ^7| ^4FP: %d\"", oppCl->name, oppHp, oppBp, oppFp));
-      SV_SendServerCommand(cl, va("chat \"^3[YOUR STATUS] ^1HP: %d ^7| ^5BP: %d ^7| ^4FP: %d\"", myHp, myBp, myFp));
+      char oppBpStr[64];
+      if (oppBp == 0) Com_sprintf(oppBpStr, sizeof(oppBpStr), "^10 (GUARD BROKEN!)");
+      else Com_sprintf(oppBpStr, sizeof(oppBpStr), "^5%d", oppBp);
+
+      SV_SendServerCommand(cl, va("chat \"^3[OPPONENT] ^5%s ^7- ^1HP: %d ^7| ^5BP: %s ^7| ^4FP: %d\"", oppCl->name, oppHp, oppBpStr, oppFp));
+      SV_SendServerCommand(cl, va("chat \"^3[YOUR STATUS] ^1HP: %d ^7| ^5BP: %s ^7| ^4FP: %d\"", myHp, myBpStr, myFp));
     } else {
-      SV_SendServerCommand(cl, va("chat \"^3[YOUR STATUS] ^1HP: %d ^7| ^5BP: %d ^7| ^4FP: %d\"", myHp, myBp, myFp));
+      SV_SendServerCommand(cl, va("chat \"^3[YOUR STATUS] ^1HP: %d ^7| ^5BP: %s ^7| ^4FP: %d\"", myHp, myBpStr, myFp));
     }
     return qtrue;
   } else if (!Q_stricmp(cmdSpace, "duel_bp") || !Q_stricmp(cmdSpace, "my_bp")) {

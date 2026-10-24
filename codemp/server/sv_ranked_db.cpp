@@ -2575,6 +2575,140 @@ void SV_Ranked_RollLoot(int killerId, int victimId) {
 
 /*
 ==================
+SV_Ranked_RollLootObjective
+
+Guaranteed / boosted collection loot drop when a logged-in player completes
+an objective in FA or Legends. Higher chances for Rare and Legendary pieces.
+==================
+*/
+void SV_Ranked_RollLootObjective(int clientNum) {
+  const char *mode = SV_Ranked_GetActiveMode();
+  if (Q_stricmp(mode, "fa") != 0 && Q_stricmp(mode, "legends") != 0)
+    return;
+
+  cJSON *enabled = SV_Ranked_GetSetting("loot_enabled");
+  if (enabled && cJSON_IsNumber(enabled) && enabled->valueint == 0)
+    return;
+
+  if (clientNum < 0 || clientNum >= sv_maxclients->integer)
+    return;
+
+  client_t *cl = &svs.clients[clientNum];
+  if (!cl->state)
+    return;
+
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r->loggedIn || !r->username[0])
+    return;
+
+  // Boosted roll: 30% Common (0), 35% Uncommon (1), 25% Rare (2), 10% Legendary (3)
+  int roll = rand() % 100;
+  int rarity = (roll < 30) ? 0 : (roll < 65) ? 1 : (roll < 90) ? 2 : 3;
+  int idx = Ranked_PickLootIndex(rarity);
+  if (idx < 0)
+    return;
+
+  cJSON *acc = SV_Ranked_GetAccount(r->username);
+  if (!acc)
+    return;
+
+  cJSON *inv = Ranked_GetInventoryObject(acc);
+  const shopItem_t *item = &sv_lootItems[idx];
+  cJSON *owned = cJSON_GetObjectItemCaseSensitive(inv, item->key);
+  if (owned)
+    cJSON_SetNumberValue(owned, owned->valueint + 1);
+  else
+    cJSON_AddNumberToObject(inv, item->key, 1);
+
+  if (rarity >= 2) {
+    SV_SendServerCommand(NULL, "chat \"^5OBJECTIVE HERO! ^7%s completed the objective and uncovered %s ^7(%s^7)!\"",
+                         cl->name, item->display, Ranked_RarityName(rarity));
+  } else {
+    SV_SendServerCommand(cl, "chat \"^5OBJECTIVE REWARD! ^7Found %s ^7(%s^7)!\"",
+                         item->display, Ranked_RarityName(rarity));
+  }
+  SV_Ranked_Log("LOOT_OBJ: %s uncovered %s (rarity %d) mode=%s", r->username, item->key,
+                rarity, mode);
+
+  Ranked_CheckSetCompletion(cl, r, acc);
+  SV_Ranked_MarkAccountsDirty();
+}
+
+/*
+==================
+SV_Ranked_RollLootAssist
+
+Loot roll for a player who earned an assist in FA or Legends.
+Drop chance is 50% of the standard killer drop chance.
+==================
+*/
+void SV_Ranked_RollLootAssist(int assistId, int victimId) {
+  const char *mode = SV_Ranked_GetActiveMode();
+  if (Q_stricmp(mode, "fa") != 0 && Q_stricmp(mode, "legends") != 0)
+    return;
+
+  cJSON *enabled = SV_Ranked_GetSetting("loot_enabled");
+  if (enabled && cJSON_IsNumber(enabled) && enabled->valueint == 0)
+    return;
+
+  if (assistId < 0 || assistId >= sv_maxclients->integer || victimId < 0 ||
+      victimId >= sv_maxclients->integer || assistId == victimId)
+    return;
+
+  client_t *assistCl = &svs.clients[assistId];
+  client_t *victimCl = &svs.clients[victimId];
+  if (!assistCl->state || !victimCl->state)
+    return;
+  if (victimCl->netchan.remoteAddress.type == NA_BOT)
+    return;
+
+  rankedMatchState_t *aState = &sv_rankedPlayers[assistId];
+  if (!aState->loggedIn || !aState->username[0])
+    return;
+
+  cJSON *chancePtr = SV_Ranked_GetSetting("loot_drop_chance");
+  int baseChance = (chancePtr && cJSON_IsNumber(chancePtr)) ? chancePtr->valueint : 10;
+  int chance = baseChance / 2;
+  if (chance < 3) chance = 3;
+  if (aState->activeLuckyCharm)
+    chance += chance / 2;
+
+  if ((rand() % 100) >= chance)
+    return;
+
+  int roll = rand() % 100;
+  int rarity = (roll < 65) ? 0 : (roll < 90) ? 1 : (roll < 98) ? 2 : 3;
+  int idx = Ranked_PickLootIndex(rarity);
+  if (idx < 0)
+    return;
+
+  cJSON *acc = SV_Ranked_GetAccount(aState->username);
+  if (!acc)
+    return;
+
+  cJSON *inv = Ranked_GetInventoryObject(acc);
+  const shopItem_t *item = &sv_lootItems[idx];
+  cJSON *owned = cJSON_GetObjectItemCaseSensitive(inv, item->key);
+  if (owned)
+    cJSON_SetNumberValue(owned, owned->valueint + 1);
+  else
+    cJSON_AddNumberToObject(inv, item->key, 1);
+
+  SV_SendServerCommand(assistCl, "chat \"^3ASSIST LOOT! ^7%s ^7(%s^7)\"",
+                       item->display, Ranked_RarityName(rarity));
+  if (rarity >= 2) {
+    SV_SendServerCommand(NULL, "chat \"^3%s ^7found %s ^7(%s^7) on assist!\"",
+                         assistCl->name, item->display, Ranked_RarityName(rarity));
+  }
+  SV_Ranked_Log("LOOT_ASSIST: %s found %s (rarity %d) mode=%s", aState->username, item->key,
+                rarity, mode);
+
+  Ranked_CheckSetCompletion(assistCl, aState, acc);
+  SV_Ranked_MarkAccountsDirty();
+}
+
+/*
+==================
 SV_Ranked_ShowCollection  (!collection)
 ==================
 */

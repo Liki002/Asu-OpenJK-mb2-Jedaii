@@ -14,8 +14,12 @@ void Ranked_SafeUserKey(const char *username, char *out, int outSize);
 // round/match. This matches the volatile data in gameEventHandler.ts
 typedef struct {
   int roundKills;
+  int roundEliminations;  // Kills that permanently eliminated someone from round
   int roundDeaths;
-  int roundObjective;
+  int roundAssists;       // From RENS assistId / ranked_assist command
+  int roundObjective;     // Objective completions this round
+  int roundSpawns;        // Spawns this round (1 = initial, >1 = reinforcements used)
+  qboolean roundSurvived; // True if alive at round end
   int latestTeamId; // To identify if they are Red or Blue for match win
   int killStreak;
   int bountyValue;
@@ -47,6 +51,10 @@ typedef struct {
   int duelOpponent;
   int duelStartTime; // ms
   int lastBP;        // Last reported Block Points (BP) from client/game
+  int minDuelBP;              // Lowest BP reached during current duel
+  int guardBreaksInflicted;   // Count of guard breaks landed on opponent during duel
+  int guardBreaksSuffered;    // Count of guard breaks suffered (BP=0) during duel
+  qboolean guardBroken;       // Whether player is currently in 0 BP guard-break state
 
   
   // Economy / betting state
@@ -128,6 +136,7 @@ void SV_Ranked_ClientConnect(client_t *cl);
 void SV_Ranked_ClientDisconnect(client_t *cl);
 void SV_Ranked_AutoRegisterByGUID(client_t *cl);
 void SV_Ranked_DB_RecordDuelAnalysis(const char *winnerName, const char *loserName, int winHealth, int winBP, int winEloDelta, int loseEloDelta, int durationSec);
+int SV_Ranked_GetPlayerBP(int clientNum);
 
 
 // Trivia
@@ -199,7 +208,11 @@ int SV_Ranked_GetShopSellBack(const char *itemKey, int defaultSellBack);
 
 // Loot drops and collections (FA / Legends)
 void SV_Ranked_RollLoot(int killerId, int victimId);
+void SV_Ranked_RollLootObjective(int clientNum);
+void SV_Ranked_RollLootAssist(int assistId, int victimId);
 void SV_Ranked_ShowCollection(client_t *cl);
+void SV_Ranked_ProcessObjectiveComplete(int clientNum);
+void SV_Ranked_ProcessAssist(int assistId, int victimId);
 
 // Non-blocking Debounced Database Saving
 void SV_Ranked_MarkAccountsDirty(void);

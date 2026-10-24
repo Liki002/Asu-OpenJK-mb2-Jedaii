@@ -13,6 +13,35 @@ extern cJSON *accountsDB;
 
 rankedParty_t sv_rankedParties[64];
 
+/*
+==================
+SV_Ranked_GetPlayerBP
+Returns a player's real-time Block Points (BP) directly from the engine simulation.
+In MBII, Jedi/Sith BP (0-100) is synced via playerState_t::jetpackFuel.
+0 is fully valid and represents Guard Break (broken saber defense).
+==================
+*/
+int SV_Ranked_GetPlayerBP(int clientNum) {
+    if (clientNum < 0 || clientNum >= sv_maxclients->integer) return 100;
+    if (svs.clients[clientNum].state < CS_ACTIVE) return 100;
+    playerState_t *ps = SV_GameClientNum(clientNum);
+    if (!ps) return 100;
+
+    // In MBII, Jedi and Sith lightsaber Block Points are mapped to ps->jetpackFuel (0-100).
+    // 0 is valid and signifies that the player's saber defense has collapsed (Guard Break).
+    if (ps->jetpackFuel >= 0 && ps->jetpackFuel <= 100) {
+        return ps->jetpackFuel;
+    }
+    if (ps->cloakFuel >= 0 && ps->cloakFuel <= 100) {
+        return ps->cloakFuel;
+    }
+    rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+    if (r->lastBP >= 0 && r->lastBP <= 100) {
+        return r->lastBP;
+    }
+    return (ps->stats[STAT_ARMOR] > 0) ? ps->stats[STAT_ARMOR] : 100;
+}
+
 rankedParty_t *SV_Ranked_FindPlayerParty(int clientNum) {
     if (clientNum < 0 || clientNum >= sv_maxclients->integer) return NULL;
     for (int i = 0; i < 64; i++) {
@@ -58,17 +87,10 @@ void SV_Ranked_UpdateParty(int leaderId) {
                 }
             }
 
-            int hp = 100;
-            int fp = 100;
-            int bp = 100;
             playerState_t *ps = SV_GameClientNum(cid);
-            if (ps) {
-                hp = ps->stats[STAT_HEALTH];
-                fp = ps->fd.forcePower;
-                bp = (ps->jetpackFuel > 0) ? ps->jetpackFuel : (ps->cloakFuel > 0 ? ps->cloakFuel : ((r->lastBP > 0) ? r->lastBP : ((ps->stats[STAT_ARMOR] > 0) ? ps->stats[STAT_ARMOR] : 100)));
-            } else if (r->lastBP > 0) {
-                bp = r->lastBP;
-            }
+            int hp = ps ? ps->stats[STAT_HEALTH] : 100;
+            int fp = ps ? ps->fd.forcePower : 100;
+            int bp = SV_Ranked_GetPlayerBP(cid);
 
             char cleanName[64];
             Q_strncpyz(cleanName, svs.clients[cid].name, sizeof(cleanName));
@@ -196,20 +218,58 @@ static qboolean IsThermalMod(int mod) {
 
 /*
 ==================
+SV_Ranked_BroadcastCP
+Broadcasts a centerprint message to clients, auto-wrapping long lines at ~40
+visible chars using SV_CP_WrapMessage (identical to !cp all).
+- allClients = qtrue: broadcasts to all active players on the server.
+- allClients = qfalse: skips players engaged in private duels.
+==================
+*/
+static void SV_Ranked_BroadcastCP(const char *msg, qboolean allClients) {
+  if (!msg || !msg[0]) return;
+  char wrapped[1024];
+  SV_CP_WrapMessage(msg, wrapped, sizeof(wrapped));
+
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    client_t *c = &svs.clients[i];
+    if (c->state >= CS_ACTIVE) {
+      if (allClients || !sv_rankedPlayers[i].inDuel) {
+        SV_SendServerCommand(c, "cp \"%s\n\"", wrapped);
+      }
+    }
+  }
+}
+
+/*
+==================
 SV_Ranked_BroadcastOpen
 Helper to send centerprints/chats only to players NOT in a private duel.
+Auto-wraps centerprint messages at ~40 visible chars (using SV_CP_WrapMessage,
+identical to !cp all) so multi-line text never gets cut in half on client HUDs.
 ==================
 */
 static void SV_Ranked_BroadcastOpen(const char *fmt, ...) {
-  char msg[1024];
+  char raw[1024];
   va_list argptr;
   va_start(argptr, fmt);
-  Q_vsnprintf(msg, sizeof(msg), fmt, argptr);
+  Q_vsnprintf(raw, sizeof(raw), fmt, argptr);
   va_end(argptr);
 
-  for (int i = 0; i < sv_maxclients->integer; i++) {
-    if (svs.clients[i].state && !sv_rankedPlayers[i].inDuel) {
-      SV_SendServerCommand(&svs.clients[i], "%s", msg);
+  // If this is a centerprint command: cp "..."
+  if (!Q_strncmp(raw, "cp \"", 4)) {
+    char inner[1024];
+    Q_strncpyz(inner, raw + 4, sizeof(inner));
+    // Strip trailing quote and newline if present
+    int len = (int)strlen(inner);
+    while (len > 0 && (inner[len - 1] == '"' || inner[len - 1] == '\n' || inner[len - 1] == '\r')) {
+      inner[--len] = '\0';
+    }
+    SV_Ranked_BroadcastCP(inner, qfalse);
+  } else {
+    for (int i = 0; i < sv_maxclients->integer; i++) {
+      if (svs.clients[i].state >= CS_ACTIVE && !sv_rankedPlayers[i].inDuel) {
+        SV_SendServerCommand(&svs.clients[i], "%s", raw);
+      }
     }
   }
 }
@@ -1008,10 +1068,11 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
   // ---- MELEE KILL BONUS ----
   if (mappedWep && !Q_stricmp(mappedWep, "Melee")) {
     Com_Printf("[RANKED] MELEE KILL bonus for %s!\n", killerName);
-    if (!isDuelMode) {
-      SV_Ranked_BroadcastOpen("cp \"^1BRAWLER!\n^7%s ^7styled on ^1%s\"",
-                              killerName, victimName);
-    }
+    char brawlerMsg[512];
+    Com_sprintf(brawlerMsg, sizeof(brawlerMsg), "^1BRAWLER!\n^7%s ^7styled on ^1%s",
+                killerName, victimName);
+    // Broadcast to everyone (including duelists), auto-wrapped identically to !cp all
+    SV_Ranked_BroadcastCP(brawlerMsg, qtrue);
     UpdateAccountStats(kState->username, killerName, 5, 0, 0, 0, NULL);
     SV_Ranked_ProgressQuest(kState->username, "melee_kills", 1, killerCl);
   }
@@ -1057,29 +1118,29 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
   if (kState->multiKillCount == 2) {
     Com_Printf("[RANKED] DOUBLE KILL by %s\n", killerName);
     if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^5%s\n^1DOUBLE KILL! ^7(+2 Elo)\"",
-                           killerName);
+      SV_Ranked_BroadcastOpen("cp \"^5%s\n^1DOUBLE KILL! ^7(+2 Elo)\"",
+                              killerName);
     }
     UpdateAccountStats(kState->username, killerName, 2, 0, 0, 0, NULL);
     SV_Ranked_ProgressQuest(kState->username, "double_kills", 1, killerCl);
   } else if (kState->multiKillCount == 3) {
     Com_Printf("[RANKED] TRIPLE KILL by %s\n", killerName);
     if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^5%s\n^1TRIPLE KILL! ^7(+5 Elo)\"",
-                           killerName);
+      SV_Ranked_BroadcastOpen("cp \"^5%s\n^1TRIPLE KILL! ^7(+5 Elo)\"",
+                              killerName);
     }
     UpdateAccountStats(kState->username, killerName, 5, 0, 0, 0, NULL);
     SV_Ranked_ProgressQuest(kState->username, "triple_kills", 1, killerCl);
   } else if (kState->multiKillCount == 4) {
     Com_Printf("[RANKED] OVERKILL by %s\n", killerName);
     if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1OVERKILL!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^1OVERKILL!\"", killerName);
     }
     UpdateAccountStats(kState->username, killerName, 10, 0, 0, 0, NULL);
   } else if (kState->multiKillCount >= 5) {
     Com_Printf("[RANKED] MONSTER KILL by %s\n", killerName);
     if (!Q_stricmp(SV_Ranked_GetActiveMode(), "open")) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1MONSTER KILL!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^1MONSTER KILL!\"", killerName);
     }
     UpdateAccountStats(kState->username, killerName, 15, 0, 0, 0, NULL);
   }
@@ -1090,9 +1151,9 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
     Com_Printf("[RANKED] %s kill streak = %d\n", kState->username, streak);
 
     if (streak == 3) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^3SPREE!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^3SPREE!\"", killerName);
     } else if (streak == 5) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1RAMPAGE!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^1RAMPAGE!\"", killerName);
       SV_SendServerCommand(
           NULL,
           "chat \"^1WANTED! ^7%s ^7is on a 5-kill streak! Worth ^55 Credits^7!\"",
@@ -1124,10 +1185,10 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
         }
       }
     } else if (streak == 8) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1UNSTOPPABLE!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^1UNSTOPPABLE!\"", killerName);
       UpdateAccountStats(kState->username, killerName, 5, 0, 0, 0, NULL);
     } else if (streak == 10) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1GODLIKE!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^1GODLIKE!\"", killerName);
       SV_SendServerCommand(NULL,
                            "chat \"^1WANTED! ^7%s ^7is on a 10-kill streak! "
                            "Worth ^510 Credits + 50 XP^7!\"",
@@ -1135,10 +1196,10 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
       kState->bountyValue = 10;
       UpdateAccountStats(kState->username, killerName, 10, 50, 0, 0, NULL);
     } else if (streak == 14) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1FORCE MASTER!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^1FORCE MASTER!\"", killerName);
       UpdateAccountStats(kState->username, killerName, 15, 0, 0, 0, NULL);
     } else if (streak == 20) {
-      SV_SendServerCommand(NULL, "cp \"^7%s\n^1LEGENDARY!\"", killerName);
+      SV_Ranked_BroadcastOpen("cp \"^7%s\n^1LEGENDARY!\"", killerName);
       SV_SendServerCommand(
           NULL,
           "chat \"^1LEGENDARY WANTED! ^7%s ^7is on a 20-kill streak! Worth ^520 "
@@ -1305,6 +1366,118 @@ void SV_Ranked_UpdateDisplayName(int clientNum, const char *newName) {
 }
 
 // ===========================================================================
+//  OBJECTIVES & ASSISTS
+// ===========================================================================
+
+/*
+==================
+SV_Ranked_ProcessObjectiveComplete
+
+Called whenever a player completes a map objective.
+Awards credits, XP, increments objective counters, triggers loot in FA/Legends.
+==================
+*/
+void SV_Ranked_ProcessObjectiveComplete(int clientNum) {
+  if (clientNum < 0 || clientNum >= sv_maxclients->integer)
+    return;
+
+  client_t *cl = &svs.clients[clientNum];
+  if (!cl->state)
+    return;
+
+  // Debounce check: prevent double-counting if triggered by multiple hooks
+  static int lastObjTime[64] = {0};
+  if (svs.time - lastObjTime[clientNum] < 2000)
+    return;
+  lastObjTime[clientNum] = svs.time;
+
+  rankedMatchState_t *mState = &sv_rankedPlayers[clientNum];
+  mState->roundObjective++;
+
+  Com_Printf("[RANKED] Objective completed by client %d (%s) | roundObjs=%d\n",
+             clientNum, cl->name, mState->roundObjective);
+
+  const char *modeStr = SV_Ranked_GetActiveMode();
+
+  if (mState->loggedIn && mState->username[0]) {
+    // Award 50 XP and 50 Credits for completing an objective
+    UpdateAccountCredits(mState->username, 50);
+    UpdateAccountStats(mState->username, cl->name, 0, 50, 0, 0, NULL);
+
+    cJSON *acc = SV_Ranked_GetAccount(mState->username);
+    if (acc) {
+      cJSON *modeData = GetModeDataForAccount(acc);
+      if (modeData) {
+        cJSON *objPtr = cJSON_GetObjectItemCaseSensitive(modeData, "objectives");
+        if (objPtr)
+          cJSON_SetNumberValue(objPtr, objPtr->valueint + 1);
+        else
+          cJSON_AddNumberToObject(modeData, "objectives", 1);
+      }
+    }
+
+    if (Q_stricmp(modeStr, "fa") == 0 || Q_stricmp(modeStr, "legends") == 0) {
+      SV_Ranked_RollLootObjective(clientNum);
+    }
+    SV_Ranked_MarkAccountsDirty();
+  }
+
+  SV_SendServerCommand(NULL, "chat \"^5OBJECTIVE COMPLETE! ^7%s completed the objective! ^3(+50 Credits)\"", cl->name);
+  SV_Ranked_Log("OBJECTIVE: %s (%s) completed an objective (mode=%s)",
+                cl->name, mState->loggedIn ? mState->username : "guest", modeStr);
+}
+
+/*
+==================
+SV_Ranked_ProcessAssist
+
+Called when a player earns an assist on a kill.
+==================
+*/
+void SV_Ranked_ProcessAssist(int assistId, int victimId) {
+  if (assistId < 0 || assistId >= sv_maxclients->integer)
+    return;
+
+  client_t *cl = &svs.clients[assistId];
+  if (!cl->state)
+    return;
+
+  rankedMatchState_t *aState = &sv_rankedPlayers[assistId];
+  aState->roundAssists++;
+
+  Com_Printf("[RANKED] Assist recorded for client %d (%s) on victim %d | roundAssists=%d\n",
+             assistId, cl->name, victimId, aState->roundAssists);
+
+  const char *modeStr = SV_Ranked_GetActiveMode();
+
+  if (aState->loggedIn && aState->username[0]) {
+    cJSON *acc = SV_Ranked_GetAccount(aState->username);
+    if (acc) {
+      cJSON *modeData = GetModeDataForAccount(acc);
+      if (modeData) {
+        cJSON *asPtr = cJSON_GetObjectItemCaseSensitive(modeData, "assists");
+        if (asPtr)
+          cJSON_SetNumberValue(asPtr, asPtr->valueint + 1);
+        else
+          cJSON_AddNumberToObject(modeData, "assists", 1);
+      }
+    }
+
+    if (Q_stricmp(modeStr, "fa") == 0 || Q_stricmp(modeStr, "legends") == 0) {
+      // FA / Legends: +15 Credits and roll assist loot
+      UpdateAccountCredits(aState->username, 15);
+      SV_Ranked_RollLootAssist(assistId, victimId);
+      SV_SendServerCommand(cl, "chat \"^3ASSIST! ^7+15 Credits (+1 Assist)\"");
+    } else {
+      // Open mode
+      UpdateAccountCredits(aState->username, 5); // 5 credits assist bounty in open
+      SV_SendServerCommand(cl, "print \"^3ASSIST! ^7+1 Assist (^5+5 Credits^7)\n\"");
+    }
+    SV_Ranked_MarkAccountsDirty();
+  }
+}
+
+// ===========================================================================
 //  ROUND END
 // ===========================================================================
 
@@ -1331,14 +1504,42 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
                                "tie! ^3No rank changes.\"");
   }
 
-  // Handle MVPs
-  struct PlayerKD {
+  // 1. Evaluate round survival for each player
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    client_t *c = &svs.clients[i];
+    rankedMatchState_t *m = &sv_rankedPlayers[i];
+    m->roundSurvived = qfalse;
+    if (!c->state)
+      continue;
+    playerState_t *ps = SV_GameClientNum(i);
+    if (ps && ps->stats[STAT_HEALTH] > 0 && ps->pm_type == PM_NORMAL) {
+      m->roundSurvived = qtrue;
+    }
+  }
+
+  // 2. Evaluate round eliminations (kills against enemies who did not survive the round)
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    rankedMatchState_t *m = &sv_rankedPlayers[i];
+    int elims = 0;
+    for (int opp = 0; opp < sv_maxclients->integer; opp++) {
+      if (m->killsOnPlayers[opp] > 0 && !sv_rankedPlayers[opp].roundSurvived) {
+        elims += m->killsOnPlayers[opp];
+      }
+    }
+    m->roundEliminations = elims;
+  }
+
+  // 3. Handle MVPs based on Combat Impact Score
+  struct PlayerImpact {
     int clientNum;
-    int kd;
+    float impact;
     int kills;
+    int elims;
+    int assists;
+    int objs;
     int deaths;
   };
-  PlayerKD tops[64];
+  PlayerImpact tops[64];
   int numValid = 0;
 
   for (int i = 0; i < sv_maxclients->integer; i++) {
@@ -1349,11 +1550,23 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
     if (!mState->loggedIn || !mState->username[0])
       continue;
 
-    int kd = mState->roundKills - mState->roundDeaths;
-    if (kd > 0 || mState->roundKills > 0) {
+    float deathPen = 0.0f;
+    if (mState->roundDeaths > 0) {
+      deathPen = (!mState->roundSurvived ? 1.0f : 0.3f) * mState->roundDeaths;
+    }
+    float playerImpact = (mState->roundKills * 2.5f) +
+                         (mState->roundEliminations * 1.0f) +
+                         (mState->roundAssists * 1.5f) +
+                         (mState->roundObjective * 5.0f) -
+                         deathPen;
+
+    if (playerImpact > 0.0f || mState->roundKills > 0 || mState->roundObjective > 0) {
       tops[numValid].clientNum = i;
-      tops[numValid].kd = kd;
+      tops[numValid].impact = playerImpact;
       tops[numValid].kills = mState->roundKills;
+      tops[numValid].elims = mState->roundEliminations;
+      tops[numValid].assists = mState->roundAssists;
+      tops[numValid].objs = mState->roundObjective;
       tops[numValid].deaths = mState->roundDeaths;
       numValid++;
     }
@@ -1361,9 +1574,9 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
 
   for (int i = 0; i < numValid - 1; i++) {
     for (int j = i + 1; j < numValid; j++) {
-      if (tops[j].kd > tops[i].kd ||
-          (tops[j].kd == tops[i].kd && tops[j].kills > tops[i].kills)) {
-        PlayerKD temp = tops[i];
+      if (tops[j].impact > tops[i].impact ||
+          (tops[j].impact == tops[i].impact && tops[j].kills > tops[i].kills)) {
+        PlayerImpact temp = tops[i];
         tops[i] = tops[j];
         tops[j] = temp;
       }
@@ -1371,21 +1584,34 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
   }
 
   if (numValid > 0) {
-    SV_SendServerCommand(NULL, "chat \"^5--- Match MVPs ---\"");
+    SV_SendServerCommand(NULL, "chat \"^5--- Round MVPs ---\"");
     if (numValid >= 1)
-      SV_SendServerCommand(NULL, "chat \"^3MVP: ^7%s ^5(KD: +%d | %dK/%dD)\"",
-                           svs.clients[tops[0].clientNum].name, tops[0].kd,
-                           tops[0].kills, tops[0].deaths);
+      SV_SendServerCommand(NULL, "chat \"^3MVP: ^7%s ^5(Impact: %.1f | %dK/%dE/%dA/%dObj)\"",
+                           svs.clients[tops[0].clientNum].name, tops[0].impact,
+                           tops[0].kills, tops[0].elims, tops[0].assists, tops[0].objs);
     if (numValid >= 2)
-      SV_SendServerCommand(NULL, "chat \"^72nd: ^7%s ^5(KD: +%d | %dK/%dD)\"",
-                           svs.clients[tops[1].clientNum].name, tops[1].kd,
-                           tops[1].kills, tops[1].deaths);
+      SV_SendServerCommand(NULL, "chat \"^72nd: ^7%s ^5(Impact: %.1f | %dK/%dE/%dA/%dObj)\"",
+                           svs.clients[tops[1].clientNum].name, tops[1].impact,
+                           tops[1].kills, tops[1].elims, tops[1].assists, tops[1].objs);
     if (numValid >= 3)
-      SV_SendServerCommand(NULL, "chat \"^73rd: ^7%s ^5(KD: +%d | %dK/%dD)\"",
-                           svs.clients[tops[2].clientNum].name, tops[2].kd,
-                           tops[2].kills, tops[2].deaths);
+      SV_SendServerCommand(NULL, "chat \"^73rd: ^7%s ^5(Impact: %.1f | %dK/%dE/%dA/%dObj)\"",
+                           svs.clients[tops[2].clientNum].name, tops[2].impact,
+                           tops[2].kills, tops[2].elims, tops[2].assists, tops[2].objs);
+
+    // Round MVP Intermission Crate & Credit Multiplier for FA / Legends
+    if (numValid >= 1 && (Q_stricmp(modeStr, "fa") == 0 || Q_stricmp(modeStr, "legends") == 0)) {
+      int mvpSlot = tops[0].clientNum;
+      rankedMatchState_t *mvpState = &sv_rankedPlayers[mvpSlot];
+      if (mvpState->loggedIn && mvpState->username[0]) {
+        UpdateAccountCredits(mvpState->username, 25);
+        SV_Ranked_RollLootObjective(mvpSlot);
+        SV_SendServerCommand(NULL, "chat \"^3MVP BONUS! ^7%s awarded ^5+25 Credits ^7and an MVP Crate!\"",
+                             svs.clients[mvpSlot].name);
+      }
+    }
   }
 
+  // 4. Per-player Elo, Stats, and Rewards calculation
   for (int i = 0; i < sv_maxclients->integer; i++) {
     rankedMatchState_t *mState = &sv_rankedPlayers[i];
     client_t *cl = &svs.clients[i];
@@ -1410,11 +1636,25 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
     qboolean onWinningTeam =
         (thisTeam == winnerTeam && winnerTeam > 0) ? qtrue : qfalse;
 
-    Com_Printf("[RANKED] Player %d (%s) team=%d wins=%s kills=%d deaths=%d "
-               "loggedIn=%d\n",
+    float deathPen = 0.0f;
+    if (mState->roundDeaths > 0) {
+      deathPen = (!mState->roundSurvived ? 1.0f : 0.3f) * mState->roundDeaths;
+    }
+    float impact = (mState->roundKills * 2.5f) +
+                   (mState->roundEliminations * 1.0f) +
+                   (mState->roundAssists * 1.5f) +
+                   (mState->roundObjective * 5.0f) -
+                   deathPen;
+    if (onWinningTeam && mState->roundSurvived) {
+      impact += 1.0f; // Survival bonus on winning team
+    }
+
+    Com_Printf("[RANKED] Player %d (%s) team=%d wins=%s K=%d E=%d A=%d Obj=%d D=%d Surv=%d Impact=%.1f loggedIn=%d\n",
                i, mState->loggedIn ? mState->username : cl->name, thisTeam,
                onWinningTeam ? "YES" : "NO", mState->roundKills,
-               mState->roundDeaths, (int)mState->loggedIn);
+               mState->roundEliminations, mState->roundAssists,
+               mState->roundObjective, mState->roundDeaths, (int)mState->roundSurvived,
+               impact, (int)mState->loggedIn);
 
     if (!mState->loggedIn || !mState->username[0]) {
       goto reset_player;
@@ -1428,21 +1668,28 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
     }
 
     if (onWinningTeam) {
-      // K/D-based Elo for winners (Open mode)
+      // CS-style Combat Impact Elo for winners (Open mode)
       int frGain = 0;
       if (noElo) {
         SV_SendServerCommand(cl, "print \"^2VICTORY! ^7Your team won the round.\n\"");
-      } else if (mState->roundDeaths > mState->roundKills) {
-        frGain = 5; // carried by team
+      } else if (impact >= 6.0f) {
+        frGain = 22; // MVP / High Impact
         SV_SendServerCommand(
             cl,
-            "print \"^2VICTORY! ^7You were carried by your team. (+5 Elo)\n\"");
-        Com_Printf("[RANKED] %s WIN (carried): +5 Elo\n", mState->username);
+            "print \"^2MVP VICTORY! ^7Outstanding combat impact! (+22 Elo)\n\"");
+        Com_Printf("[RANKED] %s WIN (high impact %.1f): +22 Elo\n", mState->username, impact);
+      } else if (impact >= 2.0f) {
+        frGain = 14; // Solid contribution
+        SV_SendServerCommand(
+            cl,
+            "print \"^2VICTORY! ^7Solid team play! (+14 Elo)\n\"");
+        Com_Printf("[RANKED] %s WIN (solid impact %.1f): +14 Elo\n", mState->username, impact);
       } else {
-        frGain = 15; // positive K/D
-        SV_SendServerCommand(cl,
-                             "print \"^2VICTORY! ^7Positive K/D! (+15 Elo)\n\"");
-        Com_Printf("[RANKED] %s WIN (positive KD): +15 Elo\n", mState->username);
+        frGain = 5; // Carried by team
+        SV_SendServerCommand(
+            cl,
+            "print \"^2VICTORY! ^7Carried by team. (+5 Elo)\n\"");
+        Com_Printf("[RANKED] %s WIN (carried impact %.1f): +5 Elo\n", mState->username, impact);
       }
       if (frGain != 0) {
         AddEloToAccount(mState->username, frGain);
@@ -1450,7 +1697,8 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
       IncrementWinLoss(mState->username, qtrue, cl);
       cJSON *crTeamWinPtr = SV_Ranked_GetSetting("credits_per_team_win");
       int crTeamWin = crTeamWinPtr ? crTeamWinPtr->valueint : 20;
-      UpdateAccountCredits(mState->username, crTeamWin); // Credits for Team Win
+      if (impact >= 6.0f) crTeamWin += 10; // High impact bonus credits
+      UpdateAccountCredits(mState->username, crTeamWin);
 
       // Quest 8: Deathless – win a round with 0 deaths 3 times
       if (mState->roundDeaths == 0 && !Q_stricmp(modeStr, "open")) {
@@ -1477,21 +1725,25 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
       }
 
     } else {
-      // Losers
+      // Losers: Underdog protection and performance-scaled Elo loss
       int frLoss = 0;
       if (noElo) {
         SV_SendServerCommand(cl, "chat \"^1DEFEAT. ^7Your team lost the round.\"");
-      } else if (mState->roundKills > mState->roundDeaths) {
-        frLoss = 0;
-        SV_SendServerCommand(cl, "chat \"^1DEFEAT. ^7Good fight — positive K/D "
-                                 "saves your rank. (-0 Elo)\"");
-        Com_Printf("[RANKED] %s LOSS (positive KD): 0 Elo lost\n",
-                   mState->username);
+      } else if (impact >= 6.0f) {
+        frLoss = 0; // Star effort saves rank completely
+        SV_SendServerCommand(cl, "chat \"^3STAR EFFORT! ^7Exceptional combat impact saved your rank. (-0 Elo)\"");
+        Com_Printf("[RANKED] %s LOSS (underdog impact %.1f): 0 Elo lost\n",
+                   mState->username, impact);
+      } else if (impact >= 3.0f) {
+        frLoss = 5; // Fought well
+        SV_SendServerCommand(cl, "chat \"^1DEFEAT. ^7Good effort in defeat. (-5 Elo)\"");
+        Com_Printf("[RANKED] %s LOSS (fought well impact %.1f): -5 Elo\n",
+                   mState->username, impact);
       } else {
-        frLoss = 10;
-        SV_SendServerCommand(cl, "chat \"^1DEFEAT. ^7Negative K/D. (-10 Elo)\"");
-        Com_Printf("[RANKED] %s LOSS (negative KD): -10 Elo\n",
-                   mState->username);
+        frLoss = 12; // Minimal impact
+        SV_SendServerCommand(cl, "chat \"^1DEFEAT. ^7Minimal combat impact. (-12 Elo)\"");
+        Com_Printf("[RANKED] %s LOSS (low impact %.1f): -12 Elo\n",
+                   mState->username, impact);
       }
       if (frLoss > 0) {
         AddEloToAccount(mState->username, -frLoss);
@@ -1501,15 +1753,17 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
 
   reset_player:
     mState->roundKills = 0;
+    mState->roundEliminations = 0;
     mState->roundDeaths = 0;
+    mState->roundAssists = 0;
     mState->roundObjective = 0;
+    mState->roundSpawns = 0;
+    mState->roundSurvived = qfalse;
     mState->killStreak = 0;
     mState->multiKillCount = 0;
     mState->bombStreak = 0;
     Com_Memset(mState->killsOnPlayers, 0, sizeof(mState->killsOnPlayers));
   }
-
-  // MVP tracking would need a pre-reset snapshot — skipping for now.
 
   sv_ranked_firstBlood = qfalse;
   Com_Printf("[RANKED] ====== ROUND END COMPLETE ======\n");
@@ -1648,12 +1902,20 @@ void SV_Ranked_DuelStart(int p1, int p2) {
   r1->inDuel = qtrue;
   r1->duelOpponent = p2;
   r1->duelStartTime = svs.time;
-  r1->lastBP = ps1 ? ps1->stats[STAT_ARMOR] : -1;
+  r1->lastBP = SV_Ranked_GetPlayerBP(p1);
+  r1->minDuelBP = r1->lastBP;
+  r1->guardBreaksInflicted = 0;
+  r1->guardBreaksSuffered = 0;
+  r1->guardBroken = (r1->lastBP == 0) ? qtrue : qfalse;
 
   r2->inDuel = qtrue;
   r2->duelOpponent = p1;
   r2->duelStartTime = svs.time;
-  r2->lastBP = ps2 ? ps2->stats[STAT_ARMOR] : -1;
+  r2->lastBP = SV_Ranked_GetPlayerBP(p2);
+  r2->minDuelBP = r2->lastBP;
+  r2->guardBreaksInflicted = 0;
+  r2->guardBreaksSuffered = 0;
+  r2->guardBroken = (r2->lastBP == 0) ? qtrue : qfalse;
 
 
 
@@ -1933,8 +2195,8 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
 
   // Unengaged / Accidental Match Void Check:
   // If BOTH players still have >= 90 BP when the match ended (no real combat occurred / accidental death), void the match.
-  int currentWinBP = (psWin && psWin->jetpackFuel > 0) ? psWin->jetpackFuel : (rWin->lastBP > 0 ? rWin->lastBP : winArmor);
-  int currentLoseBP = (rLose->lastBP > 0) ? rLose->lastBP : ((psLose && psLose->jetpackFuel > 0) ? psLose->jetpackFuel : 100);
+  int currentWinBP = SV_Ranked_GetPlayerBP(winnerId);
+  int currentLoseBP = (rLose->guardBroken || rLose->minDuelBP == 0) ? 0 : SV_Ranked_GetPlayerBP(loserId);
   if (currentWinBP >= 90 && currentLoseBP >= 90 && !isDisconnect) {
     SV_SendServerCommand(NULL, va("print \"^3[DUEL VOIDED] ^7Duel between ^5%s ^7and ^5%s ^7ended before combat engaged (Both had full BP). No Elo changed.\n\"",
                                  svs.clients[winnerId].name, svs.clients[loserId].name));
@@ -2066,7 +2328,7 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   }
 
   // Close Fight Mitigation: If loser brought winner below 25 HP or 20 BP, reduce loser's penalty by 30%
-  if (winHealth < 25 || (winArmor > 0 && winArmor < 20)) {
+  if (winHealth < 25 || (currentWinBP > 0 && currentWinBP < 20)) {
     loseEloChange = (int)round((double)loseEloChange * 0.70);
     if (loseEloChange > -1) loseEloChange = -1;
     SV_SendServerCommand(NULL, va("print \"^6[VALIANT EFFORT] ^5%s ^7fought hard and nearly defeated ^5%s^7 (-30%% Elo Loss Shielded)!\n\"",
@@ -2074,17 +2336,27 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   }
 
   // Flawless Defense Bonus (+2 Elo): 100 HP and >= 90 BP
-  if (winHealth >= 100 && winArmor >= 90) {
+  if (winHealth >= 100 && currentWinBP >= 90) {
     winEloChange += 2;
     SV_SendServerCommand(NULL, va("print \"^3[FLAWLESS DEFENSE] ^5%s ^7dominated ^1%s ^7with an impenetrable defense (100 HP, %d BP)! (+2 Bonus Elo)\n\"",
-                                 svs.clients[winnerId].name, svs.clients[loserId].name, winArmor));
+                                 svs.clients[winnerId].name, svs.clients[loserId].name, currentWinBP));
   }
 
-  // Clutch Comeback Bonus (+3 Elo): Winner dropped below 15 HP or 10 BP
-  if (winHealth <= 15 || (winArmor > 0 && winArmor <= 10)) {
+  // Clutch Comeback Bonus (+3 Elo): Winner dropped below 15 HP or <= 10 BP
+  if (winHealth <= 15 || (currentWinBP > 0 && currentWinBP <= 10) || rWin->minDuelBP <= 10) {
     winEloChange += 3;
     SV_SendServerCommand(NULL, va("print \"^2[CLUTCH COMEBACK] ^5%s ^7survived on the brink (%d HP, %d BP) and defeated ^1%s^7! (+3 Bonus Elo)\n\"",
-                                 svs.clients[winnerId].name, winHealth, winArmor, svs.clients[loserId].name));
+                                 svs.clients[winnerId].name, winHealth, currentWinBP, svs.clients[loserId].name));
+  }
+
+  // Guard Break Finisher: Fatal blow landed while opponent's saber defense was completely broken (0 BP)
+  if (currentLoseBP == 0 || rLose->guardBroken || rLose->minDuelBP == 0) {
+    SV_SendServerCommand(NULL, va("print \"^3[GUARD BREAK FINISHER] ^5%s ^7struck down ^1%s ^7through a shattered defense (0 BP)!\n\"",
+                                 svs.clients[winnerId].name, svs.clients[loserId].name));
+    Com_Printf("[RANKED] GUARD BREAK FINISHER: %s defeated %s (0 BP remaining)\n",
+               svs.clients[winnerId].name, svs.clients[loserId].name);
+    SV_Ranked_Log("GUARD_BREAK_FINISHER: %s def. %s (0 BP)",
+                  svs.clients[winnerId].name, svs.clients[loserId].name);
   }
 
   // Loser Mitigation
@@ -2232,7 +2504,6 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   }
 
   int loseHealth = (psLose && psLose->stats[STAT_HEALTH] > 0) ? psLose->stats[STAT_HEALTH] : 0;
-  int loseBP = (rLose->lastBP > 0) ? rLose->lastBP : ((psLose && psLose->stats[STAT_ARMOR] > 0) ? psLose->stats[STAT_ARMOR] : 0);
 
   // Toast notifications — winner sees green card with remaining HP and BP, loser sees red card with their own stats
   SV_SendServerCommand(svs.clients + winnerId,
@@ -2242,7 +2513,7 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
                           xpPerDuelWin,
                           svs.clients[loserId].name,
                           winHealth,
-                          winArmor));
+                          currentWinBP));
 
   SV_SendServerCommand(svs.clients + loserId,
                        va("toast_lose %d %d %d \"%s\" %d %d",
@@ -2251,19 +2522,18 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
                           0,
                           svs.clients[winnerId].name,
                           loseHealth,
-                          loseBP));
+                          currentLoseBP));
 
   int duelDurationSec = (rWin->duelStartTime > 0) ? (svs.time - rWin->duelStartTime) / 1000 : 0;
 
   // Record Full Server Duel Analysis
-
-  SV_Ranked_Log("DUEL_ANALYSIS: Winner '%s' [HP:%d, BP:%d, Wep:%s, Style:%s, ELO:+%d] defeated Loser '%s' [Wep:%s, Style:%s, ELO:%d, Duration:%ds]",
-                svs.clients[winnerId].name, winHealth, winArmor, winWeaponStr, winStyleStr, winEloChange,
-                svs.clients[loserId].name, loseWeaponStr, loseStyleStr, loseEloChange, duelDurationSec);
+  SV_Ranked_Log("DUEL_ANALYSIS: Winner '%s' [HP:%d, BP:%d, Wep:%s, Style:%s, ELO:+%d] defeated Loser '%s' [HP:%d, BP:%d, Wep:%s, Style:%s, ELO:%d, Duration:%ds, GuardBreaks:%d]",
+                svs.clients[winnerId].name, winHealth, currentWinBP, winWeaponStr, winStyleStr, winEloChange,
+                svs.clients[loserId].name, loseHealth, currentLoseBP, loseWeaponStr, loseStyleStr, loseEloChange, duelDurationSec, rWin->guardBreaksInflicted);
 
   extern void SV_Ranked_DB_RecordDuelAnalysis(const char *winnerName, const char *loserName, int winHealth, int winBP, int winEloDelta, int loseEloDelta, int durationSec);
   if (rWin->loggedIn && rWin->username[0]) {
-    SV_Ranked_DB_RecordDuelAnalysis(rWin->username, (rLose->loggedIn && rLose->username[0]) ? rLose->username : svs.clients[loserId].name, winHealth, winArmor, winEloChange, loseEloChange, duelDurationSec);
+    SV_Ranked_DB_RecordDuelAnalysis(rWin->username, (rLose->loggedIn && rLose->username[0]) ? rLose->username : svs.clients[loserId].name, winHealth, currentWinBP, winEloChange, loseEloChange, duelDurationSec);
   }
 
 
@@ -2879,6 +3149,17 @@ void SV_Ranked_StopHotPotato(qboolean disableCompletely) {
 }
 
 void SV_Ranked_ProcessRoundStart(void) {
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    sv_rankedPlayers[i].roundSpawns = 0;
+    sv_rankedPlayers[i].roundSurvived = qfalse;
+    sv_rankedPlayers[i].roundEliminations = 0;
+    sv_rankedPlayers[i].roundAssists = 0;
+    sv_rankedPlayers[i].roundObjective = 0;
+    sv_rankedPlayers[i].roundKills = 0;
+    sv_rankedPlayers[i].roundDeaths = 0;
+    Com_Memset(sv_rankedPlayers[i].killsOnPlayers, 0, sizeof(sv_rankedPlayers[i].killsOnPlayers));
+  }
+
   if (sv_hotPotatoEnabled && !sv_hotPotatoActive) {
     int count = 0;
     for (int i = 0; i < sv_maxclients->integer; i++) {
@@ -3303,6 +3584,47 @@ void SV_Ranked_Logic_Frame(void) {
     }
   }
 
+  // Real-Time Duel BP Tracking & Guard Break Detection (every 100ms)
+  static int lastDuelBPTick = 0;
+  if (svs.time - lastDuelBPTick >= 100) {
+    lastDuelBPTick = svs.time;
+    if (sv_maxclients) {
+      for (int i = 0; i < sv_maxclients->integer; i++) {
+        rankedMatchState_t *r = &sv_rankedPlayers[i];
+        if (r->inDuel && r->duelOpponent >= 0 && r->duelOpponent < sv_maxclients->integer && r->duelOpponent != i) {
+          int opp = r->duelOpponent;
+          if (svs.clients[i].state >= CS_ACTIVE && svs.clients[opp].state >= CS_ACTIVE) {
+            int currentBP = SV_Ranked_GetPlayerBP(i);
+            if (currentBP < r->minDuelBP) {
+              r->minDuelBP = currentBP;
+            }
+
+            // Detect transition to 0 BP (Guard Break!)
+            if (currentBP == 0 && !r->guardBroken && r->lastBP > 0) {
+              r->guardBroken = qtrue;
+              r->guardBreaksSuffered++;
+              sv_rankedPlayers[opp].guardBreaksInflicted++;
+
+              Com_Printf("[RANKED] GUARD BREAK! %s shattered %s's defense (0 BP)!\n",
+                         svs.clients[opp].name, svs.clients[i].name);
+              SV_Ranked_Log("GUARD_BREAK: %s shattered %s's defense (BP=0)",
+                            svs.clients[opp].name, svs.clients[i].name);
+
+              // Subtle top-left print notification to duelists (no chat, no centerprint)
+              SV_SendServerCommand(&svs.clients[i], "print \"^1[GUARD BROKEN] ^7Your saber defense collapsed (0 BP)!\n\"");
+              SV_SendServerCommand(&svs.clients[opp], va("print \"^2[GUARD BREAK] ^7You broke ^5%s^7's guard (0 BP)!\n\"", svs.clients[i].name));
+            } else if (currentBP > 5) {
+              // Reset guard broken flag once BP recovers
+              r->guardBroken = qfalse;
+            }
+
+            r->lastBP = currentBP;
+          }
+        }
+      }
+    }
+  }
+
   // Periodic Duel Opponent Status Telemetry (every 1000ms)
   static int lastDuelStatusSync = 0;
   if (svs.time - lastDuelStatusSync >= 1000) {
@@ -3317,11 +3639,11 @@ void SV_Ranked_Logic_Frame(void) {
             playerState_t *ps2 = SV_GameClientNum(opp);
             int hp1 = ps1 ? ps1->stats[STAT_HEALTH] : 0;
             int fp1 = ps1 ? ps1->fd.forcePower : 0;
-            int bp1 = (ps1 && ps1->jetpackFuel > 0) ? ps1->jetpackFuel : (r->lastBP > 0 ? r->lastBP : (ps1 ? ps1->stats[STAT_ARMOR] : 100));
+            int bp1 = SV_Ranked_GetPlayerBP(i);
 
             int hp2 = ps2 ? ps2->stats[STAT_HEALTH] : 0;
             int fp2 = ps2 ? ps2->fd.forcePower : 0;
-            int bp2 = (ps2 && ps2->jetpackFuel > 0) ? ps2->jetpackFuel : (sv_rankedPlayers[opp].lastBP > 0 ? sv_rankedPlayers[opp].lastBP : (ps2 ? ps2->stats[STAT_ARMOR] : 100));
+            int bp2 = SV_Ranked_GetPlayerBP(opp);
 
             r->lastBP = bp1;
             sv_rankedPlayers[opp].lastBP = bp2;
