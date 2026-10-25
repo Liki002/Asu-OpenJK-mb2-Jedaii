@@ -1913,7 +1913,8 @@ void SV_Ranked_DuelStart(int p1, int p2) {
   r1->guardBreaksSuffered = 0;
   r1->guardBroken = (r1->lastBP == 0) ? qtrue : qfalse;
   r1->hadSaberAtStart = (ps1 && ps1->saberEntityNum > 0) ? qtrue : qfalse;
-  r1->wasDisarmed = qfalse;
+  r1->hadDisarmInMatch = qfalse;
+  r1->isCurrentlyDisarmed = qfalse;
   r1->disarmsInflicted = 0;
 
   r2->inDuel = qtrue;
@@ -1925,7 +1926,8 @@ void SV_Ranked_DuelStart(int p1, int p2) {
   r2->guardBreaksSuffered = 0;
   r2->guardBroken = (r2->lastBP == 0) ? qtrue : qfalse;
   r2->hadSaberAtStart = (ps2 && ps2->saberEntityNum > 0) ? qtrue : qfalse;
-  r2->wasDisarmed = qfalse;
+  r2->hadDisarmInMatch = qfalse;
+  r2->isCurrentlyDisarmed = qfalse;
   r2->disarmsInflicted = 0;
 
 
@@ -2257,10 +2259,10 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
 
   // Unengaged / Accidental Match Void Check:
   // If BOTH players still have >= 90 BP when the match ended (no real combat occurred / accidental death), void the match.
-  // EXCEPTION: If either player was disarmed, active combat took place — never void the duel!
+  // EXCEPTION: If either player was disarmed at any point in the match, active combat took place — never void!
   int currentWinBP = SV_Ranked_GetPlayerBP(winnerId);
   int currentLoseBP = (rLose->guardBroken || rLose->minDuelBP == 0) ? 0 : SV_Ranked_GetPlayerBP(loserId);
-  if (currentWinBP >= 90 && currentLoseBP >= 90 && !isDisconnect && !rWin->wasDisarmed && !rLose->wasDisarmed) {
+  if (currentWinBP >= 90 && currentLoseBP >= 90 && !isDisconnect && !rWin->hadDisarmInMatch && !rLose->hadDisarmInMatch) {
     SV_SendServerCommand(NULL, va("print \"^3[DUEL VOIDED] ^7Duel between ^5%s ^7and ^5%s ^7ended before combat engaged (Both had full BP). No Elo changed.\n\"",
                                  svs.clients[winnerId].name, svs.clients[loserId].name));
     Com_Printf("[RANKED] Duel VOIDED: winBP=%d loseBP=%d (no combat engaged)\n", currentWinBP, currentLoseBP);
@@ -2422,10 +2424,10 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
                   svs.clients[winnerId].name, svs.clients[loserId].name);
   }
 
-  // Disarm Finisher: Winner struck down an opponent who was disarmed during the duel (+2 Bonus Elo)
-  if (rLose->wasDisarmed) {
+  // Disarm Finisher: Fatal blow landed while opponent was currently disarmed (saber knocked away) (+2 Bonus Elo)
+  if (rLose->isCurrentlyDisarmed) {
     winEloChange += 2;
-    SV_SendServerCommand(NULL, va("print \"^3[DISARM FINISHER] ^5%s ^7disarmed and defeated ^1%s^7! (+2 Bonus Elo)\n\"",
+    SV_SendServerCommand(NULL, va("print \"^3[DISARM FINISHER] ^5%s ^7struck down ^1%s ^7while disarmed! (+2 Bonus Elo)\n\"",
                                  svs.clients[winnerId].name, svs.clients[loserId].name));
     Com_Printf("[RANKED] DISARM FINISHER: %s defeated disarmed %s (+2 Bonus Elo)\n",
                svs.clients[winnerId].name, svs.clients[loserId].name);
@@ -3695,21 +3697,32 @@ void SV_Ranked_Logic_Frame(void) {
               r->guardBroken = qfalse;
             }
 
-            // Detect Saber Disarm / Knockdown:
-            // When saber is knocked away onto the floor, engine sets saberEntityNum = 0 and saberInFlight = qtrue
+            // Detect Saber Disarm / Retrieval:
             playerState_t *ps = SV_GameClientNum(i);
-            if (ps && r->hadSaberAtStart && !r->wasDisarmed && ps->saberEntityNum == 0 && ps->saberInFlight && ps->stats[STAT_HEALTH] > 0) {
-              r->wasDisarmed = qtrue;
-              sv_rankedPlayers[opp].disarmsInflicted++;
+            if (ps && r->hadSaberAtStart && ps->stats[STAT_HEALTH] > 0) {
+              if (ps->saberEntityNum == 0 && ps->saberInFlight) {
+                if (!r->isCurrentlyDisarmed) {
+                  r->isCurrentlyDisarmed = qtrue;
+                  r->hadDisarmInMatch = qtrue;
+                  sv_rankedPlayers[opp].disarmsInflicted++;
 
-              Com_Printf("[RANKED] DISARM! %s knocked away %s's lightsaber!\n",
-                         svs.clients[opp].name, svs.clients[i].name);
-              SV_Ranked_Log("DISARM: %s disarmed %s",
-                            svs.clients[opp].name, svs.clients[i].name);
+                  Com_Printf("[RANKED] DISARM! %s knocked away %s's lightsaber!\n",
+                             svs.clients[opp].name, svs.clients[i].name);
+                  SV_Ranked_Log("DISARM: %s disarmed %s",
+                                svs.clients[opp].name, svs.clients[i].name);
 
-              // Subtle top-left print notification to duelists
-              SV_SendServerCommand(&svs.clients[i], "print \"^1[DISARMED] ^7Your lightsaber was knocked away!\n\"");
-              SV_SendServerCommand(&svs.clients[opp], va("print \"^2[DISARM] ^7You disarmed ^5%s^7!\n\"", svs.clients[i].name));
+                  // Subtle top-left print notification to duelists
+                  SV_SendServerCommand(&svs.clients[i], "print \"^1[DISARMED] ^7Your lightsaber was knocked away!\n\"");
+                  SV_SendServerCommand(&svs.clients[opp], va("print \"^2[DISARM] ^7You disarmed ^5%s^7!\n\"", svs.clients[i].name));
+                }
+              } else if (ps->saberEntityNum > 0 && !ps->saberInFlight) {
+                // Saber retrieved / back in hand
+                if (r->isCurrentlyDisarmed) {
+                  r->isCurrentlyDisarmed = qfalse;
+                  Com_Printf("[RANKED] %s retrieved their lightsaber.\n", svs.clients[i].name);
+                  SV_SendServerCommand(&svs.clients[i], "print \"^2[SABER RETRIEVED] ^7You picked up your lightsaber!\n\"");
+                }
+              }
             }
 
             r->lastBP = currentBP;

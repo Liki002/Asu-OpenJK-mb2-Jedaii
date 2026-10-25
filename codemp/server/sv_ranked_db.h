@@ -56,7 +56,8 @@ typedef struct {
   int guardBreaksSuffered;    // Count of guard breaks suffered (BP=0) during duel
   qboolean guardBroken;       // Whether player is currently in 0 BP guard-break state
   qboolean hadSaberAtStart;   // Whether player held a lightsaber when the duel started
-  qboolean wasDisarmed;       // Whether player was disarmed (saber knocked away) during this duel
+  qboolean hadDisarmInMatch;  // Whether a disarm occurred at any point during this duel (prevents voiding)
+  qboolean isCurrentlyDisarmed; // Whether player is currently disarmed (saber knocked away on floor)
   int disarmsInflicted;       // Count of disarms landed on opponent during duel
 
   
