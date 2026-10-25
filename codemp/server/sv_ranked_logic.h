@@ -32,6 +32,7 @@ void SV_Ranked_DuelEnd(int winner, int loser, int isTie, int isDisconnect, int m
 void SV_Ranked_DuelStop(int p1, int p2);
 void SV_Ranked_DuelDisconnectCheck(int clientNum);
 void SV_Ranked_ProcessPrivateDuel(int d1, int d2);
+void SV_Ranked_SyncEngineDuels(void);
 
 // Open Scoreboard Hook
 void SV_Ranked_ProcessScoreboard(const char* text);

@@ -1845,10 +1845,15 @@ void SV_Ranked_DuelStart(int p1, int p2) {
       p2 >= sv_maxclients->integer)
     return;
 
-  SV_Ranked_Log("DUEL_START: %s vs %s", svs.clients[p1].name, svs.clients[p2].name);
-
   rankedMatchState_t *r1 = &sv_rankedPlayers[p1];
   rankedMatchState_t *r2 = &sv_rankedPlayers[p2];
+
+  // If both players are already actively registered in this exact duel, ignore duplicate start
+  if (r1->inDuel && r1->duelOpponent == p2 && r2->inDuel && r2->duelOpponent == p1) {
+    return;
+  }
+
+  SV_Ranked_Log("DUEL_START: %s vs %s", svs.clients[p1].name, svs.clients[p2].name);
 
   // Allow duels even if one or both players are temp (no GUID / not logged in).
   // Stats are only saved for logged-in players — see SV_Ranked_DuelEnd.
@@ -1907,6 +1912,9 @@ void SV_Ranked_DuelStart(int p1, int p2) {
   r1->guardBreaksInflicted = 0;
   r1->guardBreaksSuffered = 0;
   r1->guardBroken = (r1->lastBP == 0) ? qtrue : qfalse;
+  r1->hadSaberAtStart = (ps1 && ps1->saberEntityNum > 0) ? qtrue : qfalse;
+  r1->wasDisarmed = qfalse;
+  r1->disarmsInflicted = 0;
 
   r2->inDuel = qtrue;
   r2->duelOpponent = p1;
@@ -1916,6 +1924,9 @@ void SV_Ranked_DuelStart(int p1, int p2) {
   r2->guardBreaksInflicted = 0;
   r2->guardBreaksSuffered = 0;
   r2->guardBroken = (r2->lastBP == 0) ? qtrue : qfalse;
+  r2->hadSaberAtStart = (ps2 && ps2->saberEntityNum > 0) ? qtrue : qfalse;
+  r2->wasDisarmed = qfalse;
+  r2->disarmsInflicted = 0;
 
 
 
@@ -1967,6 +1978,57 @@ void SV_Ranked_DuelStop(int p1, int p2) {
     sv_rankedPlayers[p1].inDuel = qfalse;
   if (p2 >= 0 && p2 < sv_maxclients->integer)
     sv_rankedPlayers[p2].inDuel = qfalse;
+}
+
+void SV_Ranked_SyncEngineDuels(void) {
+  if (!sv_maxclients || !Cvar_VariableIntegerValue("sv_ranked_enabled"))
+    return;
+
+  for (int i = 0; i < sv_maxclients->integer; i++) {
+    client_t *cl = &svs.clients[i];
+    if (cl->state != CS_ACTIVE)
+      continue;
+
+    playerState_t *ps = SV_GameClientNum(i);
+    if (!ps)
+      continue;
+
+    // 1. Mutual engine duel check -> start ranked duel cleanly without name parsing
+    if (ps->duelInProgress && ps->stats[STAT_HEALTH] > 0) {
+      int opp = ps->duelIndex;
+      if (opp >= 0 && opp < sv_maxclients->integer && opp != i) {
+        client_t *oppCl = &svs.clients[opp];
+        if (oppCl->state == CS_ACTIVE) {
+          playerState_t *oppPs = SV_GameClientNum(opp);
+          if (oppPs && oppPs->duelInProgress && oppPs->duelIndex == i && oppPs->stats[STAT_HEALTH] > 0) {
+            // Both players verified by engine to be in a mutual private duel!
+            if (!sv_rankedPlayers[i].inDuel || sv_rankedPlayers[i].duelOpponent != opp) {
+              Com_Printf("[RANKED] Mutual engine duel detected via playerState: client %d (%s) vs %d (%s)\n",
+                         i, cl->name, opp, oppCl->name);
+              SV_Ranked_DuelStart(i, opp);
+            }
+          }
+        }
+      }
+    }
+    // 2. Both players were in a ranked duel, but neither is dueling in the engine anymore
+    // (e.g. duel timed out or ran too far apart > 1024 distance without a kill)
+    else if (sv_rankedPlayers[i].inDuel) {
+      int opp = sv_rankedPlayers[i].duelOpponent;
+      if (opp >= 0 && opp < sv_maxclients->integer && svs.clients[opp].state == CS_ACTIVE) {
+        playerState_t *oppPs = SV_GameClientNum(opp);
+        if (ps->stats[STAT_HEALTH] > 0 && oppPs && oppPs->stats[STAT_HEALTH] > 0) {
+          if (!ps->duelInProgress && !oppPs->duelInProgress) {
+            Com_Printf("[RANKED] Engine duel between client %d and %d ended without death (cancelled).\n", i, opp);
+            sv_rankedPlayers[i].inDuel = qfalse;
+            sv_rankedPlayers[i].duelOpponent = -1;
+            sv_rankedPlayers[opp].inDuel = qfalse;
+            sv_rankedPlayers[opp].duelOpponent = -1;
+          }
+        }
+      }
+    }
+  }
 }
 
 int SV_Ranked_FindPlayerByNameOrId(const char *identifier) {
@@ -2195,9 +2257,10 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
 
   // Unengaged / Accidental Match Void Check:
   // If BOTH players still have >= 90 BP when the match ended (no real combat occurred / accidental death), void the match.
+  // EXCEPTION: If either player was disarmed, active combat took place — never void the duel!
   int currentWinBP = SV_Ranked_GetPlayerBP(winnerId);
   int currentLoseBP = (rLose->guardBroken || rLose->minDuelBP == 0) ? 0 : SV_Ranked_GetPlayerBP(loserId);
-  if (currentWinBP >= 90 && currentLoseBP >= 90 && !isDisconnect) {
+  if (currentWinBP >= 90 && currentLoseBP >= 90 && !isDisconnect && !rWin->wasDisarmed && !rLose->wasDisarmed) {
     SV_SendServerCommand(NULL, va("print \"^3[DUEL VOIDED] ^7Duel between ^5%s ^7and ^5%s ^7ended before combat engaged (Both had full BP). No Elo changed.\n\"",
                                  svs.clients[winnerId].name, svs.clients[loserId].name));
     Com_Printf("[RANKED] Duel VOIDED: winBP=%d loseBP=%d (no combat engaged)\n", currentWinBP, currentLoseBP);
@@ -2356,6 +2419,17 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
     Com_Printf("[RANKED] GUARD BREAK FINISHER: %s defeated %s (0 BP remaining)\n",
                svs.clients[winnerId].name, svs.clients[loserId].name);
     SV_Ranked_Log("GUARD_BREAK_FINISHER: %s def. %s (0 BP)",
+                  svs.clients[winnerId].name, svs.clients[loserId].name);
+  }
+
+  // Disarm Finisher: Winner struck down an opponent who was disarmed during the duel (+2 Bonus Elo)
+  if (rLose->wasDisarmed) {
+    winEloChange += 2;
+    SV_SendServerCommand(NULL, va("print \"^3[DISARM FINISHER] ^5%s ^7disarmed and defeated ^1%s^7! (+2 Bonus Elo)\n\"",
+                                 svs.clients[winnerId].name, svs.clients[loserId].name));
+    Com_Printf("[RANKED] DISARM FINISHER: %s defeated disarmed %s (+2 Bonus Elo)\n",
+               svs.clients[winnerId].name, svs.clients[loserId].name);
+    SV_Ranked_Log("DISARM_FINISHER: %s def. disarmed %s",
                   svs.clients[winnerId].name, svs.clients[loserId].name);
   }
 
@@ -3502,6 +3576,9 @@ void SV_Ranked_Logic_Frame(void) {
     }
   }
 
+  // Auto-sync mutual engine duels from playerState (immune to name parsing bugs)
+  SV_Ranked_SyncEngineDuels();
+
   // Enforce PM_FREEZE and grantedWeaponsMask for active clients
   if (sv_maxclients) {
     for (int i = 0; i < sv_maxclients->integer; i++) {
@@ -3616,6 +3693,23 @@ void SV_Ranked_Logic_Frame(void) {
             } else if (currentBP > 5) {
               // Reset guard broken flag once BP recovers
               r->guardBroken = qfalse;
+            }
+
+            // Detect Saber Disarm / Knockdown:
+            // When saber is knocked away onto the floor, engine sets saberEntityNum = 0 and saberInFlight = qtrue
+            playerState_t *ps = SV_GameClientNum(i);
+            if (ps && r->hadSaberAtStart && !r->wasDisarmed && ps->saberEntityNum == 0 && ps->saberInFlight && ps->stats[STAT_HEALTH] > 0) {
+              r->wasDisarmed = qtrue;
+              sv_rankedPlayers[opp].disarmsInflicted++;
+
+              Com_Printf("[RANKED] DISARM! %s knocked away %s's lightsaber!\n",
+                         svs.clients[opp].name, svs.clients[i].name);
+              SV_Ranked_Log("DISARM: %s disarmed %s",
+                            svs.clients[opp].name, svs.clients[i].name);
+
+              // Subtle top-left print notification to duelists
+              SV_SendServerCommand(&svs.clients[i], "print \"^1[DISARMED] ^7Your lightsaber was knocked away!\n\"");
+              SV_SendServerCommand(&svs.clients[opp], va("print \"^2[DISARM] ^7You disarmed ^5%s^7!\n\"", svs.clients[i].name));
             }
 
             r->lastBP = currentBP;

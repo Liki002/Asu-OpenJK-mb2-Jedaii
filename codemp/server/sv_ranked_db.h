@@ -55,6 +55,9 @@ typedef struct {
   int guardBreaksInflicted;   // Count of guard breaks landed on opponent during duel
   int guardBreaksSuffered;    // Count of guard breaks suffered (BP=0) during duel
   qboolean guardBroken;       // Whether player is currently in 0 BP guard-break state
+  qboolean hadSaberAtStart;   // Whether player held a lightsaber when the duel started
+  qboolean wasDisarmed;       // Whether player was disarmed (saber knocked away) during this duel
+  int disarmsInflicted;       // Count of disarms landed on opponent during duel
 
   
   // Economy / betting state

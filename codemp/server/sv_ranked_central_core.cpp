@@ -282,6 +282,7 @@ void StartConnect() {
   fcntl(fd, F_SETFL, flags | O_NONBLOCK);
   int one = 1;
   setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (const char *)&one, sizeof(one));
+  setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (const char *)&one, sizeof(one));
 
   struct sockaddr_in addr;
   memset(&addr, 0, sizeof(addr));
@@ -492,12 +493,16 @@ void CentralCore_Frame(void) {
     return;
   }
   if (S.state == CS_READY) {
+    bool hasTimedOut = false;
     for (int i = 0; i < MAX_PENDING; ++i) {
       if (S.pending[i].used && (unsigned)(now - S.pending[i].sentAt) > REQUEST_TIMEOUT_MS) {
-        Pending p = S.pending[i];
-        S.pending[i].used = false;
-        if (p.cb) p.cb(p.ctx, 0, NULL);
+        hasTimedOut = true;
+        break;
       }
+    }
+    if (hasTimedOut) {
+      Disconnect("request timed out (reconnecting fresh)");
+      return;
     }
   }
 #endif
