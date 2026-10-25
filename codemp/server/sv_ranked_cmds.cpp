@@ -1851,10 +1851,10 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
       SV_Ranked_HandleDuelEndCommand(cl);
       // Clean up engine duelInProgress so duelist isn't stuck
       playerState_t *ps = SV_GameClientNum(clientNum);
-      if (ps) ps->duelInProgress = 0;
+      if (ps) ps->duelInProgress = qfalse;
       if (r->duelOpponent >= 0 && r->duelOpponent < sv_maxclients->integer) {
         playerState_t *oppPs = SV_GameClientNum(r->duelOpponent);
-        if (oppPs) oppPs->duelInProgress = 0;
+        if (oppPs) oppPs->duelInProgress = qfalse;
       }
     } else {
       SV_SendServerCommand(cl, "chat \"^3[RANKED] ^7You are not currently in an active duel.\"");
