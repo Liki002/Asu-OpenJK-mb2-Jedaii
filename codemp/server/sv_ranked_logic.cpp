@@ -1982,6 +1982,57 @@ void SV_Ranked_DuelStop(int p1, int p2) {
     sv_rankedPlayers[p2].inDuel = qfalse;
 }
 
+void SV_Ranked_HandleDuelEndCommand(client_t *cl) {
+  if (!cl || cl->state != CS_ACTIVE)
+    return;
+
+  int clientNum = (int)(cl - svs.clients);
+  if (clientNum < 0 || clientNum >= sv_maxclients->integer)
+    return;
+
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r->inDuel || r->duelOpponent < 0 || r->duelOpponent >= sv_maxclients->integer)
+    return;
+
+  int opp = r->duelOpponent;
+  client_t *oppCl = &svs.clients[opp];
+  if (oppCl->state != CS_ACTIVE)
+    return;
+
+  rankedMatchState_t *rOpp = &sv_rankedPlayers[opp];
+  int callerBP = SV_Ranked_GetPlayerBP(clientNum);
+  int callerMinBP = r->minDuelBP;
+  playerState_t *callerPs = SV_GameClientNum(clientNum);
+  int callerHP = (callerPs && callerPs->stats[STAT_HEALTH] > 0) ? callerPs->stats[STAT_HEALTH] : 100;
+
+  Com_Printf("[RANKED] Client %d (%s) executed manual duel_end vs %s. Caller BP: %d, minBP: %d, HP: %d\n",
+             clientNum, cl->name, oppCl->name, callerBP, callerMinBP, callerHP);
+
+  // If caller was under pressure (low BP < 60, min BP < 60, low HP < 60, guard broken, or disarmed)
+  if (callerBP < 60 || callerMinBP < 60 || callerHP < 60 || r->guardBroken || r->isCurrentlyDisarmed) {
+    SV_SendServerCommand(NULL, va("print \"^1[FORFEIT] ^5%s ^7surrendered to ^5%s ^7via duel_end under pressure (%d BP, %d HP)!\n\"",
+                                 cl->name, oppCl->name, callerBP, callerHP));
+    SV_SendServerCommand(NULL, va("cp \"^1%s ^7FORFEITED!\\n^2%s ^7WINS!\"",
+                                 cl->name, oppCl->name));
+    SV_Ranked_Log("DUEL_FORFEIT: %s surrendered against %s via duel_end (BP: %d, minBP: %d, HP: %d)",
+                  cl->name, oppCl->name, callerBP, callerMinBP, callerHP);
+
+    // Caller loses by default, opponent is awarded win
+    SV_Ranked_DuelEnd(opp, clientNum, 0, 0, -1);
+  } else {
+    // Both players had high BP (>= 60 BP) and HP (>= 60 HP) — fair/peaceful cancel!
+    SV_SendServerCommand(NULL, va("print \"^3[DUEL CANCELLED] ^5%s ^7ended the duel manually (Both above 60 BP). No Elo changed.\n\"",
+                                 cl->name));
+    SV_Ranked_Log("DUEL_CANCEL: %s cancelled duel vs %s via duel_end (Caller BP: %d, minBP: %d)",
+                  cl->name, oppCl->name, callerBP, callerMinBP);
+
+    r->inDuel = qfalse;
+    r->duelOpponent = -1;
+    rOpp->inDuel = qfalse;
+    rOpp->duelOpponent = -1;
+  }
+}
+
 void SV_Ranked_SyncEngineDuels(void) {
   if (!sv_maxclients || !Cvar_VariableIntegerValue("sv_ranked_enabled"))
     return;
@@ -2021,11 +2072,39 @@ void SV_Ranked_SyncEngineDuels(void) {
         playerState_t *oppPs = SV_GameClientNum(opp);
         if (ps->stats[STAT_HEALTH] > 0 && oppPs && oppPs->stats[STAT_HEALTH] > 0) {
           if (!ps->duelInProgress && !oppPs->duelInProgress) {
-            Com_Printf("[RANKED] Engine duel between client %d and %d ended without death (cancelled).\n", i, opp);
-            sv_rankedPlayers[i].inDuel = qfalse;
-            sv_rankedPlayers[i].duelOpponent = -1;
-            sv_rankedPlayers[opp].inDuel = qfalse;
-            sv_rankedPlayers[opp].duelOpponent = -1;
+            int bp1 = SV_Ranked_GetPlayerBP(i);
+            int bp2 = SV_Ranked_GetPlayerBP(opp);
+            int minBp1 = sv_rankedPlayers[i].minDuelBP;
+            int minBp2 = sv_rankedPlayers[opp].minDuelBP;
+            int hp1 = ps->stats[STAT_HEALTH];
+            int hp2 = oppPs->stats[STAT_HEALTH];
+
+            // If one player was heavily losing (< 60 BP / HP or guard broken) while the opponent was healthy (>= 60 BP & HP)
+            if ((bp1 < 60 || minBp1 < 60 || hp1 < 60 || sv_rankedPlayers[i].guardBroken || sv_rankedPlayers[i].isCurrentlyDisarmed) &&
+                (bp2 >= 60 && hp2 >= 60 && !sv_rankedPlayers[opp].guardBroken && !sv_rankedPlayers[opp].isCurrentlyDisarmed)) {
+              SV_SendServerCommand(NULL, va("print \"^1[FORFEIT] ^5%s ^7fled from the duel against ^5%s ^7under pressure (%d BP, %d HP)!\n\"",
+                                           svs.clients[i].name, svs.clients[opp].name, bp1, hp1));
+              SV_SendServerCommand(NULL, va("cp \"^1%s ^7FLED FROM DUEL!\\n^2%s ^7WINS!\"",
+                                           svs.clients[i].name, svs.clients[opp].name));
+              SV_Ranked_Log("DUEL_FLED: %s fled vs %s (BP: %d, HP: %d)",
+                            svs.clients[i].name, svs.clients[opp].name, bp1, hp1);
+              SV_Ranked_DuelEnd(opp, i, 0, 0, -1);
+            } else if ((bp2 < 60 || minBp2 < 60 || hp2 < 60 || sv_rankedPlayers[opp].guardBroken || sv_rankedPlayers[opp].isCurrentlyDisarmed) &&
+                       (bp1 >= 60 && hp1 >= 60 && !sv_rankedPlayers[i].guardBroken && !sv_rankedPlayers[i].isCurrentlyDisarmed)) {
+              SV_SendServerCommand(NULL, va("print \"^1[FORFEIT] ^5%s ^7fled from the duel against ^5%s ^7under pressure (%d BP, %d HP)!\n\"",
+                                           svs.clients[opp].name, svs.clients[i].name, bp2, hp2));
+              SV_SendServerCommand(NULL, va("cp \"^1%s ^7FLED FROM DUEL!\\n^2%s ^7WINS!\"",
+                                           svs.clients[opp].name, svs.clients[i].name));
+              SV_Ranked_Log("DUEL_FLED: %s fled vs %s (BP: %d, HP: %d)",
+                            svs.clients[opp].name, svs.clients[i].name, bp2, hp2);
+              SV_Ranked_DuelEnd(i, opp, 0, 0, -1);
+            } else {
+              Com_Printf("[RANKED] Engine duel between client %d and %d ended without death (cancelled).\n", i, opp);
+              sv_rankedPlayers[i].inDuel = qfalse;
+              sv_rankedPlayers[i].duelOpponent = -1;
+              sv_rankedPlayers[opp].inDuel = qfalse;
+              sv_rankedPlayers[opp].duelOpponent = -1;
+            }
           }
         }
       }
@@ -2258,11 +2337,11 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
   }
 
   // Unengaged / Accidental Match Void Check:
-  // If BOTH players still have >= 90 BP when the match ended (no real combat occurred / accidental death), void the match.
-  // EXCEPTION: If either player was disarmed at any point in the match, active combat took place — never void!
+  // If BOTH players still have >= 90 BP when the match ended (no real combat occurred / accidental death / side hit while waiting), void the match.
+  // EXCEPTION: If the losing player was killed while currently disarmed, this is a legitimate disarm finisher kill — do not void!
   int currentWinBP = SV_Ranked_GetPlayerBP(winnerId);
   int currentLoseBP = (rLose->guardBroken || rLose->minDuelBP == 0) ? 0 : SV_Ranked_GetPlayerBP(loserId);
-  if (currentWinBP >= 90 && currentLoseBP >= 90 && !isDisconnect && !rWin->hadDisarmInMatch && !rLose->hadDisarmInMatch) {
+  if (currentWinBP >= 90 && currentLoseBP >= 90 && !isDisconnect && !rLose->isCurrentlyDisarmed) {
     SV_SendServerCommand(NULL, va("print \"^3[DUEL VOIDED] ^7Duel between ^5%s ^7and ^5%s ^7ended before combat engaged (Both had full BP). No Elo changed.\n\"",
                                  svs.clients[winnerId].name, svs.clients[loserId].name));
     Com_Printf("[RANKED] Duel VOIDED: winBP=%d loseBP=%d (no combat engaged)\n", currentWinBP, currentLoseBP);

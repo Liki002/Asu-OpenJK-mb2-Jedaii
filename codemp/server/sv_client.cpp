@@ -1815,6 +1815,11 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
     SV_Ranked_Log("VICTIM_BP_REPORT: Client %d (%s) reported victim BP:%d", cNum, cl->name, vBP);
     return;
   }
+  if (!Q_stricmp(Cmd_Argv(0), "duel_end") || !Q_stricmp(Cmd_Argv(0), "duelend")) {
+    extern void SV_Ranked_HandleDuelEndCommand(client_t *cl);
+    SV_Ranked_HandleDuelEndCommand(cl);
+    // Note: Do NOT return here — allow MBII engine to also process duel_end to clear its internal state!
+  }
   if (!Q_stricmp(Cmd_Argv(0), "rpg_gameresult")) {
     // Format: rpg_gameresult <gameId> <betPaid> <winAwarded>
     int cNum = (int)(cl - svs.clients);
