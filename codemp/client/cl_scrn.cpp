@@ -27,6 +27,7 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 #include "client.h"
 #include "cl_uiapi.h"
 #include "cl_cgameapi.h"
+#include "qcommon/cm_public.h"
 
 extern console_t con;
 qboolean	scr_initialized;		// ready to draw
@@ -3763,6 +3764,161 @@ void SCR_DrawPartyOverheadIcons( void ) {
 	}
 }
 
+/*
+==================
+SCR_DrawNPCOverheadHUD
+
+3D World Space Overhead Floating Name & Health Bar for Bosses & NPCs
+==================
+*/
+void SCR_DrawNPCOverheadHUD( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cls.cgameStarted ) return;
+	if ( !cl.snap.valid ) return;
+
+	static cvar_t *cl_drawNPCOverhead = NULL;
+	if ( !cl_drawNPCOverhead ) {
+		cl_drawNPCOverhead = Cvar_Get( "cg_drawNPCOverhead", "1", CVAR_ARCHIVE );
+	}
+	if ( cl_drawNPCOverhead && !cl_drawNPCOverhead->integer ) return;
+
+	for ( int i = 0; i < cl.snap.numEntities; i++ ) {
+		int parseIdx = ( cl.snap.parseEntitiesNum + i ) & ( MAX_PARSE_ENTITIES - 1 );
+		entityState_t *ent = &cl.parseEntities[parseIdx];
+		if ( ent->eType != ET_NPC ) continue;
+
+		// Get model path from configstrings
+		int csIdx = CS_MODELS + ent->modelindex;
+		const char *modelName = ( csIdx >= 0 && csIdx < MAX_CONFIGSTRINGS && cl.gameState.stringOffsets[csIdx] )
+			? ( cl.gameState.stringData + cl.gameState.stringOffsets[csIdx] ) : "";
+
+		const char *bossName = NULL;
+		vec4_t themeColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+		vec4_t fillColor = { 0.2f, 0.8f, 0.2f, 1.0f };
+		qboolean isBoss = qfalse;
+
+		if ( Q_stristr( modelName, "darthmaul" ) || Q_stristr( modelName, "maul" ) ) {
+			bossName = "^1[BOSS] ^7Darth Maul";
+			themeColor[0] = 1.0f; themeColor[1] = 0.2f; themeColor[2] = 0.2f; themeColor[3] = 1.0f;
+			fillColor[0] = 0.95f; fillColor[1] = 0.15f; fillColor[2] = 0.15f; fillColor[3] = 1.0f;
+			isBoss = qtrue;
+		} else if ( Q_stristr( modelName, "kyle" ) ) {
+			bossName = "^3[BOSS] ^7Kyle Katarn";
+			themeColor[0] = 1.0f; themeColor[1] = 0.82f; themeColor[2] = 0.2f; themeColor[3] = 1.0f;
+			fillColor[0] = 1.0f; fillColor[1] = 0.75f; fillColor[2] = 0.15f; fillColor[3] = 1.0f;
+			isBoss = qtrue;
+		} else if ( Q_stristr( modelName, "reborn" ) ) {
+			// Check saber to distinguish corner trainers
+			int csSaber = CS_MODELS + ent->npcSaber1;
+			const char *saberModel = ( csSaber >= 0 && csSaber < MAX_CONFIGSTRINGS && cl.gameState.stringOffsets[csSaber] )
+				? ( cl.gameState.stringData + cl.gameState.stringOffsets[csSaber] ) : "";
+
+			if ( ent->npcSaber2 > 0 ) {
+				bossName = "^5[TRAINER] ^7Duals Reborn";
+			} else if ( Q_stristr( saberModel, "dual" ) || Q_stristr( saberModel, "staff" ) ) {
+				bossName = "^5[TRAINER] ^7Staff Reborn";
+			} else {
+				bossName = "^5[TRAINER] ^7Reborn Dummy";
+			}
+			themeColor[0] = 0.25f; themeColor[1] = 0.75f; themeColor[2] = 1.0f; themeColor[3] = 1.0f;
+			fillColor[0] = 0.2f; fillColor[1] = 0.65f; fillColor[2] = 0.95f; fillColor[3] = 1.0f;
+			isBoss = qfalse;
+		} else if ( ent->maxhealth > 0 ) {
+			bossName = "^2NPC Target";
+			themeColor[0] = 0.2f; themeColor[1] = 0.9f; themeColor[2] = 0.3f; themeColor[3] = 1.0f;
+			fillColor[0] = 0.2f; fillColor[1] = 0.85f; fillColor[2] = 0.3f; fillColor[3] = 1.0f;
+		} else {
+			continue;
+		}
+
+		vec3_t headPos;
+		VectorCopy( ent->pos.trBase, headPos );
+		headPos[2] += 78.0f; // Above character head
+
+		vec3_t delta;
+		VectorSubtract( headPos, cl.snap.ps.origin, delta );
+		float dist = VectorLength( delta );
+		if ( dist > 2200.0f ) continue; // Far culling distance
+
+		float sx = 0.0f, sy = 0.0f;
+		if ( !FX_WorldToScreen( headPos, &sx, &sy ) ) continue;
+
+		// Calculate perspective scale
+		float scale = 400.0f / ( dist + 200.0f );
+		if ( scale > 1.15f ) scale = 1.15f;
+		if ( scale < 0.40f ) scale = 0.40f;
+
+		// Line of sight check for clean alpha blending
+		trace_t tr;
+		CM_BoxTrace( &tr, cl.snap.ps.origin, headPos, NULL, NULL, 0, MASK_SOLID, 0 );
+		float alpha = ( tr.fraction >= 0.96f ) ? 1.0f : 0.35f;
+
+		// 1. Draw Name
+		float charSize = ( isBoss ? 5.6f : 4.8f ) * scale;
+		float nameW = SCR_GetStringWidth( bossName, charSize );
+		float nameX = sx - nameW * 0.5f;
+		float nameY = sy - ( ( ent->maxhealth > 0 ) ? 22.0f : 12.0f ) * scale;
+
+		vec4_t shadowCol = { 0.0f, 0.0f, 0.0f, 0.85f * alpha };
+		SCR_DrawVirtualString( nameX + 1.0f, nameY + 1.0f, charSize, bossName, shadowCol );
+		SCR_DrawVirtualString( nameX, nameY, charSize, bossName, NULL );
+
+		// 2. Draw Health Bar (if NPC has maxhealth networked)
+		if ( ent->maxhealth > 0 ) {
+			float barW = 76.0f * scale;
+			float barH = ( isBoss ? 7.0f : 5.5f ) * scale;
+			float barX = sx - barW * 0.5f;
+			float barY = sy - 6.0f * scale;
+
+			float hpFrac = (float)ent->health / (float)ent->maxhealth;
+			if ( hpFrac < 0.0f ) hpFrac = 0.0f;
+			if ( hpFrac > 1.0f ) hpFrac = 1.0f;
+
+			// Background (dark glass)
+			vec4_t bgCol = { 0.05f, 0.05f, 0.08f, 0.75f * alpha };
+			SCR_FillRect( barX, barY, barW, barH, bgCol );
+
+			// Outer border with theme color
+			vec4_t borderCol = { themeColor[0], themeColor[1], themeColor[2], 0.70f * alpha };
+			SCR_FillRect( barX, barY, barW, 1.0f, borderCol );
+			SCR_FillRect( barX, barY + barH - 1.0f, barW, 1.0f, borderCol );
+			SCR_FillRect( barX, barY, 1.0f, barH, borderCol );
+			SCR_FillRect( barX + barW - 1.0f, barY, 1.0f, barH, borderCol );
+
+			// Filled HP bar
+			float fillW = ( barW - 2.0f ) * hpFrac;
+			if ( fillW > 0.0f ) {
+				vec4_t actualFill;
+				actualFill[0] = fillColor[0];
+				actualFill[1] = fillColor[1];
+				actualFill[2] = fillColor[2];
+				actualFill[3] = 0.90f * alpha;
+				SCR_FillRect( barX + 1.0f, barY + 1.0f, fillW, barH - 2.0f, actualFill );
+
+				// Specular gloss highlight on top half of bar
+				vec4_t glossCol = { 1.0f, 1.0f, 1.0f, 0.25f * alpha };
+				SCR_FillRect( barX + 1.0f, barY + 1.0f, fillW, ( barH - 2.0f ) * 0.45f, glossCol );
+			}
+
+			// Numeric HP readout for Bosses
+			if ( isBoss ) {
+				int realCurrent = ( ent->maxhealth >= 10 ) ? ( ent->health * 100 ) : ent->health;
+				int realMax = ( ent->maxhealth >= 10 ) ? ( ent->maxhealth * 100 ) : ent->maxhealth;
+				char hpStr[32];
+				Com_sprintf( hpStr, sizeof( hpStr ), "%d / %d", realCurrent, realMax );
+				float hpCharSize = 3.6f * scale;
+				float hpW = SCR_GetStringWidth( hpStr, hpCharSize );
+				float hpX = sx - hpW * 0.5f;
+				float hpY = barY + barH + 2.0f * scale;
+
+				vec4_t hpTextCol = { 0.9f, 0.9f, 0.9f, 0.9f * alpha };
+				SCR_DrawVirtualString( hpX + 1.0f, hpY + 1.0f, hpCharSize, hpStr, shadowCol );
+				SCR_DrawVirtualString( hpX, hpY, hpCharSize, hpStr, hpTextCol );
+			}
+		}
+	}
+}
+
 //=======================================================
 
 /*
@@ -5172,6 +5328,8 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 			}
 			SCR_DrawPartyOverheadIcons();
 			SCR_DrawHotPotatoOverheadIcon();
+			void SCR_DrawNPCOverheadHUD( void );
+			SCR_DrawNPCOverheadHUD();
 			break;
 
 

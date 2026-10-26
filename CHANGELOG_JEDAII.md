@@ -7,6 +7,21 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 
 ---
 
+### Session: 2026-10-26 — 3D Overhead NPC Names & Dynamic Health Bars
+
+#### 1. 3D World-Space NPC Overhead HUD
+- **Dynamic 3D Overhead HUD (`SCR_DrawNPCOverheadHUD`)**: Added real-time 3D world-to-screen projection directly above NPC heads in `codemp/client/cl_scrn.cpp`.
+- **Boss Theming & Identification**:
+  - **Darth Maul**: Crimson red themed nameplate (`^1[BOSS] ^7Darth Maul`), dark glass health bar with glowing red border, live HP readout (`2000 / 2000 HP`).
+  - **Kyle Katarn**: Amber gold themed nameplate (`^3[BOSS] ^7Kyle Katarn`), live HP readout (`1000 / 1000 HP`).
+  - **Corner Practice Reborns**: Auto-identifies weapon style (Duals, Staff, Single dummy) with cyan styling.
+- **Perspective Scaling & Occlusion**:
+  - Distance scaling between 0 and 2200 units with smooth scaling.
+  - Solid line-of-sight raytracing (`CM_BoxTrace`) giving 100% solid opacity in direct view and 35% ghosting through walls.
+- **Client Toggle CVar**: Added `cg_drawNPCOverhead` (`1` default).
+
+---
+
 ### Session: 2026-10-01 — Server Connect Crash Fix, Reliable Chat Parsing & Stability Overhaul
 
 #### 1. Server Connection Crash Guard
