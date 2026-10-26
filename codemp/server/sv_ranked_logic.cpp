@@ -931,7 +931,7 @@ void SV_Ranked_ProcessKill(int killerId, int victimId, int mod,
         killerName, bReward, victimName);
     if (kState->loggedIn) {
       UpdateAccountCredits(kState->username, bReward);
-      UpdateAccountStats(kState->username, killerName, bReward, 50, 0, 0, NULL);
+      UpdateAccountStats(kState->username, killerName, 0, 50, 0, 0, NULL);
       // Quest 4: Bounty Hunter – collect 3 bounties (works in ALL modes)
       cJSON *bacc = SV_Ranked_GetAccount(kState->username);
       if (bacc) {
