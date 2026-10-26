@@ -450,6 +450,14 @@ static void UpdateAccountStats(const char *username, const char *displayName,
       SV_Ranked_Log("LEVEL: %s leveled up to %d", username, newLevel);
       Com_Printf("[RANKED] LevelUp: guid=%s name='%s' old_level=%d new_level=%d\n",
                  username, displayName, oldLevel, newLevel);
+      // Level-up sound for everybody on this server, played by the engine itself (no Discord bot needed).
+      // sv_ranked_levelup_sound = sound path, empty = off.
+      {
+        cvar_t *lvlSnd = Cvar_Get("sv_ranked_levelup_sound", "Sound/ushowdown/win.mp3", CVAR_ARCHIVE);
+        if (lvlSnd && lvlSnd->string[0] && !strpbrk(lvlSnd->string, ";\n\r\"")) {
+          Cbuf_ExecuteText(EXEC_APPEND, va("snd %s\n", lvlSnd->string));
+        }
+      }
     }
     SV_Ranked_SyncClientRPGByName(username);
   }
@@ -3630,6 +3638,8 @@ void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex) {
     Adventure_DisplayNode(cl, destIdx);
   }
 }
+
+// TODO: Optional server-side anchor for Dojo trainers to prevent kick velocity if decided later.
 
 // Called every SV_Frame — drives the 10-second potato tick and trivia
 void SV_Ranked_Logic_Frame(void) {
