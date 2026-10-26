@@ -1841,26 +1841,6 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     }
     return qtrue;
 
-  } else if (!Q_stricmp(cmdSpace, "!duel_end") || !Q_stricmp(cmdSpace, "!duelend") ||
-             !Q_stricmp(cmdSpace, "!forfeit") || !Q_stricmp(cmdSpace, "!surrender") ||
-             !Q_stricmp(cmdSpace, "!ff")) {
-    int clientNum = (int)(cl - svs.clients);
-    rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
-    if (r->inDuel) {
-      extern void SV_Ranked_HandleDuelEndCommand(client_t *cl);
-      SV_Ranked_HandleDuelEndCommand(cl);
-      // Clean up engine duelInProgress so duelist isn't stuck
-      playerState_t *ps = SV_GameClientNum(clientNum);
-      if (ps) ps->duelInProgress = qfalse;
-      if (r->duelOpponent >= 0 && r->duelOpponent < sv_maxclients->integer) {
-        playerState_t *oppPs = SV_GameClientNum(r->duelOpponent);
-        if (oppPs) oppPs->duelInProgress = qfalse;
-      }
-    } else {
-      SV_SendServerCommand(cl, "chat \"^3[RANKED] ^7You are not currently in an active duel.\"");
-    }
-    return qtrue;
-
   } else if (!Q_stricmp(cmdSpace, "!top") || !Q_stricmp(cmdSpace, "!t") ||
              !Q_stricmp(cmdSpace, "!topelo")) {
     SV_Ranked_ShowTop(cl);
