@@ -21,6 +21,7 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 #### 2b. UI Text and HUD Layout
 - **Proportional UI font**: all client overlay text (`SCR_DrawVirtualString` / `SCR_GetStringWidth` in `cl_scrn.cpp`) now uses the MBII proportional font (`ergoec`, falling back to `arialnb` / `ocr_a`) instead of the fixed-width character sheet, so letters are evenly spaced. Text with emoji glyphs (0x80-0x8F) still uses the old path.
 - **RPG HUD**: the XP text now matches the bar (`245 / 1000 XP`), kills/deaths/wins/losses are spelled out, long names are shortened with `..` and the level badge is pinned to the card edge, and the wide bar style has a fixed width so it no longer resizes with the name.
+- **Follow-up fixes**: the font code no longer leaves the renderer colour set (casino buttons were tinted yellow until hovered), text is drawn slightly smaller and higher so it no longer collides with the card art, the rank line is left-aligned on all card styles, the XP text is centred inside the bar, and the wide bar style shows its stats under the bar. The garbled bullet in the blackjack subtitle was replaced with a dash.
 - **Test commands**: `rpgui_test [name] [style]` fills the HUD with sample data.
 
 #### 3. Collection Book (`!collection` / `!col`)

@@ -173,7 +173,7 @@ static float SCR_UIFontScale( int font, float charSize ) {
 	float renderH = (charSize < 7.0f) ? (charSize * 1.35f) : charSize;
 	int h = re->Font_HeightPixels( font, 1.0f );
 	if ( h < 1 ) h = 1;
-	return renderH * 1.30f / (float)h;
+	return renderH * 1.15f / (float)h;
 }
 
 float SCR_GetStringWidth( const char *str, float charSize ) {
@@ -823,7 +823,9 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 
 	int font = SCR_UIFont();
 	if ( font && !SCR_HasEmojiGlyph( string ) ) {
-		re->Font_DrawString( (int)( x + 0.5f ), (int)( y + 0.5f ), string, color, font, -1, SCR_UIFontScale( font, charSize ) );
+		float rh = (charSize < 7.0f) ? (charSize * 1.35f) : charSize;
+		re->Font_DrawString( (int)( x + 0.5f ), (int)( y - rh * 0.20f + 0.5f ), string, color, font, -1, SCR_UIFontScale( font, charSize ) );
+		re->SetColor( NULL );
 		return;
 	}
 
@@ -1190,7 +1192,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		// Line 2: Rank Title, Force Rating ELO & Kills/Deaths/Wins/Losses
 		char rankStr[128];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7| ^2%d Elo ^7| ^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", rankTitle, fr, g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses );
+		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7| ^2%d Elo", rankTitle, fr );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 3.8f, rankStr, whiteColor );
 
 		// Line 3: Sleek Horizontal XP Bar (TGA Background)
@@ -1229,6 +1231,10 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float xpTextX = barX + barW - textWidthPixels - 3.0f;
 		if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
 		SCR_DrawVirtualString( xpTextX, barY - 10.0f, 3.8f, xpText, whiteColor );
+
+		// kills / deaths / wins / losses, spelled out, under the bar
+		SCR_DrawVirtualString( textX, panelY + panelH + 2.0f, 3.4f,
+			va( "^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses ), whiteColor );
 		return;
 	}
 
@@ -1324,10 +1330,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7| ^2%d Elo", rankTitle, fr );
 	
 	if ( style == 0 ) {
-		float rankW = SCR_GetStringWidth( rankStr, 3.0f );
-		float rankX = panelX + panelW - rankW - 4.0f;
-		if ( rankX < textX ) rankX = textX;
-		SCR_DrawVirtualString( rankX, panelY + 13.0f, 3.0f, rankStr, whiteColor );
+		SCR_DrawVirtualString( textX, panelY + 13.0f, 3.0f, rankStr, whiteColor );
 	} else if ( style == 2 ) {
 		SCR_DrawVirtualString( textX, panelY + 12.0f, 3.0f, rankStr, whiteColor );
 	} else {
@@ -1352,11 +1355,11 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	SCR_DrawVirtualString( panelX + 4.0f, panelY + panelH + 1.0f, 3.0f,
 		va( "^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses ), whiteColor );
 
-	float textWidthPixels = SCR_GetStringWidth( xpText, 3.0f );
+	float textWidthPixels = SCR_GetStringWidth( xpText, 2.6f );
 	float xpTextX = fX + fW - textWidthPixels - 4.0f;
 	if ( xpTextX < fX + 3.0f ) xpTextX = fX + 3.0f;
-	float xpTextY = fY + (fH - 3.0f) * 0.5f;
-	SCR_DrawVirtualString( xpTextX, xpTextY, 3.0f, xpText, whiteColor );
+	float xpTextY = fY + (fH - 2.6f * 1.35f) * 0.5f + 0.6f;
+	SCR_DrawVirtualString( xpTextX, xpTextY, 2.6f, xpText, whiteColor );
 }
 
 topLeaderboardEntry_t g_topLeaderboard[10];
@@ -4797,7 +4800,7 @@ void SCR_DrawCantinaGamesOverlay( void ) {
 		SCR_DrawVirtualString( winX + 16.0f, winY + 12.0f, 4.2f, "< ^5[BACK]", cyanColor );
 		SCR_DrawVirtualString( winX + winW - 35.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
 
-		SCR_DrawVirtualString( winX + 20.0f, winY + 30.0f, 3.8f, "^7DEALER STANDS ON 17 • BLACKJACK PAYS 3:2", yellowCol );
+		SCR_DrawVirtualString( winX + 20.0f, winY + 30.0f, 3.8f, "^7DEALER STANDS ON 17  -  BLACKJACK PAYS 3:2", yellowCol );
 		SCR_DrawVirtualString( winX + winW - 150.0f, winY + 30.0f, 4.4f, va( "^7Bankroll: ^5%d CR", credits ), cyanColor );
 
 		// Dealer Area
