@@ -3334,17 +3334,22 @@ void SCR_DrawPartyStudioOverlay( void ) {
 	float tabW = 220.0f;
 	float tabH = 20.0f;
 
-	// Tab 0 Button
-	qboolean hTab0 = (qboolean)(mx >= winX + 25.0f && mx <= winX + 25.0f + tabW && my >= tabY && my <= tabY + tabH);
-	vec4_t t0Bg = { 0.08f, 0.20f, 0.35f, (g_partyStudioTab == 0) ? 0.90f : (hTab0 ? 0.60f : 0.30f) };
-	SCR_DrawRoundedGlassPanel( winX + 25.0f, tabY, tabW, tabH, 3.0f, t0Bg, (g_partyStudioTab == 0) ? borderColor : NULL );
-	SCR_DrawVirtualString( winX + 45.0f, tabY + 4.0f, 4.4f, (g_partyStudioTab == 0) ? "^2[ MY PARTY & INVITES ]" : "^7[ MY PARTY & INVITES ]", whiteColor );
-
-	// Tab 1 Button
-	qboolean hTab1 = (qboolean)(mx >= winX + 255.0f && mx <= winX + 255.0f + tabW && my >= tabY && my <= tabY + tabH);
-	vec4_t t1Bg = { 0.08f, 0.20f, 0.35f, (g_partyStudioTab == 1) ? 0.90f : (hTab1 ? 0.60f : 0.30f) };
-	SCR_DrawRoundedGlassPanel( winX + 255.0f, tabY, tabW, tabH, 3.0f, t1Bg, (g_partyStudioTab == 1) ? borderColor : NULL );
-	SCR_DrawVirtualString( winX + 270.0f, tabY + 4.0f, 4.4f, (g_partyStudioTab == 1) ? "^2[ ACTIVE SERVER PARTIES ]" : "^7[ ACTIVE SERVER PARTIES ]", whiteColor );
+	// tabs with a sliding indicator
+	{
+		const qboolean hTab0 = (qboolean)(mx >= winX + 25.0f && mx <= winX + 25.0f + tabW && my >= tabY && my <= tabY + tabH);
+		const qboolean hTab1 = (qboolean)(mx >= winX + 255.0f && mx <= winX + 255.0f + tabW && my >= tabY && my <= tabY + tabH);
+		vec4_t tabTint = { 0.20f, 0.70f, 1.00f, 1.0f };
+		SCR_UIButton( winX + 25.0f, tabY, tabW, tabH, "MY PARTY & INVITES", 4.4f, (qboolean)( g_partyStudioTab == 0 || hTab0 ), tabTint );
+		SCR_UIButton( winX + 255.0f, tabY, tabW, tabH, "ACTIVE SERVER PARTIES", 4.4f, (qboolean)( g_partyStudioTab == 1 || hTab1 ), tabTint );
+		static float s_psIndX = -1.0f;
+		static int s_psIndMs = 0;
+		const float target = ( g_partyStudioTab == 0 ) ? winX + 25.0f : winX + 255.0f;
+		const float dt = ( cls.realtime - s_psIndMs > 250 ) ? 1.0f : (float)( cls.realtime - s_psIndMs ) * 0.001f;
+		s_psIndMs = cls.realtime;
+		if ( s_psIndX < 0.0f || dt >= 1.0f ) s_psIndX = target;
+		else s_psIndX += ( target - s_psIndX ) * ( 1.0f - expf( -dt * 16.0f ) );
+		SCR_FillRect( s_psIndX, tabY + tabH - 2.0f, tabW, 2.0f, tabTint );
+	}
 
 	SCR_FillRect( winX + 15.0f, winY + 58.0f, winW - 30.0f, 1.0f, borderColor );
 
@@ -3404,20 +3409,17 @@ void SCR_DrawPartyStudioOverlay( void ) {
 
 		// Button 1: Create Party
 		qboolean hCreate = (qboolean)(mx >= leftX && mx <= leftX + leftW && my >= btnY && my <= btnY + 26.0f);
-		SCR_DrawRoundedGlassPanel( leftX, btnY, leftW, 26.0f, 4.0f, hCreate ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( leftX + 35.0f, btnY + 6.0f, 4.2f, "^2+ CREATE PARTY", whiteColor );
+		{ vec4_t g = { 0.25f, 0.85f, 0.45f, 1.0f }; SCR_UIButton( leftX, btnY, leftW, 26.0f, "+ CREATE PARTY", 4.4f, hCreate, g ); }
 
 		// Button 2: Leave Party
 		btnY += 32.0f;
 		qboolean hLeave = (qboolean)(mx >= leftX && mx <= leftX + leftW && my >= btnY && my <= btnY + 26.0f);
-		SCR_DrawRoundedGlassPanel( leftX, btnY, leftW, 26.0f, 4.0f, hLeave ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( leftX + 45.0f, btnY + 6.0f, 4.2f, "^1LEAVE PARTY", whiteColor );
+		{ vec4_t r = { 0.95f, 0.30f, 0.25f, 1.0f }; SCR_UIButton( leftX, btnY, leftW, 26.0f, "LEAVE PARTY", 4.4f, hLeave, r ); }
 
 		// Button 3: Disband Party
 		btnY += 32.0f;
 		qboolean hDisband = (qboolean)(mx >= leftX && mx <= leftX + leftW && my >= btnY && my <= btnY + 26.0f);
-		SCR_DrawRoundedGlassPanel( leftX, btnY, leftW, 26.0f, 4.0f, hDisband ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( leftX + 40.0f, btnY + 6.0f, 4.2f, "^1DISBAND TEAM", whiteColor );
+		{ vec4_t r = { 0.95f, 0.30f, 0.25f, 1.0f }; SCR_UIButton( leftX, btnY, leftW, 26.0f, "DISBAND TEAM", 4.4f, hDisband, r ); }
 
 		// Divider
 		SCR_FillRect( winX + 235.0f, winY + 62.0f, 1.0f, winH - 85.0f, borderColor );
@@ -3474,9 +3476,8 @@ void SCR_DrawPartyStudioOverlay( void ) {
 			float invBtnY = rowY + 2.0f;
 			qboolean hInv = (qboolean)(mx >= invBtnX && mx <= invBtnX + 55.0f && my >= invBtnY && my <= invBtnY + 18.0f);
 
-			vec4_t invCol = { 0.00f, 0.60f, 0.20f, hInv ? 0.90f : 0.60f };
-			SCR_DrawRoundedGlassPanel( invBtnX, invBtnY, 55.0f, 18.0f, 2.0f, invCol, NULL );
-			SCR_DrawVirtualString( invBtnX + 6.0f, invBtnY + 3.0f, 4.0f, "INVITE", whiteColor );
+			vec4_t invCol = { 0.25f, 0.85f, 0.45f, 1.0f };
+			SCR_UIButton( invBtnX, invBtnY, 55.0f, 18.0f, "INVITE", 3.8f, hInv, invCol );
 
 			rowY += 25.0f;
 		}
@@ -3501,9 +3502,8 @@ void SCR_DrawPartyStudioOverlay( void ) {
 			float acBtnX = contentX + contentW - 75.0f;
 			float acBtnY = contentY + 3.0f;
 			qboolean hAc = (qboolean)(mx >= acBtnX && mx <= acBtnX + 70.0f && my >= acBtnY && my <= acBtnY + 20.0f);
-			vec4_t acCol = { 0.00f, 0.65f, 0.25f, hAc ? 0.95f : 0.75f };
-			SCR_DrawRoundedGlassPanel( acBtnX, acBtnY, 70.0f, 20.0f, 3.0f, acCol, NULL );
-			SCR_DrawVirtualString( acBtnX + 10.0f, acBtnY + 4.0f, 4.2f, "^7[ACCEPT]", whiteColor );
+			vec4_t acCol = { 0.25f, 0.85f, 0.45f, 1.0f };
+			SCR_UIButton( acBtnX, acBtnY, 70.0f, 20.0f, "ACCEPT", 4.0f, hAc, acCol );
 
 			contentY += 32.0f;
 		}
@@ -3518,9 +3518,8 @@ void SCR_DrawPartyStudioOverlay( void ) {
 			float acBtnX = contentX + contentW - 75.0f;
 			float acBtnY = contentY + 3.0f;
 			qboolean hAc = (qboolean)(mx >= acBtnX && mx <= acBtnX + 70.0f && my >= acBtnY && my <= acBtnY + 20.0f);
-			vec4_t acCol = { 0.00f, 0.60f, 0.20f, hAc ? 0.95f : 0.75f };
-			SCR_DrawRoundedGlassPanel( acBtnX, acBtnY, 70.0f, 20.0f, 3.0f, acCol, NULL );
-			SCR_DrawVirtualString( acBtnX + 10.0f, acBtnY + 4.0f, 4.2f, "^2[ACCEPT]", whiteColor );
+			vec4_t acCol = { 0.25f, 0.85f, 0.45f, 1.0f };
+			SCR_UIButton( acBtnX, acBtnY, 70.0f, 20.0f, "ACCEPT", 4.0f, hAc, acCol );
 
 			contentY += 32.0f;
 		}
@@ -3556,9 +3555,8 @@ void SCR_DrawPartyStudioOverlay( void ) {
 			float reqBtnX = contentX + contentW - 115.0f;
 			float reqBtnY = contentY + 3.0f;
 			qboolean hReq = (qboolean)(mx >= reqBtnX && mx <= reqBtnX + 110.0f && my >= reqBtnY && my <= reqBtnY + 20.0f);
-			vec4_t reqCol = { 0.10f, 0.35f, 0.60f, hReq ? 0.95f : 0.70f };
-			SCR_DrawRoundedGlassPanel( reqBtnX, reqBtnY, 110.0f, 20.0f, 3.0f, reqCol, borderColor );
-			SCR_DrawVirtualString( reqBtnX + 6.0f, reqBtnY + 4.0f, 4.0f, "REQUEST JOIN", whiteColor );
+			vec4_t reqCol = { 0.20f, 0.70f, 1.00f, 1.0f };
+			SCR_UIButton( reqBtnX, reqBtnY, 110.0f, 20.0f, "REQUEST JOIN", 3.8f, hReq, reqCol );
 
 			contentY += 30.0f;
 		}
@@ -3568,7 +3566,7 @@ void SCR_DrawPartyStudioOverlay( void ) {
 		}
 	}
 
-	SCR_DrawVirtualString( winX + (winW - 180.0f) * 0.5f, winY + winH - 15.0f, 4.0f, "^7Press ^1[ESC]^7 to close Party Studio", whiteColor );
+	SCR_UIFooter( winX, winY, winW, winH, borderColor, "^7Press ^1ESC^7 to close the Party Studio" );
 }
 
 
@@ -3645,6 +3643,7 @@ void SCR_DrawAdminOverlay( void ) {
 
 		vec4_t rowBg = { 0.40f, 0.05f, 0.10f, isSelected ? 0.85f : (isHover ? 0.50f : 0.20f) };
 		SCR_DrawRoundedGlassPanel( leftX, rowY, leftW, 22.0f, 3.0f, rowBg, isSelected ? yellowCol : NULL );
+		if ( isSelected || isHover ) SCR_FillRect( leftX, rowY, 3.0f, 22.0f, isSelected ? yellowCol : borderColor );
 
 		char displayStr[64];
 		Com_sprintf( displayStr, sizeof(displayStr), isSelected ? "^3#%d %s" : "^7#%d %s", i, nameBuf );
@@ -3695,11 +3694,8 @@ void SCR_DrawAdminOverlay( void ) {
 		float by = gridY + (b / 2) * 28.0f;
 
 		qboolean bHover = (qboolean)(mx >= bx && mx <= bx + 140.0f && my >= by && my <= by + 22.0f);
-		vec4_t btnBg = { 0.35f, 0.08f, 0.12f, bHover ? 0.90f : 0.60f };
-		vec4_t btnBorder = { 0.90f, 0.20f, 0.25f, 0.80f };
-
-		SCR_DrawRoundedGlassPanel( bx, by, 140.0f, 22.0f, 4.0f, btnBg, btnBorder );
-		SCR_DrawVirtualString( bx + 6.0f, by + 3.0f, 4.2f, va("^1%s", adminCmds[b][0]), whiteColor );
+		vec4_t redTint = { 0.95f, 0.30f, 0.25f, 1.0f };
+		SCR_UIButton( bx, by, 140.0f, 22.0f, adminCmds[b][0], 4.2f, bHover, redTint );
 	}
 
 	// Draw Credits Amount Input Box
@@ -3746,7 +3742,7 @@ void SCR_DrawAdminOverlay( void ) {
 	Com_sprintf( cpDisp, sizeof(cpDisp), s_adminEditingCp && ((cls.realtime >> 8) & 1) == 0 ? "^3%s_" : "^3%s", g_adminCpInput );
 	SCR_DrawVirtualString( rightX + 106.0f, cpBoxY + 1.0f, 4.4f, cpDisp, whiteColor );
 
-	SCR_DrawVirtualString( winX + (winW - 190.0f) * 0.5f, winY + winH - 15.0f, 4.0f, "^7Press ^1[ESC]^7 to close Admin Panel", whiteColor );
+	SCR_UIFooter( winX, winY, winW, winH, borderColor, "^7Press ^1ESC^7 to close the Admin Panel" );
 }
 
 /*
@@ -3763,37 +3759,50 @@ void SCR_DrawPartyOverlay( void ) {
 	static cvar_t *cg_partyX = NULL;
 	static cvar_t *cg_partyY = NULL;
 	if ( !cg_partyX ) cg_partyX = Cvar_Get( "cg_partyX", "15", CVAR_ARCHIVE );
-	if ( !cg_partyX ) cg_partyX = Cvar_Get( "cg_partyX", "15", CVAR_ARCHIVE );
 	if ( !cg_partyY ) cg_partyY = Cvar_Get( "cg_partyY", "140", CVAR_ARCHIVE );
 
 	int members = g_rpgParty.memberCount;
 	if ( members <= 0 ) return;
 	if ( members > MAX_PARTY_MEMBERS ) members = MAX_PARTY_MEMBERS;
-	float cardW = 120.0f;
-	float cardH = 16.0f + (float)members * 24.0f + 4.0f;
+	const float cardW = 134.0f;
+	const float cardH = 20.0f + (float)members * 26.0f + 3.0f;
 	float startX = cg_partyX ? cg_partyX->value : 15.0f;
-	float startY = cg_partyY ? cg_partyY->value : 140.0f;
+	const float startY = cg_partyY ? cg_partyY->value : 140.0f;
 
-	vec4_t bgCol     = { 0.03f, 0.06f, 0.12f, 0.85f };
-	vec4_t borderCol = { 0.20f, 0.65f, 1.00f, 0.80f };
-	vec4_t whiteCol  = { 1.00f, 1.00f, 1.00f, 1.00f };
-	vec4_t hpBgCol   = { 0.10f, 0.10f, 0.10f, 0.90f };
-	vec4_t hpFillCol = { 0.15f, 0.85f, 0.25f, 0.95f };
-	vec4_t bpBgCol   = { 0.10f, 0.10f, 0.10f, 0.90f };
-	vec4_t bpFillCol = { 0.95f, 0.20f, 0.20f, 0.95f };
+	// slides in from the left when it appears; the bars ease to their values
+	static int s_pShownMs = 0;
+	static int s_pLastMs = 0;
+	static float s_pHp[MAX_PARTY_MEMBERS], s_pFp[MAX_PARTY_MEMBERS], s_pBp[MAX_PARTY_MEMBERS];
+	const int now = cls.realtime;
+	const qboolean fresh = ( now - s_pLastMs > 400 ) ? qtrue : qfalse;
+	float dt = fresh ? 0.0f : (float)( now - s_pLastMs ) * 0.001f;
+	if ( dt > 0.1f ) dt = 0.1f;
+	if ( fresh ) s_pShownMs = now;
+	s_pLastMs = now;
+	const float ease = SCR_UIEase( (float)( now - s_pShownMs ) / 450.0f );
+	const float a = ease;
+	startX -= ( 1.0f - ease ) * ( cardW + 20.0f );
+	const float k = 1.0f - expf( -dt * 10.0f );
 
-	SCR_DrawRoundedGlassPanel( startX, startY, cardW, cardH, 4.0f, bgCol, borderCol );
+	vec4_t bgCol     = { 0.04f, 0.07f, 0.14f, 0.88f * a };
+	vec4_t borderCol = { 0.20f, 0.50f, 0.80f, 0.55f * a };
+	vec4_t accent    = { 0.10f, 0.75f, 0.95f, a };
+	vec4_t whiteCol  = { 1.00f, 1.00f, 1.00f, a };
+	vec4_t track     = { 0.02f, 0.04f, 0.09f, 0.95f * a };
+	SCR_UIPanel( startX, startY, cardW, cardH, 5.0f, bgCol, borderCol, accent );
 
-	// Party Name Header + Score
-	char headerStr[64];
-	Com_sprintf( headerStr, sizeof( headerStr ), "^5%s ^7[^3%dP^7]", g_rpgParty.teamName[0] ? g_rpgParty.teamName : "Party", g_rpgParty.score );
-	SCR_DrawVirtualString( startX + 4.0f, startY + 2.0f, 3.8f, headerStr, whiteCol );
+	// header: party name, score on the right
+	char nameStr[64];
+	Com_sprintf( nameStr, sizeof( nameStr ), "^5%s", g_rpgParty.teamName[0] ? g_rpgParty.teamName : "Party" );
+	char fit[64];
+	SCR_FitText( nameStr, fit, sizeof( fit ), cardW - 56.0f, 4.0f );
+	SCR_DrawVirtualString( startX + 10.0f, startY + 4.0f, 4.0f, fit, whiteCol );
+	const char *scoreStr = va( "^3%d P", g_rpgParty.score );
+	SCR_DrawVirtualString( startX + cardW - 8.0f - SCR_GetStringWidth( scoreStr, 3.8f ), startY + 4.5f, 3.8f, scoreStr, whiteCol );
+	vec4_t divColor = { 0.20f, 0.50f, 0.80f, 0.45f * a };
+	SCR_FillRect( startX + 8.0f, startY + 15.0f, cardW - 16.0f, 1.0f, divColor );
 
-	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.40f };
-	SCR_FillRect( startX + 3.0f, startY + 14.0f, cardW - 6.0f, 1.0f, divColor );
-
-	// Render Party Members
-	float rowY = startY + 16.0f;
+	float rowY = startY + 19.0f;
 	for ( int i = 0; i < members; i++ ) {
 		rpgPartyMember_t *m = &g_rpgParty.members[i];
 
@@ -3807,53 +3816,52 @@ void SCR_DrawPartyOverlay( void ) {
 			m->maxBP = 100;
 		}
 
-		char lineStr[64];
-		Com_sprintf( lineStr, sizeof( lineStr ), "^3L%d ^7%s", m->level, m->name[0] ? m->name : "Player" );
-		SCR_DrawVirtualString( startX + 4.0f, rowY, 3.6f, lineStr, whiteCol );
-
-		// 3 Mini Bars: Green (HP), Blue (FP), Red (BP)
-		float barX = startX + 4.0f;
-		float barY = rowY + 10.0f;
-		float barW = cardW - 8.0f;
-		float barH = 2.0f;
-
 		float hpFrac = ( m->maxHealth > 0 ) ? ( (float)m->health / (float)m->maxHealth ) : 1.0f;
+		const int fp = ( m->clientNum == cl.snap.ps.clientNum ) ? cl.snap.ps.fd.forcePower : m->fp;
+		const int maxFP = ( m->maxFP > 0 ) ? m->maxFP : 100;
+		float fpFrac = (float)fp / (float)maxFP;
+		const int maxBP = ( m->maxBP > 0 ) ? m->maxBP : 100;
+		float bpFrac = (float)m->bp / (float)maxBP;
 		if ( hpFrac < 0.0f ) hpFrac = 0.0f;
 		if ( hpFrac > 1.0f ) hpFrac = 1.0f;
-
-		// 1. HP Bar (Green)
-		SCR_FillRect( barX, barY, barW, barH, hpBgCol );
-		if ( hpFrac > 0.0f ) {
-			SCR_FillRect( barX, barY, barW * hpFrac, barH, hpFillCol );
-		}
-
-		// 2. FP Bar (Blue) - Use individual member's FP
-		int fp = ( m->clientNum == cl.snap.ps.clientNum ) ? cl.snap.ps.fd.forcePower : m->fp;
-		int maxFP = ( m->maxFP > 0 ) ? m->maxFP : 100;
-		float fpFrac = (float)fp / (float)maxFP;
 		if ( fpFrac < 0.0f ) fpFrac = 0.0f;
 		if ( fpFrac > 1.0f ) fpFrac = 1.0f;
-		vec4_t fpFillCol = { 0.10f, 0.55f, 0.95f, 0.95f };
-		float barY_fp = barY + 2.5f;
-		SCR_FillRect( barX, barY_fp, barW, barH, bpBgCol );
-		if ( fpFrac > 0.0f ) {
-			SCR_FillRect( barX, barY_fp, barW * fpFrac, barH, fpFillCol );
-		}
-
-		// 3. BP Bar (Red)
-		int curBP = m->bp;
-		int maxBP = ( m->maxBP > 0 ) ? m->maxBP : 100;
-		float bpFrac = (float)curBP / (float)maxBP;
 		if ( bpFrac < 0.0f ) bpFrac = 0.0f;
 		if ( bpFrac > 1.0f ) bpFrac = 1.0f;
+		if ( fresh ) { s_pHp[i] = hpFrac; s_pFp[i] = fpFrac; s_pBp[i] = bpFrac; }
+		s_pHp[i] += ( hpFrac - s_pHp[i] ) * k;
+		s_pFp[i] += ( fpFrac - s_pFp[i] ) * k;
+		s_pBp[i] += ( bpFrac - s_pBp[i] ) * k;
 
-		float barY2 = barY_fp + 2.5f;
-		SCR_FillRect( barX, barY2, barW, barH, bpBgCol );
-		if ( bpFrac > 0.0f ) {
-			SCR_FillRect( barX, barY2, barW * bpFrac, barH, bpFillCol );
+		// name row with the level
+		char lineStr[96];
+		Com_sprintf( lineStr, sizeof( lineStr ), "^3L%d ^7%s", m->level, m->name[0] ? m->name : "Player" );
+		char lineFit[96];
+		SCR_FitText( lineStr, lineFit, sizeof( lineFit ), cardW - 20.0f, 3.8f );
+		SCR_DrawVirtualString( startX + 10.0f, rowY, 3.8f, lineFit, whiteCol );
+
+		// three mini bars: HP (green, flashes red when low), FP (blue), BP (red)
+		const float barX = startX + 10.0f;
+		const float barW = cardW - 20.0f;
+		const float barH = 3.0f;
+		float barY = rowY + 11.0f;
+		vec4_t hp = { 0.15f, 0.85f, 0.25f, 0.95f * a };
+		if ( hpFrac < 0.25f ) {
+			const float p = 0.5f + 0.5f * sinf( (float)now * 0.012f );
+			hp[0] = 0.95f; hp[1] = 0.25f + 0.2f * p; hp[2] = 0.20f;
 		}
+		vec4_t fpC = { 0.10f, 0.55f, 0.95f, 0.95f * a };
+		vec4_t bpC = { 0.95f, 0.20f, 0.20f, 0.95f * a };
+		SCR_FillRect( barX, barY, barW, barH, track );
+		SCR_FillRect( barX, barY, barW * s_pHp[i], barH, hp );
+		barY += 4.5f;
+		SCR_FillRect( barX, barY, barW, barH, track );
+		SCR_FillRect( barX, barY, barW * s_pFp[i], barH, fpC );
+		barY += 4.5f;
+		SCR_FillRect( barX, barY, barW, barH, track );
+		SCR_FillRect( barX, barY, barW * s_pBp[i], barH, bpC );
 
-		rowY += 24.0f;
+		rowY += 26.0f;
 	}
 }
 

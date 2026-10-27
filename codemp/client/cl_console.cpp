@@ -794,6 +794,12 @@ void Con_DrawNotify (void)
 
 		if ( drawBg ) {
 			SCR_FillRect( 8.0f, (float)(chatY - 3), (float)(SCREEN_WIDTH - 16), (float)(BIGCHAR_HEIGHT + 6), chatBg );
+			// thin border and an accent bar, same look as the RPG windows
+			vec4_t chatBorder = { 0.20f, 0.50f, 0.80f, 0.55f };
+			vec4_t chatAccent = { 0.10f, 0.75f, 0.95f, 1.0f };
+			SCR_FillRect( 8.0f, (float)(chatY - 3), (float)(SCREEN_WIDTH - 16), 1.0f, chatBorder );
+			SCR_FillRect( 8.0f, (float)(chatY + BIGCHAR_HEIGHT + 2), (float)(SCREEN_WIDTH - 16), 1.0f, chatBorder );
+			SCR_FillRect( 8.0f, (float)(chatY - 3), 3.0f, (float)(BIGCHAR_HEIGHT + 6), chatAccent );
 		}
 		SCR_DrawBigString (14, chatY, chattext, 1.0f, qfalse );
 		Field_BigDraw( &chatField, chatFieldX, chatY, chatFieldW, qtrue, qtrue );
