@@ -61,6 +61,7 @@ cvar_t		*cg_drawTopCredits;
 cvar_t		*cg_drawTopPotato;
 cvar_t		*cg_drawAdv;
 static void SCR_ColUITest_f( void );
+static void SCR_UIScreenTest_f( void );
 static void SCR_RPGUITest_f( void );
 static void SCR_RPGXPTest_f( void );
 int g_rpgXpPerLevel = 1000;
@@ -107,6 +108,13 @@ void SCR_DrawNamedPic( float x, float y, float width, float height, const char *
 }
 
 
+// UI animation state: while an overlay is wrapped in SCR_UIAnimBegin/End every rect, pic and string is
+// faded by s_uiAlpha and moved by s_uiDY, so whole windows can fade/slide in without touching their code.
+static float s_uiAlpha = 1.0f;
+static float s_uiDY = 0.0f;
+static qboolean s_uiAnimating = qfalse;
+static qboolean s_uiDrew = qfalse;
+
 /*
 ================
 SCR_FillRect
@@ -115,6 +123,17 @@ Coordinates are 640*480 virtual values
 =================
 */
 void SCR_FillRect( float x, float y, float width, float height, const float *color ) {
+	if ( s_uiAnimating ) {
+		vec4_t c = { 1.0f, 1.0f, 1.0f, 1.0f };
+		if ( color ) { c[0] = color[0]; c[1] = color[1]; c[2] = color[2]; c[3] = color[3]; }
+		c[3] *= s_uiAlpha;
+		s_uiDrew = qtrue;
+		re->SetColor( c );
+		re->DrawStretchPic( x, y + s_uiDY, width, height, 0, 0, 0, 0, cls.whiteShader );
+		re->SetColor( NULL );
+		return;
+	}
+
 	re->SetColor( color );
 
 	re->DrawStretchPic( x, y, width, height, 0, 0, 0, 0, cls.whiteShader );
@@ -133,6 +152,13 @@ Coordinates are 640*480 virtual values
 =================
 */
 void SCR_DrawPic( float x, float y, float width, float height, qhandle_t hShader ) {
+	if ( s_uiAnimating ) {
+		vec4_t c = { 1.0f, 1.0f, 1.0f, s_uiAlpha };
+		re->SetColor( c );
+		re->DrawStretchPic( x, y + s_uiDY, width, height, 0, 0, 1, 1, hShader );
+		re->SetColor( NULL );
+		return;
+	}
 	re->DrawStretchPic( x, y, width, height, 0, 0, 1, 1, hShader );
 }
 
@@ -682,6 +708,7 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "rpgui_test", SCR_RPGUITest_f, "Fill the RPG HUD with sample data: rpgui_test [name] [style]" );
 	Cmd_AddCommand( "rpgxp_test", SCR_RPGXPTest_f, "Add XP to the sample HUD: rpgxp_test [amount]" );
 	Cmd_AddCommand( "colui_test", SCR_ColUITest_f, "Open the collection book with sample data" );
+	Cmd_AddCommand( "uiscreen_test", SCR_UIScreenTest_f, "Open a UI window with sample data: uiscreen_test <lb|stats|wanted|bounties|shop|inv|quest|ach|credits|potato|adv|menu|toast>" );
 	Cmd_AddCommand( "menu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "settings", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "partymenu", SCR_PartyMenu_f, "Toggle Party Management Studio overlay" );
@@ -817,6 +844,12 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 		color[0] = 1.0f; color[1] = 1.0f; color[2] = 1.0f; color[3] = 1.0f;
 	}
 
+	const float baseAlpha = color[3] * ( s_uiAnimating ? s_uiAlpha : 1.0f );
+	if ( s_uiAnimating ) {
+		color[3] = baseAlpha;
+		y += s_uiDY;
+	}
+
 	int font = SCR_UIFont();
 	if ( font && !SCR_HasEmojiGlyph( string ) ) {
 		float rh = (charSize < 7.0f) ? (charSize * 1.35f) : charSize;
@@ -833,6 +866,7 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 	while ( *s ) {
 		if ( Q_IsColorString( s ) ) {
 			Com_Memcpy( color, g_color_table[ColorIndex(*(s+1))], sizeof( color ) );
+			color[3] = baseAlpha;
 			re->SetColor( color );
 			s += 2;
 			continue;
@@ -1092,8 +1126,221 @@ static void SCR_UIChip( float x, float y, float w, float h, const char *text, fl
 static void SCR_UITitle( float x, float y, float w, const char *title, float size, const float *tint ) {
 	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
 	SCR_DrawVirtualString( x, y, size, title, white );
+	const float ly = y + size * 1.5f + 3.0f;
 	vec4_t line = { tint[0], tint[1], tint[2], 0.85f };
-	SCR_FillRect( x, y + size * 1.5f + 3.0f, w, 1.0f, line );
+	SCR_FillRect( x, ly, w, 1.0f, line );
+	// a bright highlight travels along the rule
+	const float seg = 46.0f;
+	float sx0 = x + fmodf( (float)cls.realtime * 0.09f, w + seg ) - seg;
+	float sx1 = sx0 + seg;
+	if ( sx0 < x ) sx0 = x;
+	if ( sx1 > x + w ) sx1 = x + w;
+	if ( sx1 > sx0 ) {
+		vec4_t glow = { 1.0f, 1.0f, 1.0f, 0.75f };
+		SCR_FillRect( sx0, ly - 0.5f, sx1 - sx0, 2.0f, glow );
+	}
+}
+
+// ---- Animation + widgets for the modal windows ---------------------------------------------------
+static int s_uiShownMs[16];
+static int s_uiLastDrawMs[16];
+static int s_uiAnimMs = 0;
+static float s_uiBaseAlpha = 1.0f;
+static float s_uiBaseDY = 0.0f;
+
+static float SCR_UIEase( float t ) {
+	if ( t < 0.0f ) t = 0.0f;
+	if ( t > 1.0f ) t = 1.0f;
+	return 1.0f - ( 1.0f - t ) * ( 1.0f - t ) * ( 1.0f - t );
+}
+
+// Eased 0..1 progress since the window opened, after delayMs, over durMs
+static float SCR_UIOpenEase( float delayMs, float durMs ) {
+	return SCR_UIEase( ( (float)s_uiAnimMs - delayMs ) / durMs );
+}
+
+// Starts the open animation (fade + slide down) for the overlay in this slot; call SCR_UIAnimEnd after it was drawn
+static void SCR_UIAnimBegin( int slot ) {
+	const int now = cls.realtime;
+	if ( now - s_uiLastDrawMs[slot] > 250 ) {
+		s_uiShownMs[slot] = now;	// (re)opened
+	}
+	s_uiAnimMs = now - s_uiShownMs[slot];
+	const float e = SCR_UIEase( (float)s_uiAnimMs / 260.0f );
+	s_uiAlpha = e;
+	s_uiDY = -( 1.0f - e ) * 16.0f;
+	s_uiBaseAlpha = s_uiAlpha;
+	s_uiBaseDY = s_uiDY;
+	s_uiAnimating = qtrue;
+	s_uiDrew = qfalse;
+}
+
+static void SCR_UIAnimEnd( int slot ) {
+	if ( s_uiDrew ) s_uiLastDrawMs[slot] = cls.realtime;
+	s_uiAnimating = qfalse;
+	s_uiAlpha = 1.0f;
+	s_uiDY = 0.0f;
+}
+
+static void SCR_UIAnimated( int slot, void ( *fn )( void ) ) {
+	SCR_UIAnimBegin( slot );
+	fn();
+	SCR_UIAnimEnd( slot );
+}
+
+// Fades and slides one row / block in; ms = time since it should start appearing
+static void SCR_UIRowBeginMs( int ms, int i ) {
+	const float e = SCR_UIEase( ( (float)ms - 140.0f - 40.0f * (float)i ) / 220.0f );
+	s_uiAlpha = s_uiBaseAlpha * e;
+	s_uiDY = s_uiBaseDY + ( 1.0f - e ) * 8.0f;
+}
+
+static void SCR_UIRowBegin( int i ) {
+	SCR_UIRowBeginMs( s_uiAnimMs, i );
+}
+
+static void SCR_UIRowEnd( void ) {
+	s_uiAlpha = s_uiBaseAlpha;
+	s_uiDY = s_uiBaseDY;
+}
+
+// Window: chamfered panel, title with a travelling highlight, optional ESC chip
+static void SCR_UIWindow( float x, float y, float w, float h, const char *title, const float *tint, qboolean closeChip ) {
+	vec4_t bg     = { 0.04f, 0.07f, 0.14f, 0.94f };
+	vec4_t border = { tint[0] * 0.8f, tint[1] * 0.8f, tint[2] * 0.8f, 0.70f };
+	SCR_UIPanel( x, y, w, h, 10.0f, bg, border, tint );
+	SCR_UITitle( x + 18.0f, y + 10.0f, w - 36.0f, title, 7.0f, tint );
+	if ( closeChip ) {
+		vec4_t chipFill   = { 0.30f, 0.06f, 0.06f, 0.9f };
+		vec4_t chipBorder = { 0.90f, 0.30f, 0.25f, 0.9f };
+		vec4_t white      = { 1.0f, 1.0f, 1.0f, 1.0f };
+		SCR_UIChip( x + w - 40.0f, y + 8.0f, 34.0f, 15.0f, "ESC", 3.6f, chipFill, chipBorder, white );
+	}
+}
+
+static void SCR_UIFooter( float x, float y, float w, float h, const float *tint, const char *text ) {
+	vec4_t line = { tint[0], tint[1], tint[2], 0.35f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_FillRect( x + 18.0f, y + h - 22.0f, w - 36.0f, 1.0f, line );
+	SCR_DrawVirtualString( x + 18.0f, y + h - 16.0f, 3.8f, text, white );
+}
+
+// Button with a tinted fill, border and a left accent that lights up on hover
+static void SCR_UIButton( float x, float y, float w, float h, const char *label, float size, qboolean hover, const float *tint ) {
+	const float k = hover ? 0.55f : 0.28f;
+	vec4_t fill   = { tint[0] * k, tint[1] * k, tint[2] * k, hover ? 0.95f : 0.85f };
+	vec4_t border = { tint[0], tint[1], tint[2], hover ? 1.0f : 0.60f };
+	vec4_t white  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_FillRect( x, y, w, h, fill );
+	SCR_FillRect( x, y, w, 1.0f, border );
+	SCR_FillRect( x, y + h - 1.0f, w, 1.0f, border );
+	SCR_FillRect( x, y, 1.0f, h, border );
+	SCR_FillRect( x + w - 1.0f, y, 1.0f, h, border );
+	if ( hover ) SCR_FillRect( x, y, 3.0f, h, border );
+	SCR_DrawVirtualString( x + ( w - SCR_GetStringWidth( label, size ) ) * 0.5f, y + ( h - size * 1.2f ) * 0.5f, size, label, white );
+}
+
+// Gold / silver / bronze chip for the top three, plain number for the rest
+static void SCR_UIRankBadge( float x, float y, float w, float h, int rank, float size ) {
+	vec4_t chip = { 0.0f, 0.0f, 0.0f, 0.0f };
+	if ( rank == 1 )      { chip[0] = 1.00f; chip[1] = 0.80f; chip[2] = 0.20f; chip[3] = 1.0f; }
+	else if ( rank == 2 ) { chip[0] = 0.78f; chip[1] = 0.84f; chip[2] = 0.90f; chip[3] = 1.0f; }
+	else if ( rank == 3 ) { chip[0] = 0.80f; chip[1] = 0.50f; chip[2] = 0.25f; chip[3] = 1.0f; }
+	const char *rs = va( "%d", rank );
+	const float tx = x + ( w - SCR_GetStringWidth( rs, size ) ) * 0.5f;
+	const float ty = y + ( h - size * 1.2f ) * 0.5f;
+	if ( chip[3] > 0.0f ) {
+		vec4_t dark = { 0.05f, 0.05f, 0.08f, 1.0f };
+		SCR_FillRect( x, y, w, h, chip );
+		SCR_DrawVirtualString( tx, ty, size, rs, dark );
+	} else {
+		vec4_t num = { 0.75f, 0.85f, 1.0f, 1.0f };
+		SCR_DrawVirtualString( tx, ty, size, rs, num );
+	}
+}
+
+// XP-style progress bar: gradient fill, travelling sheen and a bright tip
+static void SCR_UIBar( float x, float y, float w, float h, float ratio, const float *lo, const float *hi ) {
+	if ( ratio < 0.0f ) ratio = 0.0f;
+	if ( ratio > 1.0f ) ratio = 1.0f;
+	vec4_t trackBorder = { 0.20f, 0.50f, 0.80f, 0.55f };
+	vec4_t track       = { 0.02f, 0.04f, 0.09f, 0.95f };
+	SCR_FillRect( x - 1.0f, y - 1.0f, w + 2.0f, h + 2.0f, trackBorder );
+	SCR_FillRect( x, y, w, h, track );
+	const float fw = w * ratio;
+	if ( fw > 0.5f ) {
+		SCR_FillRect( x, y, fw, h, lo );
+		SCR_FillRect( x, y, fw, h * 0.45f, hi );
+		const float sweep = fmodf( (float)cls.realtime * 0.045f, w + 60.0f ) - 30.0f;
+		float sx0 = x + sweep, sx1 = sx0 + 26.0f;
+		if ( sx0 < x ) sx0 = x;
+		if ( sx1 > x + fw ) sx1 = x + fw;
+		if ( sx1 > sx0 ) {
+			vec4_t sheen = { 1.0f, 1.0f, 1.0f, 0.35f };
+			SCR_FillRect( sx0, y, sx1 - sx0, h, sheen );
+		}
+		vec4_t tip = { 1.0f, 1.0f, 1.0f, 0.9f };
+		SCR_FillRect( x + fw - 1.5f, y, 1.5f, h, tip );
+	}
+}
+
+// Slider: label above (clear of the thumb), thin track, filled part, narrow thumb centred on the value
+static void SCR_UISlider( float x, float y, float w, float h, float progress, const char *label, const char *valueText ) {
+	vec4_t dim   = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t track = { 0.05f, 0.10f, 0.18f, 1.0f };
+	vec4_t fill  = { 0.10f, 0.60f, 0.90f, 1.0f };
+	vec4_t thumb = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t thumbBorder = { 0.20f, 0.80f, 1.0f, 1.0f };
+	if ( progress < 0.0f ) progress = 0.0f;
+	if ( progress > 1.0f ) progress = 1.0f;
+	SCR_DrawVirtualString( x, y - 9.5f, 3.6f, label, dim );
+	SCR_DrawVirtualString( x + w - SCR_GetStringWidth( valueText, 3.6f ), y - 9.5f, 3.6f, valueText, dim );
+	const float ty = y + h * 0.5f - 1.5f;
+	SCR_FillRect( x, ty, w, 3.0f, track );
+	SCR_FillRect( x, ty, w * progress, 3.0f, fill );
+	float tx = x + w * progress - 3.0f;
+	if ( tx < x ) tx = x;
+	if ( tx > x + w - 6.0f ) tx = x + w - 6.0f;
+	SCR_FillRect( tx - 1.0f, y - 2.0f, 8.0f, h + 4.0f, thumbBorder );
+	SCR_FillRect( tx, y - 1.0f, 6.0f, h + 2.0f, thumb );
+}
+
+// Ranked list window (top wealth / top potato): rank badge, name, value column
+static void SCR_UIDrawTopList( const char *title, const float *tint, const char *valueHead, int count, char names[][64], char values[][24], const char *footer ) {
+	vec4_t dim   = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	const float winW = 290.0f, winH = 400.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 40.0f;
+	SCR_UIWindow( winX, winY, winW, winH, title, tint, qtrue );
+
+	const float headY = winY + 38.0f;
+	const float colName = winX + 46.0f;
+	const float rightEdge = winX + winW - 18.0f;
+	SCR_DrawVirtualString( winX + 20.0f, headY, 3.6f, "#", dim );
+	SCR_DrawVirtualString( colName, headY, 3.6f, "PLAYER", dim );
+	SCR_DrawVirtualString( rightEdge - SCR_GetStringWidth( valueHead, 3.6f ), headY, 3.6f, valueHead, dim );
+
+	const float rowH = 26.0f;
+	const float rowStart = headY + 13.0f;
+	for ( int i = 0; i < 10; i++ ) {
+		const float ry = rowStart + (float)i * rowH;
+		SCR_UIRowBegin( i );
+		if ( i % 2 == 0 ) {
+			vec4_t zebra = { 1.0f, 1.0f, 1.0f, 0.05f };
+			SCR_FillRect( winX + 12.0f, ry, winW - 24.0f, rowH - 2.0f, zebra );
+		}
+		if ( i < count ) {
+			const float ty = ry + ( rowH - 2.0f - 4.8f * 1.2f ) * 0.5f;
+			SCR_UIRankBadge( winX + 18.0f, ry + 3.0f, 20.0f, rowH - 8.0f, i + 1, 4.6f );
+			char fit[64];
+			SCR_FitText( names[i], fit, sizeof( fit ), rightEdge - colName - 70.0f, 4.8f );
+			SCR_DrawVirtualString( colName, ty, 4.8f, va( "^7%s", fit ), white );
+			SCR_DrawVirtualString( rightEdge - SCR_GetStringWidth( values[i], 4.8f ), ty, 4.8f, values[i], white );
+		}
+		SCR_UIRowEnd();
+	}
+	SCR_UIFooter( winX, winY, winW, winH, tint, footer );
 }
 
 static void SCR_DrawStatsCaption( float x, float y, float size ) {
@@ -1384,103 +1631,52 @@ Renders sleek modal popup window showing top 10 ranked players with smooth HD gl
 ==================
 */
 void SCR_DrawLeaderboardOverlay( void ) {
-	if ( cls.state != CA_ACTIVE ) {
-		return;
-	}
-	if ( !cg_drawLeaderboard || !cg_drawLeaderboard->integer ) {
-		return;
-	}
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !cg_drawLeaderboard || !cg_drawLeaderboard->integer ) return;
 
-	// Modal Window Dimensions (Vertical 290x400 centered card using leaderboard_bg)
-	float winW = 290.0f;
-	float winH = 400.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 40.0f;
+	const float winW = 290.0f, winH = 400.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 40.0f;
+	vec4_t tint  = { 0.20f, 0.70f, 1.00f, 1.0f };
+	vec4_t dim   = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIWindow( winX, winY, winW, winH, "^5DUELIST ^7LEADERBOARD", tint, qtrue );
 
-	if ( s_hTopBg <= 0 && re && re->RegisterShaderNoMip ) {
-		s_hTopBg = re->RegisterShaderNoMip( "gfx/rpg_hud/top_bg" );
-		if ( s_hTopBg <= 0 && re->RegisterShader ) {
-			s_hTopBg = re->RegisterShader( "gfx/rpg_hud/top_bg" );
-		}
-		if ( s_hTopBg <= 0 && re->RegisterShaderNoMip ) {
-			s_hTopBg = re->RegisterShaderNoMip( "gfx/rpg_hud/leaderboard_bg" );
-		}
-	}
+	const float headY = winY + 38.0f;
+	const float colName = winX + 46.0f;
+	const float colLv = winX + 146.0f;
+	const float colTitle = winX + 174.0f;
+	const float rightEdge = winX + winW - 18.0f;
+	SCR_DrawVirtualString( winX + 20.0f, headY, 3.6f, "#", dim );
+	SCR_DrawVirtualString( colName, headY, 3.6f, "PLAYER", dim );
+	SCR_DrawVirtualString( colLv, headY, 3.6f, "LV", dim );
+	SCR_DrawVirtualString( colTitle, headY, 3.6f, "TITLE", dim );
+	SCR_DrawVirtualString( rightEdge - SCR_GetStringWidth( "ELO", 3.6f ), headY, 3.6f, "ELO", dim );
 
-	if ( s_hTopBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hTopBg );
-	} else {
-		vec4_t bgColor     = { 0.03f, 0.06f, 0.12f, 0.88f };
-		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-
-		vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.88f };
-		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 26.0f, 3.0f, headerBg, NULL );
-	}
-
-	// Title (removed yellow virtual title overlap as requested)
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	// Close Button instruction (nudged 3 ticks right, 1 tick down)
-	SCR_DrawVirtualString( winX + winW - 37.0f, winY + 15.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	// Column Headers Divider line (right above the blue line on top UI)
-	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.70f };
-	float colY = winY + 40.0f;
-	SCR_FillRect( winX + 10.0f, colY + 16.0f, winW - 20.0f, 1.0f, divColor );
-
-	// Column Headers (moved 6 ticks to the right, 8 ticks down): # | PLAYER NAME | LV | TITLE | ELO
-	SCR_DrawVirtualString( winX + 26.0f, colY, 4.8f, "^5#", whiteColor );
-	SCR_DrawVirtualString( winX + 46.0f, colY, 4.8f, "^5PLAYER NAME", whiteColor );
-	SCR_DrawVirtualString( winX + 141.0f, colY, 4.8f, "^5LV", whiteColor );
-	SCR_DrawVirtualString( winX + 171.0f, colY, 4.8f, "^5TITLE", whiteColor );
-	SCR_DrawVirtualString( winX + winW - 84.0f, colY, 4.8f, "^5ELO", whiteColor );
-
-	// Render Rows (moved 8 ticks down from previous 60.0f)
-	float rowStartY = winY + 68.0f;
-	float rowHeight = 23.0f;
-
+	const float rowH = 26.0f;
+	const float rowStart = headY + 13.0f;
 	for ( int i = 0; i < 10; i++ ) {
-		float currentY = rowStartY + (i * rowHeight);
-
-		// Alternating row background highlight
+		const float ry = rowStart + (float)i * rowH;
+		SCR_UIRowBegin( i );
 		if ( i % 2 == 0 ) {
-			vec4_t rowBg = { 0.05f, 0.12f, 0.25f, 0.35f };
-			SCR_FillRect( winX + 10.0f, currentY, winW - 20.0f, rowHeight - 2.0f, rowBg );
+			vec4_t zebra = { 1.0f, 1.0f, 1.0f, 0.05f };
+			SCR_FillRect( winX + 12.0f, ry, winW - 24.0f, rowH - 2.0f, zebra );
 		}
-
 		if ( i < g_topLeaderboardCount ) {
 			topLeaderboardEntry_t *e = &g_topLeaderboard[i];
-
-			// Rank position # (moved 6 ticks right)
-			char numStr[16];
-			Com_sprintf( numStr, sizeof(numStr), (i < 3) ? "^3#%d" : "^7#%d", i + 1 );
-			SCR_DrawVirtualString( winX + 26.0f, currentY + 2.0f, 4.8f, numStr, whiteColor );
-
-			// Player Name (moved 6 ticks right - un-truncated name printing)
-			char pNameStr[64];
-			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%s", e->displayName );
-			SCR_DrawVirtualString( winX + 46.0f, currentY + 2.0f, 4.8f, pNameStr, whiteColor );
-
-			// Level (moved 6 ticks right)
-			char lvlStr[16];
-			Com_sprintf( lvlStr, sizeof(lvlStr), "^3%d", e->level );
-			SCR_DrawVirtualString( winX + 141.0f, currentY + 2.0f, 4.8f, lvlStr, whiteColor );
-
-			// Rank title (moved 6 ticks right)
-			char titleStr[32];
-			Com_sprintf( titleStr, sizeof(titleStr), "^3%.14s", e->rankTitle );
-			SCR_DrawVirtualString( winX + 171.0f, currentY + 2.0f, 4.4f, titleStr, whiteColor );
-
-			// FR ELO (moved 6 ticks right)
-			char eloStr[16];
-			Com_sprintf( eloStr, sizeof(eloStr), "^2%d", e->fr );
-			SCR_DrawVirtualString( winX + winW - 84.0f, currentY + 2.0f, 4.8f, eloStr, whiteColor );
+			const float ty = ry + ( rowH - 2.0f - 4.8f * 1.2f ) * 0.5f;
+			SCR_UIRankBadge( winX + 18.0f, ry + 3.0f, 20.0f, rowH - 8.0f, i + 1, 4.6f );
+			char fit[64];
+			SCR_FitText( e->displayName, fit, sizeof( fit ), colLv - colName - 6.0f, 4.8f );
+			SCR_DrawVirtualString( colName, ty, 4.8f, va( "^7%s", fit ), white );
+			SCR_DrawVirtualString( colLv, ty, 4.8f, va( "^3%d", e->level ), white );
+			SCR_DrawVirtualString( colTitle, ty, 4.2f, va( "^3%.12s", e->rankTitle ), white );
+			const char *eloStr = va( "^2%d", e->fr );
+			SCR_DrawVirtualString( rightEdge - SCR_GetStringWidth( eloStr, 4.8f ), ty, 4.8f, eloStr, white );
 		}
+		SCR_UIRowEnd();
 	}
-
-	SCR_DrawVirtualString( winX + 26.0f, winY + winH - 13.0f, 4.0f, "^7Press ^1[ESC]^7 to close Duelist Leaderboard", whiteColor );
+	SCR_UIFooter( winX, winY, winW, winH, tint, "^7Press ^1ESC^7 to close the Duelist Leaderboard" );
 }
 
 /*
@@ -1495,134 +1691,68 @@ void SCR_DrawStatsOverlay( void ) {
 	if ( !cg_drawStats || !cg_drawStats->integer ) return;
 	if ( !g_rpgStats.active ) return;
 
-	// Modal Window Dimensions (Vertical stats_card layout - Compacted 290x400)
-	float winW = 290.0f;
-	float winH = 400.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 40.0f;
+	const float winW = 290.0f, winH = 400.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 40.0f;
+	vec4_t tint  = { 0.95f, 0.75f, 0.20f, 1.0f };
+	vec4_t dim   = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIWindow( winX, winY, winW, winH, "^3PLAYER ^7STATISTICS", tint, qtrue );
 
-	vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.85f };
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	if ( s_hStatsCard <= 0 && re && re->RegisterShader ) {
-		s_hStatsCard = re->RegisterShader( "gfx/rpg_hud/stats_card" );
-	}
-
-	if ( s_hStatsCard > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hStatsCard );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-
-		vec4_t headerBg = { 0.08f, 0.18f, 0.35f, 0.88f };
-		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 22.0f, 3.0f, headerBg, NULL );
-
-		// Title (Only drawn as a fallback when texture is not loaded)
-		SCR_DrawVirtualString( winX + winW * 0.5f - 60.0f, winY + 8.0f, 4.8f, "^3STATISTICS", yellowCol );
-	}
-
-	// Close Button instruction
-	SCR_DrawVirtualString( winX + winW - 35.0f, winY + 11.0f, 4.4f, "^1[ESC]", yellowCol );
-
-	// TOP HALF - Profile Picture & Profile details (Scaled to fits inside frame)
-	float avatarX = winX + 27.0f;
-	float avatarY = winY + 59.0f;
-	float avatarSize = 72.0f;
-
+	// profile: avatar + name / rank / level
+	const float avX = winX + 20.0f, avY = winY + 40.0f, avS = 62.0f;
+	vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.80f };
+	vec4_t avBg    = { 0.03f, 0.06f, 0.11f, 1.0f };
+	SCR_FillRect( avX - 1.0f, avY - 1.0f, avS + 2.0f, avS + 2.0f, avFrame );
+	SCR_FillRect( avX, avY, avS, avS, avBg );
 	qhandle_t hAv = s_hAvatar;
 	if ( !hAv ) hAv = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
-	if ( hAv ) {
-		SCR_DrawPic( avatarX + 2.0f, avatarY + 2.0f, avatarSize - 4.0f, avatarSize - 4.0f, hAv );
+	if ( hAv ) SCR_DrawPic( avX, avY, avS, avS, hAv );
+
+	const float px = avX + avS + 14.0f;
+	SCR_DrawVirtualString( px, avY + 1.0f, 6.0f, va( "^7%s", g_rpgStats.name[0] ? g_rpgStats.name : "Player" ), white );
+	SCR_DrawVirtualString( px, avY + 17.0f, 4.8f, va( "^3%s", g_rpgStats.rankTitle[0] ? g_rpgStats.rankTitle : "Padawan" ), white );
+	SCR_DrawVirtualString( px, avY + 31.0f, 4.6f, va( "^5Lv %d   ^7|   ^2%d Elo", g_rpgStats.level, g_rpgStats.elo ), white );
+
+	// level progress bar (fills in when the window opens)
+	const int perLevel = g_rpgXpPerLevel > 0 ? g_rpgXpPerLevel : 1000;
+	const int curXP = g_rpgStats.xp % perLevel;
+	SCR_DrawVirtualString( px, avY + 46.0f, 3.8f, va( "^5XP ^7%d / %d   ^5(total %d)", curXP, perLevel, g_rpgStats.xp ), white );
+	vec4_t lo = { 0.08f, 0.55f, 0.90f, 1.0f };
+	vec4_t hi = { 0.30f, 0.85f, 1.00f, 1.0f };
+	SCR_UIBar( winX + 20.0f, avY + avS + 12.0f, winW - 40.0f, 7.0f, ( (float)curXP / (float)perLevel ) * SCR_UIOpenEase( 300.0f, 700.0f ), lo, hi );
+
+	// table
+	char rival[96];
+	if ( g_rpgStats.topRivalCount > 0 ) Com_sprintf( rival, sizeof( rival ), "^1%s ^5(%d)", g_rpgStats.topRivalName, g_rpgStats.topRivalCount );
+	else Q_strncpyz( rival, "^7None", sizeof( rival ) );
+	const float wl = g_rpgStats.losses > 0 ? (float)g_rpgStats.wins / (float)g_rpgStats.losses : (float)g_rpgStats.wins;
+	const float kd = g_rpgStats.deaths > 0 ? (float)g_rpgStats.kills / (float)g_rpgStats.deaths : (float)g_rpgStats.kills;
+	const char *labels[7] = { "Credits", "Wins / Losses", "Kills / Deaths", "Highest streak", "Favourite weapon", "Trivia wins", "Main rival" };
+	char vals[7][96];
+	Com_sprintf( vals[0], sizeof( vals[0] ), "^3%d CR", g_rpgStats.credits );
+	Com_sprintf( vals[1], sizeof( vals[1] ), "^2%d^7/^1%d ^5(%.2f)", g_rpgStats.wins, g_rpgStats.losses, wl );
+	Com_sprintf( vals[2], sizeof( vals[2] ), "^2%d^7/^1%d ^5(%.2f)", g_rpgStats.kills, g_rpgStats.deaths, kd );
+	Com_sprintf( vals[3], sizeof( vals[3] ), "^3%d", g_rpgStats.highestStreak );
+	Com_sprintf( vals[4], sizeof( vals[4] ), "^7%s", g_rpgStats.favWeapon[0] ? g_rpgStats.favWeapon : "Lightsaber" );
+	Com_sprintf( vals[5], sizeof( vals[5] ), "^7%d", g_rpgStats.triviaWins );
+	Q_strncpyz( vals[6], rival, sizeof( vals[6] ) );
+
+	const float rowH = 28.0f;
+	const float tableY = winY + 138.0f;
+	for ( int i = 0; i < 7; i++ ) {
+		const float ry = tableY + (float)i * rowH;
+		SCR_UIRowBegin( i );
+		if ( i % 2 == 0 ) {
+			vec4_t zebra = { 1.0f, 1.0f, 1.0f, 0.05f };
+			SCR_FillRect( winX + 12.0f, ry, winW - 24.0f, rowH - 2.0f, zebra );
+		}
+		const float ty = ry + ( rowH - 2.0f - 4.8f * 1.2f ) * 0.5f;
+		SCR_DrawVirtualString( winX + 22.0f, ty, 4.6f, labels[i], dim );
+		SCR_DrawVirtualString( winX + winW - 22.0f - SCR_GetStringWidth( vals[i], 4.8f ), ty, 4.8f, vals[i], white );
+		SCR_UIRowEnd();
 	}
-	// Only draw avatar frame if stats_card is NOT loaded
-	if ( s_hStatsCard <= 0 && s_hAvatarFrame > 0 ) {
-		SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatarFrame );
-	}
-
-	float profileX = winX + 108.0f;
-	float profileY = winY + 59.0f;
-
-	// Line 1: Player Name
-	char dName[128];
-	Com_sprintf( dName, sizeof(dName), "^7%s", g_rpgStats.name[0] ? g_rpgStats.name : "Player" );
-	SCR_DrawVirtualString( profileX, profileY + 4.0f, 5.2f, dName, whiteColor );
-
-	// Line 2: Rank Title
-	char rTitle[128];
-	Com_sprintf( rTitle, sizeof(rTitle), "^3%s", g_rpgStats.rankTitle[0] ? g_rpgStats.rankTitle : "Padawan" );
-	SCR_DrawVirtualString( profileX, profileY + 18.0f, 4.8f, rTitle, whiteColor );
-
-	// Line 3: Level & ELO
-	char lvlElo[128];
-	Com_sprintf( lvlElo, sizeof(lvlElo), "^5Lv %d  ^7|  ^2%d ELO", g_rpgStats.level, g_rpgStats.elo );
-	SCR_DrawVirtualString( profileX, profileY + 32.0f, 4.6f, lvlElo, whiteColor );
-
-	// Line 4: XP Progress
-	char xpStr[128];
-	Com_sprintf( xpStr, sizeof(xpStr), "^5XP: ^2%d", g_rpgStats.xp );
-	SCR_DrawVirtualString( profileX, profileY + 46.0f, 4.6f, xpStr, whiteColor );
-
-	// Divider line between columns (fallback only)
-	if ( s_hStatsCard <= 0 ) {
-		vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
-		SCR_FillRect( winX + 105.0f, winY + 34.0f, 1.0f, 85.0f, divColor );
-	}
-
-	// BOTTOM HALF - Statistics Table inside the container box
-	float bodyX = winX + 23.0f;
-	float bodyY = winY + 141.0f;
-	float bodyW = 244.0f;
-	
-	float statsX = bodyX + 15.0f;
-	float valX = winX + 175.0f;
-	float statsY = bodyY + 18.0f;
-	float spacingY = 25.5f;
-
-	// Row 1: Credits Balance
-	SCR_DrawVirtualString( statsX, statsY, 4.8f, "^5Credits Balance:", whiteColor );
-	SCR_DrawVirtualString( valX, statsY, 4.8f, va( "^3%d CR", g_rpgStats.credits ), whiteColor );
-	statsY += spacingY;
-
-	// Row 2: Wins / Losses
-	SCR_DrawVirtualString( statsX, statsY, 4.8f, "^5Wins / Losses:", whiteColor );
-	float wlRatio = g_rpgStats.losses > 0 ? (float)g_rpgStats.wins / (float)g_rpgStats.losses : (float)g_rpgStats.wins;
-	SCR_DrawVirtualString( valX, statsY, 4.8f, va( "^2%d^7/^1%d ^5(%.2f)", g_rpgStats.wins, g_rpgStats.losses, wlRatio ), whiteColor );
-	statsY += spacingY;
-
-	// Row 3: Kills / Deaths
-	SCR_DrawVirtualString( statsX, statsY, 4.8f, "^5Kills / Deaths:", whiteColor );
-	float kdRatio = g_rpgStats.deaths > 0 ? (float)g_rpgStats.kills / (float)g_rpgStats.deaths : (float)g_rpgStats.kills;
-	SCR_DrawVirtualString( valX, statsY, 4.8f, va( "^2%d^7/^1%d ^5(%.2f)", g_rpgStats.kills, g_rpgStats.deaths, kdRatio ), whiteColor );
-	statsY += spacingY;
-
-	// Row 4: Highest Streak
-	SCR_DrawVirtualString( statsX, statsY, 4.8f, "^5Highest Streak:", whiteColor );
-	SCR_DrawVirtualString( valX, statsY, 4.8f, va( "^3%d", g_rpgStats.highestStreak ), whiteColor );
-	statsY += spacingY;
-
-	// Row 5: Favorite Weapon
-	SCR_DrawVirtualString( statsX, statsY, 4.8f, "^5Fav Weapon:", whiteColor );
-	SCR_DrawVirtualString( valX, statsY, 4.8f, va( "^7%s", g_rpgStats.favWeapon[0] ? g_rpgStats.favWeapon : "Lightsaber" ), whiteColor );
-	statsY += spacingY;
-
-	// Row 6: Trivia Wins
-	SCR_DrawVirtualString( statsX, statsY, 4.8f, "^5Trivia Wins:", whiteColor );
-	SCR_DrawVirtualString( valX, statsY, 4.8f, va( "^7%d", g_rpgStats.triviaWins ), whiteColor );
-	statsY += spacingY;
-
-	// Row 7: Main Rival
-	SCR_DrawVirtualString( statsX, statsY, 4.8f, "^5Main Rival:", whiteColor );
-	char rivalStr[128];
-	if ( g_rpgStats.topRivalCount > 0 ) {
-		Com_sprintf( rivalStr, sizeof(rivalStr), "^1%s ^5(%d)", g_rpgStats.topRivalName, g_rpgStats.topRivalCount );
-	} else {
-		Com_sprintf( rivalStr, sizeof(rivalStr), "^7None" );
-	}
-	SCR_DrawVirtualString( valX, statsY, 4.8f, rivalStr, whiteColor );
-
-	// Footer instruction
-	SCR_DrawVirtualString( winX + 21.0f, winY + 386.0f, 3.8f, "^7Press ^3F8^7, ^3ESC^7, or type ^3!stats^7 to close", whiteColor );
+	SCR_UIFooter( winX, winY, winW, winH, tint, "^7Press ^3F8^7, ^3ESC^7 or type ^3!stats^7 to close" );
 }
 
 //=======================================================
@@ -1649,7 +1779,7 @@ void SCR_DrawToastOverlay( void ) {
 		return;
 	}
 
-	// Calculate alpha (fade-in / fade-out)
+	// alpha (fade-in / fade-out) and slide: comes in from the right edge and leaves the same way
 	float alpha = 1.0f;
 	if ( elapsed < TOAST_FADEIN_MS ) {
 		alpha = (float)elapsed / (float)TOAST_FADEIN_MS;
@@ -1658,88 +1788,47 @@ void SCR_DrawToastOverlay( void ) {
 	}
 	if ( alpha < 0.0f ) alpha = 0.0f;
 	if ( alpha > 1.0f ) alpha = 1.0f;
+	const float vis = SCR_UIEase( alpha );
 
-	const float panelW = 150.0f;
-	const float panelH = 46.0f;
-	const float panelX = 640.0f - panelW - 14.0f;  // Top-Right corner
+	const float panelW = 190.0f;
+	const float panelH = 56.0f;
+	const float panelX = 640.0f - panelW - 14.0f + ( 1.0f - vis ) * ( panelW + 20.0f );
 	const float panelY = 125.0f;                   // Under the map
 
+	vec4_t accent = { 1.00f, 0.25f, 0.25f, alpha };
+	if ( g_rpgToast.isWin ) { accent[0] = 0.20f; accent[1] = 1.00f; accent[2] = 0.40f; }
+	vec4_t bg     = { 0.04f, 0.07f, 0.14f, 0.90f * alpha };
+	vec4_t border = { accent[0] * 0.8f, accent[1] * 0.8f, accent[2] * 0.8f, 0.65f * alpha };
 	vec4_t whiteA = { 1.0f, 1.0f, 1.0f, alpha };
+	SCR_UIPanel( panelX, panelY, panelW, panelH, 8.0f, bg, border, accent );
 
-	// Panel background (dark navy glass)
-	vec4_t bgColor   = { 0.04f, 0.07f, 0.14f, 0.88f * alpha };
-	re->SetColor( bgColor );
-	re->DrawStretchPic( panelX, panelY, panelW, panelH, 0, 0, 0, 0, cls.whiteShader );
-	re->SetColor( NULL );
+	const float textX = panelX + 12.0f;
+	SCR_DrawVirtualString( textX, panelY + 5.0f, 5.6f, g_rpgToast.isWin ? "^2VICTORY!" : "^1DEFEAT.", whiteA );
+	SCR_DrawVirtualString( textX, panelY + 17.0f, 4.0f, va( "^7vs. ^5%.24s", g_rpgToast.opponentName ), whiteA );
 
-	// Outer border
-	vec4_t borderColor = { 0.20f, 0.50f, 0.80f, 0.55f * alpha };
-	SCR_FillRect( panelX,              panelY,              panelW, 1.0f,   borderColor );
-	SCR_FillRect( panelX,              panelY + panelH - 1, panelW, 1.0f,   borderColor );
-	SCR_FillRect( panelX,              panelY,              1.0f,   panelH, borderColor );
-	SCR_FillRect( panelX + panelW - 1, panelY,              1.0f,   panelH, borderColor );
-
-	// Left accent bar (3px wide): green for win, red for loss
-	vec4_t accentColor;
+	char row3[128];
 	if ( g_rpgToast.isWin ) {
-		accentColor[0] = 0.20f;
-		accentColor[1] = 1.00f;
-		accentColor[2] = 0.40f;
-		accentColor[3] = alpha;
+		Com_sprintf( row3, sizeof( row3 ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp );
 	} else {
-		accentColor[0] = 1.00f;
-		accentColor[1] = 0.20f;
-		accentColor[2] = 0.20f;
-		accentColor[3] = alpha;
+		Com_sprintf( row3, sizeof( row3 ), "^5ELO ^1%d ^7| ^6+%d CR", g_rpgToast.eloDelta, g_rpgToast.credits );
 	}
-	SCR_FillRect( panelX, panelY, 3.0f, panelH, accentColor );
+	SCR_DrawVirtualString( textX, panelY + 28.0f, 3.8f, row3, whiteA );
 
-	const float textX = panelX + 8.0f;
-
-	// Row 1: Title (VICTORY! / DEFEAT.)
-	const char *titleStr;
-	if ( g_rpgToast.isWin ) {
-		titleStr = "^2VICTORY!";
-	} else {
-		titleStr = "^1DEFEAT.";
+	if ( g_rpgToast.health > 0 || g_rpgToast.bp > 0 ) {
+		const char *hc = g_rpgToast.isWin ? "^2" : "^1";
+		char row4[96];
+		if ( g_rpgToast.bp > 0 ) Com_sprintf( row4, sizeof( row4 ), "%s%d HP ^7| ^5%d BP remaining", hc, g_rpgToast.health, g_rpgToast.bp );
+		else Com_sprintf( row4, sizeof( row4 ), "%s%d HP ^7remaining", hc, g_rpgToast.health );
+		SCR_DrawVirtualString( textX, panelY + 38.0f, 3.6f, row4, whiteA );
 	}
-	SCR_DrawVirtualString( textX, panelY + 4.0f, 5.2f, titleStr, whiteA );
 
-	// Row 2: vs. Opponent name
-	char vsStr[80];
-	Com_sprintf( vsStr, sizeof( vsStr ), "^7vs. ^5%.24s", g_rpgToast.opponentName );
-	SCR_DrawVirtualString( textX, panelY + 15.0f, 4.0f, vsStr, whiteA );
-
-	// Row 3: Stats row
-	char statsStr[128];
-	if ( g_rpgToast.isWin ) {
-		if ( g_rpgToast.bp > 0 ) {
-			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP ^7(^2%d HP ^7| ^5%d BP remaining^7)", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp, g_rpgToast.health, g_rpgToast.bp );
-		} else if ( g_rpgToast.health > 0 ) {
-			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP ^7(^2%d HP^7)", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp, g_rpgToast.health );
-		} else {
-			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^2+%d ^7| ^6+%d CR ^7| ^3+%d XP", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.xp );
-		}
-
-	} else {
-		if ( g_rpgToast.bp > 0 ) {
-			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^1%d ^7| ^6+%d CR ^7(^1%d HP ^7| ^5%d BP remaining^7)", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.health, g_rpgToast.bp );
-		} else if ( g_rpgToast.health > 0 ) {
-			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^1%d ^7| ^6+%d CR ^7(^1%d HP^7)", g_rpgToast.eloDelta, g_rpgToast.credits, g_rpgToast.health );
-		} else {
-			Com_sprintf( statsStr, sizeof( statsStr ), "^5ELO ^1%d ^7| ^6+%d CR", g_rpgToast.eloDelta, g_rpgToast.credits );
-		}
-	}
-	SCR_DrawVirtualString( textX, panelY + 26.0f, 4.0f, statsStr, whiteA );
-
-
-	// Progress bar (shrinks left to right as duration elapses)
-	float barW    = panelW - 4.0f;
-	float barFill = barW * ( 1.0f - (float)elapsed / (float)TOAST_DURATION_MS );
-	vec4_t barBg   = { 0.10f, 0.10f, 0.18f, 0.70f * alpha };
-	SCR_FillRect( panelX + 2.0f, panelY + panelH - 3.0f, barW,    2.0f, barBg );
+	// timer bar (shrinks as the toast runs out)
+	const float barW = panelW - 24.0f;
+	const float barFill = barW * ( 1.0f - (float)elapsed / (float)TOAST_DURATION_MS );
+	vec4_t barBg = { 0.10f, 0.10f, 0.18f, 0.70f * alpha };
+	SCR_FillRect( panelX + 12.0f, panelY + panelH - 6.0f, barW, 2.0f, barBg );
 	if ( barFill > 0.0f ) {
-		SCR_FillRect( panelX + 2.0f, panelY + panelH - 3.0f, barFill, 2.0f, accentColor );
+		SCR_FillRect( panelX + 12.0f, panelY + panelH - 6.0f, barFill, 2.0f, accent );
 	}
 }
 
@@ -1931,139 +2020,74 @@ void SCR_DrawShopOverlay( void ) {
 	if ( !cg_drawShop || !cg_drawShop->integer ) return;
 	if ( !g_rpgShop.active ) return;
 
-	// Modal Window Dimensions (Vertical 300x400 right-aligned panel using shop_bg.tga)
-	float winW = 300.0f;
-	float winH = 400.0f;
-	float winX = 640.0f - winW - 14.0f;
-	float winY = 40.0f;
+	// geometry matches the click handling in cl_keys.cpp (rows from winY+62, 34 apart; BUY / SELL buttons)
+	const float winW = 300.0f, winH = 400.0f;
+	const float winX = 640.0f - winW - 14.0f;
+	const float winY = 40.0f;
+	vec4_t tint  = { 0.95f, 0.75f, 0.20f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t line  = { tint[0], tint[1], tint[2], 0.35f };
+	SCR_UIWindow( winX, winY, winW, winH, "^3RANKED ^7SHOP", tint, qtrue );
 
-	if ( s_hShopBg <= 0 && re && re->RegisterShader ) {
-		s_hShopBg = re->RegisterShader( "gfx/rpg_hud/shop_bg" );
-	}
+	SCR_DrawVirtualString( winX + 18.0f, winY + 31.0f, 4.8f, va( "^7Credits: ^5%d CR", g_rpgShop.credits ), white );
+	SCR_FillRect( winX + 12.0f, winY + 48.0f, winW - 24.0f, 1.0f, line );
 
-	if ( s_hShopBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hShopBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		vec4_t borderColor = { 0.10f, 0.75f, 0.95f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-
-		vec4_t headerBg = { 0.08f, 0.20f, 0.38f, 0.88f };
-		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
-	}
-
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	float titleW = SCR_GetStringWidth( "RANKED SHOP", 8.2f );
-	float titleX = winX + (winW - titleW) * 0.5f;
-	SCR_DrawVirtualString( titleX, winY + 23.0f, 8.2f, "^3RANKED SHOP", yellowCol );
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 14.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	// Credits Balance
-	char crStr[64];
-	Com_sprintf( crStr, sizeof( crStr ), "^7Credits: ^5%d CR", g_rpgShop.credits );
-	SCR_DrawVirtualString( winX + 12.0f, winY + 33.0f, 4.8f, crStr, whiteColor );
-
-	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
-	SCR_FillRect( winX + 10.0f, winY + 46.0f, winW - 20.0f, 1.0f, divColor );
-
-	// Virtual Mouse Position
-	float mx = (float)g_rpgMouseX;
-	float my = (float)g_rpgMouseY;
+	const float mx = (float)g_rpgMouseX;
+	const float my = (float)g_rpgMouseY;
 
 	if ( g_rpgShop.count == 0 ) {
-		SCR_DrawVirtualString( winX + winW * 0.5f - 60.0f, winY + 120.0f, 5.2f, "^7No items.", whiteColor );
+		SCR_DrawVirtualString( winX + 18.0f, winY + 70.0f, 5.0f, "^7No items.", white );
 	} else {
-		int maxVisible = 8;
+		const int maxVisible = 8;
 		int startIdx = g_rpgShop.scroll;
 		if ( startIdx < 0 ) startIdx = 0;
 
 		float rowY = winY + 62.0f;
-		for ( int i = startIdx; i < g_rpgShop.count && (i - startIdx) < maxVisible; i++ ) {
+		for ( int i = startIdx; i < g_rpgShop.count && ( i - startIdx ) < maxVisible; i++ ) {
 			rpgShopItem_t *item = &g_rpgShop.items[i];
+			SCR_UIRowBegin( i - startIdx );
 
-			// Highlight active row on mouse hover
-			qboolean rowHover = (qboolean)( mx >= winX + 8.0f && mx <= winX + winW - 8.0f && my >= rowY && my <= rowY + 32.0f );
-			if ( rowHover ) {
-				vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.15f };
-				SCR_FillRect( winX + 8.0f, rowY, winW - 16.0f, 32.0f, hCol );
-			}
+			const qboolean rowHover = (qboolean)( mx >= winX + 8.0f && mx <= winX + winW - 8.0f && my >= rowY && my <= rowY + 32.0f );
+			vec4_t rowBg = { 1.0f, 1.0f, 1.0f, ( ( i - startIdx ) % 2 == 0 ) ? 0.05f : 0.02f };
+			if ( rowHover ) { rowBg[0] = 0.20f; rowBg[1] = 0.70f; rowBg[2] = 1.00f; rowBg[3] = 0.16f; }
+			SCR_FillRect( winX + 12.0f, rowY, winW - 24.0f, 32.0f, rowBg );
+			if ( rowHover ) SCR_FillRect( winX + 12.0f, rowY, 2.0f, 32.0f, tint );
 
-			// Draw Item Key and Clean Display Name
-			SCR_DrawVirtualString( winX + 18.0f, rowY + 2.0f, 4.4f, va( "%s", item->display ), whiteColor );
+			SCR_DrawVirtualString( winX + 20.0f, rowY + 3.0f, 4.4f, va( "%s", item->display ), white );
+			SCR_DrawVirtualString( winX + 20.0f, rowY + 17.0f, 3.8f, va( "^5Buy %d cr  ^7|  ^3Sell %d", item->price, item->sellBack ), white );
 
-			// Draw Price info
-			SCR_DrawVirtualString( winX + 18.0f, rowY + 16.0f, 4.0f, va( "^5Buy: %d cr  ^7|  ^3Sell: %d", item->price, item->sellBack ), whiteColor );
+			const float btnBuyX = winX + winW - 95.0f;
+			const float btnSellX = winX + winW - 55.0f;
+			const float btnY = rowY + 6.0f;
+			const float btnW = 35.0f, btnH = 18.0f;
+			const qboolean buyHover = (qboolean)( mx >= btnBuyX && mx <= btnBuyX + btnW && my >= btnY && my <= btnY + btnH );
+			const qboolean sellHover = (qboolean)( mx >= btnSellX && mx <= btnSellX + btnW && my >= btnY && my <= btnY + btnH );
+			vec4_t green = { 0.20f, 0.85f, 0.40f, 1.0f };
+			vec4_t red   = { 0.95f, 0.30f, 0.25f, 1.0f };
+			SCR_UIButton( btnBuyX, btnY, btnW, btnH, "BUY", 3.8f, buyHover, green );
+			SCR_UIButton( btnSellX, btnY, btnW, btnH, "SELL", 3.8f, sellHover, red );
 
-			// Draw Interactive Buttons
-			float btnBuyX = winX + winW - 95.0f;
-			float btnSellX = winX + winW - 55.0f;
-			float btnY = rowY + 6.0f;
-			float btnW = 35.0f;
-			float btnH = 18.0f;
-
-			qboolean buyHover = (qboolean)( mx >= btnBuyX && mx <= btnBuyX + btnW && my >= btnY && my <= btnY + btnH );
-			qboolean sellHover = (qboolean)( mx >= btnSellX && mx <= btnSellX + btnW && my >= btnY && my <= btnY + btnH );
-
-			vec4_t buyColor = { 0.00f, 0.50f, 0.00f, 0.40f };
-			vec4_t buyColorHover = { 0.00f, 0.80f, 0.00f, 0.70f };
-			vec4_t sellColor = { 0.50f, 0.00f, 0.00f, 0.40f };
-			vec4_t sellColorHover = { 0.80f, 0.00f, 0.00f, 0.70f };
-
-			// Draw BUY Button
-			if ( s_hBuyBtn <= 0 && re && re->RegisterShader ) {
-				s_hBuyBtn = re->RegisterShader( "gfx/rpg_hud/buy_btn" );
-			}
-			if ( s_hBuyBtn > 0 ) {
-				vec4_t bCol = { 1.0f, 1.0f, 1.0f, buyHover ? 1.00f : 0.70f };
-				re->SetColor( bCol );
-				SCR_DrawPic( btnBuyX, btnY, btnW, btnH, s_hBuyBtn );
-				re->SetColor( NULL );
-			} else {
-				SCR_DrawRoundedGlassPanel( btnBuyX, btnY, btnW, btnH, 2.0f, buyHover ? buyColorHover : buyColor, NULL );
-				SCR_DrawVirtualString( btnBuyX + 6.0f, btnY + 4.0f, 3.8f, "BUY", whiteColor );
-			}
-
-			// Draw SELL Button
-			if ( s_hSellBtn <= 0 && re && re->RegisterShader ) {
-				s_hSellBtn = re->RegisterShader( "gfx/rpg_hud/sell_btn" );
-			}
-			if ( s_hSellBtn > 0 ) {
-				vec4_t sCol = { 1.0f, 1.0f, 1.0f, sellHover ? 1.00f : 0.70f };
-				re->SetColor( sCol );
-				SCR_DrawPic( btnSellX, btnY, btnW, btnH, s_hSellBtn );
-				re->SetColor( NULL );
-			} else {
-				SCR_DrawRoundedGlassPanel( btnSellX, btnY, btnW, btnH, 2.0f, sellHover ? sellColorHover : sellColor, NULL );
-				SCR_DrawVirtualString( btnSellX + 4.0f, btnY + 4.0f, 3.8f, "SELL", whiteColor );
-			}
-
+			SCR_UIRowEnd();
 			rowY += 34.0f;
 		}
 
-		// Draw Vertical Scroll Bar Indicator if more items than fit
 		if ( g_rpgShop.count > maxVisible ) {
-			float barX = winX + winW - 6.0f;
-			float barY = winY + 54.0f;
-			float barH = maxVisible * 34.0f - 4.0f;
+			const float barX = winX + winW - 7.0f;
+			const float barY = winY + 54.0f;
+			const float barH = maxVisible * 34.0f - 4.0f;
 			vec4_t scrollBg = { 0.05f, 0.10f, 0.20f, 0.60f };
 			vec4_t scrollThumb = { 0.10f, 0.70f, 1.00f, 0.85f };
 			SCR_FillRect( barX, barY, 3.0f, barH, scrollBg );
-
-			float calcH = barH * ((float)maxVisible / (float)g_rpgShop.count);
-			float thumbH = (calcH < 12.0f) ? 12.0f : calcH;
-
-			float maxScroll = (float)(g_rpgShop.count - maxVisible);
-			float thumbY = barY + (barH - thumbH) * ((float)startIdx / maxScroll);
+			const float calcH = barH * ( (float)maxVisible / (float)g_rpgShop.count );
+			const float thumbH = ( calcH < 12.0f ) ? 12.0f : calcH;
+			const float maxScroll = (float)( g_rpgShop.count - maxVisible );
+			const float thumbY = barY + ( barH - thumbH ) * ( (float)startIdx / maxScroll );
 			SCR_FillRect( barX, thumbY, 3.0f, thumbH, scrollThumb );
 		}
 	}
 
-	SCR_DrawVirtualString( winX + 18.0f, winY + winH - 15.0f, 3.8f, "^7Scroll ^3[Mouse Wheel]^7 or Click buttons", whiteColor );
+	SCR_UIFooter( winX, winY, winW, winH, tint, "^7Scroll with the ^3mouse wheel^7, click BUY / SELL" );
 }
-
-
 
 /*
 ==================
@@ -2084,62 +2108,58 @@ void SCR_DrawQuestOverlay( void ) {
 	if ( !cg_drawQuest || !cg_drawQuest->integer ) return;
 	if ( !g_rpgQuest.active ) return;
 
-	// Modal Window Dimensions (Horizontal 380x304 centered panel using quest_bg.tga)
-	float winW = 380.0f;
-	float winH = 304.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 88.0f;
+	const float winW = 380.0f, winH = 304.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 88.0f;
+	vec4_t tint  = { 0.25f, 0.85f, 0.55f, 1.0f };
+	vec4_t dim   = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIWindow( winX, winY, winW, winH, "^2DAILY ^7QUESTS", tint, qtrue );
 
-	if ( s_hQuestBg <= 0 && re && re->RegisterShader ) {
-		s_hQuestBg = re->RegisterShader( "gfx/rpg_hud/quest_bg" );
-	}
-
-	if ( s_hQuestBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hQuestBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		vec4_t borderColor = { 0.20f, 0.80f, 0.50f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-	}
-
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	// Close Button instruction (nudged to Y + 14.0f to match style guidelines)
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 14.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	// Daily Quests Title Header (centered, right above the yellow underline)
-	float qTitleW = SCR_GetStringWidth( "Daily Quests", 8.5f );
-	float qTitleX = winX + (winW - qTitleW) * 0.5f;
-	SCR_DrawVirtualString( qTitleX, winY + 32.0f, 8.5f, "^3Daily Quests", yellowCol );
-
-	// Daily Quests Content
 	if ( g_rpgQuest.questCount == 0 ) {
-		SCR_DrawVirtualString( winX + winW * 0.5f - 80.0f, winY + 80.0f, 5.2f, "^7No daily quests available.", whiteColor );
+		SCR_DrawVirtualString( winX + 20.0f, winY + 50.0f, 5.0f, "^7No daily quests available.", white );
 	} else {
 		for ( int i = 0; i < g_rpgQuest.questCount && i < 3; i++ ) {
 			rpgQuestEntry_t *q = &g_rpgQuest.quests[i];
-			float boxY = winY + 58.0f + (i * 78.0f);
+			const float cx = winX + 16.0f, cw = winW - 32.0f;
+			const float cy = winY + 38.0f + (float)i * 80.0f;
+			SCR_UIRowBegin( i * 2 );
 
+			vec4_t cardBg = { 0.06f, 0.12f, 0.20f, 0.85f };
+			vec4_t cardBorder = { 0.20f, 0.45f, 0.65f, 0.60f };
 			if ( q->done ) {
-				// Line 1: Description (size 6.2f, nudged right)
-				SCR_DrawVirtualString( winX + 34.0f, boxY + 14.0f, 6.2f, va( "^3%d. ^2[DONE] ^7%s", q->id, q->desc ), whiteColor );
-				// Line 2: Progress & Rewards (size 5.4f, nudged right)
-				SCR_DrawVirtualString( winX + 40.0f, boxY + 42.0f, 5.4f, "^2Completed!", whiteColor );
-				SCR_DrawVirtualString( winX + 175.0f, boxY + 42.0f, 5.4f, va( "^5Rewards: ^3+%d CR ^2+%d Elo", q->rewardCr, q->rewardFr ), whiteColor );
-				SCR_DrawVirtualString( winX + winW - 90.0f, boxY + 42.0f, 5.4f, va( "^6[%s]", q->mode ), whiteColor );
-			} else {
-				// Line 1: Description (size 6.2f, nudged right)
-				SCR_DrawVirtualString( winX + 34.0f, boxY + 14.0f, 6.2f, va( "^3%d. ^7%s", q->id, q->desc ), whiteColor );
-				// Line 2: Progress & Rewards (size 5.4f, nudged right)
-				SCR_DrawVirtualString( winX + 40.0f, boxY + 42.0f, 5.4f, va( "^5Progress: %d/%d", q->prog, q->goal ), whiteColor );
-				SCR_DrawVirtualString( winX + 175.0f, boxY + 42.0f, 5.4f, va( "^5Rewards: ^3+%d CR ^2+%d Elo", q->rewardCr, q->rewardFr ), whiteColor );
-				SCR_DrawVirtualString( winX + winW - 90.0f, boxY + 42.0f, 5.4f, va( "^6[%s]", q->mode ), whiteColor );
+				cardBg[0] = 0.06f; cardBg[1] = 0.22f; cardBg[2] = 0.14f;
+				cardBorder[0] = 0.25f; cardBorder[1] = 0.85f; cardBorder[2] = 0.45f; cardBorder[3] = 0.80f;
 			}
+			SCR_UIPanel( cx, cy, cw, 72.0f, 7.0f, cardBg, cardBorder, NULL );
+
+			char descFit[96];
+			SCR_FitText( q->desc, descFit, sizeof( descFit ), cw - 80.0f, 5.2f );
+			SCR_DrawVirtualString( cx + 14.0f, cy + 8.0f, 5.2f, va( "^3%d. ^7%s", q->id, descFit ), white );
+			if ( q->done ) {
+				vec4_t chipFill = { 0.08f, 0.30f, 0.16f, 1.0f };
+				vec4_t chipBorder = { 0.25f, 0.85f, 0.45f, 1.0f };
+				SCR_UIChip( cx + cw - 50.0f, cy + 6.0f, 38.0f, 14.0f, "DONE", 3.8f, chipFill, chipBorder, white );
+			}
+
+			// progress bar fills in as the window opens
+			float ratio = q->goal > 0 ? (float)q->prog / (float)q->goal : 0.0f;
+			if ( q->done ) ratio = 1.0f;
+			vec4_t lo = { 0.08f, 0.55f, 0.90f, 1.0f };
+			vec4_t hi = { 0.30f, 0.85f, 1.00f, 1.0f };
+			if ( q->done ) { lo[0] = 0.12f; lo[1] = 0.60f; lo[2] = 0.28f; hi[0] = 0.35f; hi[1] = 0.90f; hi[2] = 0.50f; }
+			SCR_UIBar( cx + 14.0f, cy + 30.0f, cw - 90.0f, 7.0f, ratio * SCR_UIOpenEase( 250.0f + 120.0f * (float)i, 600.0f ), lo, hi );
+			const char *progStr = q->done ? "^2Completed" : va( "^7%d / %d", q->prog, q->goal );
+			SCR_DrawVirtualString( cx + cw - 70.0f, cy + 29.0f, 4.2f, progStr, white );
+
+			SCR_DrawVirtualString( cx + 14.0f, cy + 48.0f, 4.4f, va( "^5Rewards: ^3+%d CR  ^2+%d Elo", q->rewardCr, q->rewardFr ), white );
+			const char *modeStr = va( "^6%s", q->mode );
+			SCR_DrawVirtualString( cx + cw - 14.0f - SCR_GetStringWidth( modeStr, 4.4f ), cy + 48.0f, 4.4f, modeStr, white );
+			SCR_UIRowEnd();
 		}
 	}
-
-	SCR_DrawVirtualString( winX + 21.0f, winY + winH - 15.0f, 3.8f, "^7Complete daily quests to earn rewards  |  ^3ESC^7 to close", whiteColor );
+	(void)dim;
+	SCR_UIFooter( winX, winY, winW, winH, tint, "^7Complete daily quests to earn rewards  |  ^3ESC^7 to close" );
 }
 
 /*
@@ -2154,115 +2174,75 @@ void SCR_DrawInventoryOverlay( void ) {
 	if ( !cg_drawInventory || !cg_drawInventory->integer ) return;
 	if ( !g_rpgInventory.active ) return;
 
-	// Modal Window Dimensions (Vertical 240x350 right-aligned panel using inventory_bg.tga)
-	float winW = 240.0f;
-	float winH = 350.0f;
-	float winX = 640.0f - winW - 14.0f; // Right-aligned side panel!
-	float winY = 50.0f;
+	// geometry matches the click handling in cl_keys.cpp (rows from winY+68, 36 apart; USE button)
+	const float winW = 240.0f, winH = 350.0f;
+	const float winX = 640.0f - winW - 14.0f;
+	const float winY = 50.0f;
+	vec4_t tint  = { 0.20f, 0.70f, 1.00f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIWindow( winX, winY, winW, winH, "^5IN^7VENTORY", tint, qtrue );
+	SCR_DrawVirtualString( winX + 18.0f, winY + 36.0f, 4.0f, va( "^7%d item type%s", g_rpgInventory.invCount, g_rpgInventory.invCount == 1 ? "" : "s" ), white );
 
-	if ( s_hInventoryBg <= 0 && re && re->RegisterShader ) {
-		s_hInventoryBg = re->RegisterShader( "gfx/rpg_hud/inventory_bg" );
-	}
-
-	if ( s_hInventoryBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hInventoryBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		vec4_t borderColor = { 0.10f, 0.75f, 0.95f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-
-		vec4_t headerBg = { 0.08f, 0.20f, 0.38f, 0.88f };
-		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
-	}
-
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	float titleW = SCR_GetStringWidth( "INVENTORY", 8.5f );
-	float titleX = winX + (winW - titleW) * 0.5f;
-	SCR_DrawVirtualString( titleX, winY + 23.0f, 8.5f, "^3INVENTORY", yellowCol );
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 14.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
-	SCR_FillRect( winX + 10.0f, winY + 34.0f, winW - 20.0f, 1.0f, divColor );
-
-	float mx = (float)g_rpgMouseX;
-	float my = (float)g_rpgMouseY;
+	const float mx = (float)g_rpgMouseX;
+	const float my = (float)g_rpgMouseY;
 
 	if ( g_rpgInventory.invCount == 0 ) {
-		SCR_DrawVirtualString( winX + winW * 0.5f - 60.0f, winY + 120.0f, 5.2f, "^7Inventory empty.", whiteColor );
+		SCR_DrawVirtualString( winX + 18.0f, winY + 80.0f, 5.0f, "^7Inventory empty.", white );
 	} else {
-		int maxVisible = 6;
+		const int maxVisible = 6;
 		int startIdx = g_rpgInventory.scroll;
 		if ( startIdx < 0 ) startIdx = 0;
 
 		float rowY = winY + 68.0f;
-		for ( int i = startIdx; i < g_rpgInventory.invCount && (i - startIdx) < maxVisible; i++ ) {
+		for ( int i = startIdx; i < g_rpgInventory.invCount && ( i - startIdx ) < maxVisible; i++ ) {
 			rpgInvEntry_t *item = &g_rpgInventory.inv[i];
+			SCR_UIRowBegin( i - startIdx );
 
 			char cleanDisplay[256];
-			Q_strncpyz( cleanDisplay, item->display, sizeof(cleanDisplay) );
+			Q_strncpyz( cleanDisplay, item->display, sizeof( cleanDisplay ) );
 			if ( strstr( cleanDisplay, "5DB7A2" ) || strstr( cleanDisplay, "XP Boost" ) ) {
-				Com_sprintf( cleanDisplay, sizeof(cleanDisplay), "^2XP Boost ^7(50+ for 1 round)" );
+				Com_sprintf( cleanDisplay, sizeof( cleanDisplay ), "^2XP Boost ^7(50+ for 1 round)" );
 			}
 
-			qboolean rowHover = (qboolean)( mx >= winX + 8.0f && mx <= winX + winW - 8.0f && my >= rowY && my <= rowY + 34.0f );
-			if ( rowHover ) {
-				vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.15f };
-				SCR_FillRect( winX + 8.0f, rowY, winW - 16.0f, 34.0f, hCol );
-			}
+			const qboolean rowHover = (qboolean)( mx >= winX + 8.0f && mx <= winX + winW - 8.0f && my >= rowY && my <= rowY + 34.0f );
+			vec4_t rowBg = { 1.0f, 1.0f, 1.0f, ( ( i - startIdx ) % 2 == 0 ) ? 0.05f : 0.02f };
+			if ( rowHover ) { rowBg[0] = 0.20f; rowBg[1] = 0.70f; rowBg[2] = 1.00f; rowBg[3] = 0.16f; }
+			SCR_FillRect( winX + 12.0f, rowY, winW - 24.0f, 34.0f, rowBg );
+			if ( rowHover ) SCR_FillRect( winX + 12.0f, rowY, 2.0f, 34.0f, tint );
 
-			// Item Name and Qty (shifted right to avoid overlaying left border)
-			SCR_DrawVirtualString( winX + 25.0f, rowY + 2.0f, 4.8f, cleanDisplay, whiteColor );
-			SCR_DrawVirtualString( winX + 25.0f, rowY + 16.0f, 4.2f, va( "^5Owned: x%d", item->qty ), whiteColor );
+			char fit[256];
+			SCR_FitText( cleanDisplay, fit, sizeof( fit ), winW - 110.0f, 4.6f );
+			SCR_DrawVirtualString( winX + 20.0f, rowY + 4.0f, 4.6f, fit, white );
+			SCR_DrawVirtualString( winX + 20.0f, rowY + 18.0f, 4.0f, va( "^5Owned: x%d", item->qty ), white );
 
-			// Interactive USE Button (shifted left to avoid overlaying right border)
-			float btnUseX = winX + winW - 71.0f;
-			float btnY = rowY + 8.0f;
-			float btnW = 45.0f;
-			float btnH = 18.0f;
+			const float btnUseX = winX + winW - 71.0f;
+			const float btnY = rowY + 8.0f;
+			const float btnW = 45.0f, btnH = 18.0f;
+			const qboolean useHover = (qboolean)( mx >= btnUseX && mx <= btnUseX + btnW && my >= btnY && my <= btnY + btnH );
+			vec4_t green = { 0.20f, 0.85f, 0.40f, 1.0f };
+			SCR_UIButton( btnUseX, btnY, btnW, btnH, "USE", 3.8f, useHover, green );
 
-			qboolean useHover = (qboolean)( mx >= btnUseX && mx <= btnUseX + btnW && my >= btnY && my <= btnY + btnH );
-
-			if ( s_hUseBtn <= 0 && re && re->RegisterShader ) {
-				s_hUseBtn = re->RegisterShader( "gfx/rpg_hud/use_btn" );
-			}
-			if ( s_hUseBtn > 0 ) {
-				vec4_t uCol = { 1.0f, 1.0f, 1.0f, useHover ? 1.00f : 0.70f };
-				re->SetColor( uCol );
-				SCR_DrawPic( btnUseX, btnY, btnW, btnH, s_hUseBtn );
-				re->SetColor( NULL );
-			} else {
-				vec4_t useCol = { 0.00f, 0.50f, 0.00f, 0.40f };
-				vec4_t useColHover = { 0.00f, 0.80f, 0.00f, 0.70f };
-				SCR_DrawRoundedGlassPanel( btnUseX, btnY, btnW, btnH, 2.0f, useHover ? useColHover : useCol, NULL );
-				SCR_DrawVirtualString( btnUseX + 11.0f, btnY + 4.0f, 3.8f, "USE", whiteColor );
-			}
-
+			SCR_UIRowEnd();
 			rowY += 36.0f;
 		}
 
-		// Scroll Bar
 		if ( g_rpgInventory.invCount > maxVisible ) {
-			float barX = winX + winW - 6.0f;
-			float barY = winY + 42.0f;
-			float barH = maxVisible * 34.0f - 4.0f;
+			const float barX = winX + winW - 7.0f;
+			const float barY = winY + 62.0f;
+			const float barH = maxVisible * 36.0f - 4.0f;
 			vec4_t scrollBg = { 0.05f, 0.10f, 0.20f, 0.60f };
 			vec4_t scrollThumb = { 0.10f, 0.70f, 1.00f, 0.85f };
 			SCR_FillRect( barX, barY, 3.0f, barH, scrollBg );
-
-			float calcH = barH * ((float)maxVisible / (float)g_rpgInventory.invCount);
-			float thumbH = (calcH < 12.0f) ? 12.0f : calcH;
-
-			float maxScroll = (float)(g_rpgInventory.invCount - maxVisible);
-			float thumbY = barY + (barH - thumbH) * ((float)startIdx / maxScroll);
+			const float calcH = barH * ( (float)maxVisible / (float)g_rpgInventory.invCount );
+			const float thumbH = ( calcH < 12.0f ) ? 12.0f : calcH;
+			const float maxScroll = (float)( g_rpgInventory.invCount - maxVisible );
+			const float thumbY = barY + ( barH - thumbH ) * ( (float)startIdx / maxScroll );
 			SCR_FillRect( barX, thumbY, 3.0f, thumbH, scrollThumb );
 		}
 	}
 
-	SCR_DrawVirtualString( winX + 22.0f, winY + winH - 14.0f, 3.8f, "^7Scroll ^3[Mouse Wheel]^7 or Click buttons", whiteColor );
+	SCR_UIFooter( winX, winY, winW, winH, tint, "^7Scroll with the ^3mouse wheel^7, click USE" );
 }
-
 
 /*
 ==================
@@ -2276,62 +2256,55 @@ void SCR_DrawAchievementsOverlay( void ) {
 	if ( !cg_drawAch || !cg_drawAch->integer ) return;
 	if ( !g_rpgAch.active ) return;
 
-	float winW = 270.0f;
-	float winH = 360.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 60.0f;
+	const float winW = 270.0f, winH = 360.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 60.0f;
+	vec4_t tint  = { 0.95f, 0.75f, 0.20f, 1.0f };
+	vec4_t dim   = { 0.50f, 0.58f, 0.68f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIWindow( winX, winY, winW, winH, "^3ACHIEVEMENTS", tint, qtrue );
 
-	if ( s_hAchBg <= 0 && re && re->RegisterShader ) {
-		s_hAchBg = re->RegisterShader( "gfx/rpg_hud/ach_bg" );
-	}
-
-	if ( s_hAchBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hAchBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		vec4_t borderColor = { 0.85f, 0.65f, 0.10f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-
-		vec4_t headerBg = { 0.35f, 0.25f, 0.05f, 0.88f };
-		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
-	}
-
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	// Top corner red ESC close button (drawn at winY + 9.0f)
-	SCR_DrawVirtualString( winX + winW - 35.0f, winY + 9.0f, 4.4f, "^1[ESC]", yellowCol );
-
-	// Title header centered in gold header box (at winY + 22.0f)
-	float achTitleW = SCR_GetStringWidth( "ACHIEVEMENTS", 6.5f );
-	float achTitleX = winX + (winW - achTitleW) * 0.5f;
-	SCR_DrawVirtualString( achTitleX, winY + 22.0f, 6.5f, "^3ACHIEVEMENTS", yellowCol );
+	int unlocked = 0;
+	for ( int i = 0; i < g_rpgAch.count && i < 9; i++ ) if ( g_rpgAch.entries[i].unlocked ) unlocked++;
+	const int shown = g_rpgAch.count > 9 ? 9 : g_rpgAch.count;
 
 	if ( g_rpgAch.count == 0 ) {
-		SCR_DrawVirtualString( winX + winW * 0.5f - 80.0f, winY + 100.0f, 5.2f, "^7No achievements loaded.", whiteColor );
+		SCR_DrawVirtualString( winX + 20.0f, winY + 50.0f, 5.0f, "^7No achievements loaded.", white );
 	} else {
-		// Shifted down to winY + 68.0f below header frame line
-		float rowY = winY + 68.0f;
-		for ( int i = 0; i < g_rpgAch.count && i < 9; i++ ) {
+		const float rowH = 28.0f;
+		const float rowStart = winY + 40.0f;
+		for ( int i = 0; i < shown; i++ ) {
 			rpgAchEntry_t *e = &g_rpgAch.entries[i];
+			const float ry = rowStart + (float)i * rowH;
+			SCR_UIRowBegin( i );
+			vec4_t zebra = { 1.0f, 1.0f, 1.0f, ( i % 2 == 0 ) ? 0.05f : 0.02f };
+			SCR_FillRect( winX + 12.0f, ry, winW - 24.0f, rowH - 2.0f, zebra );
 
-			// Shifted to winX + 26.0f to prevent left border collision
+			const float ty = ry + ( rowH - 2.0f - 4.4f * 1.2f ) * 0.5f;
+			// status box: filled green for unlocked, hollow grey for locked
+			const float bx = winX + 20.0f, by = ry + ( rowH - 2.0f - 9.0f ) * 0.5f;
 			if ( e->unlocked ) {
-				SCR_DrawVirtualString( winX + 26.0f, rowY, 4.0f, va( "^2[UNLOCKED] ^7%s", e->name ), whiteColor );
-				SCR_DrawVirtualString( winX + winW - 68.0f, rowY, 4.0f, va( "^5+%d CR", e->rewardCr ), whiteColor );
+				vec4_t g = { 0.25f, 0.85f, 0.45f, 1.0f };
+				SCR_FillRect( bx, by, 9.0f, 9.0f, g );
+				vec4_t dark = { 0.04f, 0.10f, 0.06f, 1.0f };
+				SCR_FillRect( bx + 2.0f, by + 4.5f, 2.0f, 2.0f, dark );
+				SCR_FillRect( bx + 4.0f, by + 2.5f, 2.0f, 4.0f, dark );
 			} else {
-				SCR_DrawVirtualString( winX + 26.0f, rowY, 4.0f, va( "^7[LOCKED] %s", e->name ), whiteColor );
-				SCR_DrawVirtualString( winX + winW - 68.0f, rowY, 4.0f, va( "^3+%d CR", e->rewardCr ), whiteColor );
+				SCR_FillRect( bx, by, 9.0f, 1.0f, dim );
+				SCR_FillRect( bx, by + 8.0f, 9.0f, 1.0f, dim );
+				SCR_FillRect( bx, by, 1.0f, 9.0f, dim );
+				SCR_FillRect( bx + 8.0f, by, 1.0f, 9.0f, dim );
 			}
-			rowY += 18.0f;
+			char fit[96];
+			SCR_FitText( e->name, fit, sizeof( fit ), winW - 130.0f, 4.4f );
+			SCR_DrawVirtualString( bx + 16.0f, ty, 4.4f, fit, e->unlocked ? white : dim );
+			const char *rw = va( "%s+%d CR", e->unlocked ? "^5" : "^3", e->rewardCr );
+			SCR_DrawVirtualString( winX + winW - 20.0f - SCR_GetStringWidth( rw, 4.2f ), ty, 4.2f, rw, white );
+			SCR_UIRowEnd();
 		}
 	}
-
-	// Press ESC text centered at bottom
-	float escW = SCR_GetStringWidth( "Press [ESC] to close", 4.5f );
-	SCR_DrawVirtualString( winX + (winW - escW) * 0.5f, winY + winH - 13.0f, 4.5f, "^7Press ^1[ESC]^7 to close", whiteColor );
+	SCR_UIFooter( winX, winY, winW, winH, tint, va( "^7Unlocked ^3%d^7 / %d  |  ^1ESC^7 to close", unlocked, shown ) );
 }
-
 
 /*
 ==================
@@ -2345,70 +2318,15 @@ void SCR_DrawTopCreditsOverlay( void ) {
 	if ( !cg_drawTopCredits || !cg_drawTopCredits->integer ) return;
 	if ( !g_rpgTopCredits.active ) return;
 
-	// Modal Window Dimensions (Vertical 290x400 centered card using leaderboard_bg.tga)
-	float winW = 290.0f;
-	float winH = 400.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 40.0f;
-
-	static qhandle_t s_hLeaderboardBg = 0;
-	if ( s_hLeaderboardBg <= 0 && re && re->RegisterShader ) {
-		s_hLeaderboardBg = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
+	char names[10][64];
+	char values[10][24];
+	const int n = g_rpgTopCredits.count > 10 ? 10 : g_rpgTopCredits.count;
+	for ( int i = 0; i < n; i++ ) {
+		Q_strncpyz( names[i], g_rpgTopCredits.entries[i].name, sizeof( names[i] ) );
+		Com_sprintf( values[i], sizeof( values[i] ), "^5%d CR", g_rpgTopCredits.entries[i].credits );
 	}
-
-	if ( s_hLeaderboardBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hLeaderboardBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		vec4_t borderColor = { 0.20f, 0.85f, 0.40f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-	}
-
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	float titleW = SCR_GetStringWidth( "TOP WEALTH", 8.2f );
-	float titleX = winX + (winW - titleW) * 0.5f;
-	SCR_DrawVirtualString( titleX, winY + 23.0f, 8.2f, "^2TOP WEALTH", yellowCol );
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 14.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	vec4_t divColor = { 0.20f, 0.85f, 0.40f, 0.70f };
-	float colY = winY + 62.0f;
-
-	// Headers: # | PLAYER NAME | CREDITS
-	SCR_DrawVirtualString( winX + 25.0f, colY, 4.8f, "^5#", whiteColor );
-	SCR_DrawVirtualString( winX + 60.0f, colY, 4.8f, "^5PLAYER NAME", whiteColor );
-	SCR_DrawVirtualString( winX + winW - 80.0f, colY, 4.8f, "^5CREDITS", whiteColor );
-
-	float rowStartY = colY + 20.0f;
-	float rowHeight = 23.0f;
-
-	for ( int i = 0; i < 10; i++ ) {
-		float currentY = rowStartY + (i * rowHeight);
-
-		if ( i % 2 == 0 ) {
-			vec4_t rowBg = { 0.05f, 0.20f, 0.10f, 0.25f };
-			SCR_FillRect( winX + 10.0f, currentY, winW - 20.0f, rowHeight - 2.0f, rowBg );
-		}
-
-		if ( i < g_rpgTopCredits.count ) {
-			topCreditsEntry_t *e = &g_rpgTopCredits.entries[i];
-			// Rank
-			char numStr[16];
-			Com_sprintf( numStr, sizeof(numStr), (i < 3) ? "^3#%d" : "^7#%d", i + 1 );
-			SCR_DrawVirtualString( winX + 25.0f, currentY + 2.0f, 4.8f, numStr, whiteColor );
-			
-			// Name
-			char pNameStr[64];
-			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%.20s", e->name );
-			SCR_DrawVirtualString( winX + 60.0f, currentY + 2.0f, 4.8f, pNameStr, whiteColor );
-			
-			// Credits
-			SCR_DrawVirtualString( winX + winW - 80.0f, currentY + 2.0f, 4.8f, va( "^5%d CR", e->credits ), whiteColor );
-		}
-	}
-
-	SCR_DrawVirtualString( winX + 21.0f, winY + winH - 15.0f, 4.0f, "^7Press ^1[ESC]^7 to close Wealth Leaderboard", whiteColor );
+	vec4_t tint = { 0.25f, 0.85f, 0.45f, 1.0f };
+	SCR_UIDrawTopList( "^2TOP ^7WEALTH", tint, "CREDITS", n, names, values, "^7Press ^1ESC^7 to close the Wealth Leaderboard" );
 }
 
 
@@ -2424,71 +2342,15 @@ void SCR_DrawTopPotatoOverlay( void ) {
 	if ( !cg_drawTopPotato || !cg_drawTopPotato->integer ) return;
 	if ( !g_rpgTopPotato.active ) return;
 
-	// Modal Window Dimensions (Vertical 290x400 centered card using leaderboard_bg.tga)
-	float winW = 290.0f;
-	float winH = 400.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 40.0f;
-
-	static qhandle_t s_hLeaderboardBg = 0;
-	if ( s_hLeaderboardBg <= 0 && re && re->RegisterShader ) {
-		s_hLeaderboardBg = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
+	char names[10][64];
+	char values[10][24];
+	const int n = g_rpgTopPotato.count > 10 ? 10 : g_rpgTopPotato.count;
+	for ( int i = 0; i < n; i++ ) {
+		Q_strncpyz( names[i], g_rpgTopPotato.entries[i].name, sizeof( names[i] ) );
+		Com_sprintf( values[i], sizeof( values[i] ), "^7%d", g_rpgTopPotato.entries[i].ticks );
 	}
-
-	if ( s_hLeaderboardBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hLeaderboardBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		vec4_t borderColor = { 1.00f, 0.45f, 0.10f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
-	}
-
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	float titleW = SCR_GetStringWidth( "TOP POTATO", 8.2f );
-	float titleX = winX + (winW - titleW) * 0.5f;
-	SCR_DrawVirtualString( titleX, winY + 23.0f, 8.2f, "^1TOP POTATO", yellowCol );
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 14.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	vec4_t divColor = { 1.00f, 0.45f, 0.10f, 0.70f };
-	float colY = winY + 62.0f;
-	SCR_FillRect( winX + 10.0f, colY + 16.0f, winW - 20.0f, 1.0f, divColor );
-
-	// Headers: # | PLAYER NAME | TICKS
-	SCR_DrawVirtualString( winX + 15.0f, colY, 4.8f, "^5#", whiteColor );
-	SCR_DrawVirtualString( winX + 35.0f, colY, 4.8f, "^5PLAYER NAME", whiteColor );
-	SCR_DrawVirtualString( winX + winW - 95.0f, colY, 4.8f, "^5TICKS", whiteColor );
-
-	float rowStartY = colY + 20.0f;
-	float rowHeight = 23.0f;
-
-	for ( int i = 0; i < 10; i++ ) {
-		float currentY = rowStartY + (i * rowHeight);
-
-		if ( i % 2 == 0 ) {
-			vec4_t rowBg = { 0.25f, 0.10f, 0.05f, 0.25f };
-			SCR_FillRect( winX + 10.0f, currentY, winW - 20.0f, rowHeight - 2.0f, rowBg );
-		}
-
-		if ( i < g_rpgTopPotato.count ) {
-			topPotatoEntry_t *e = &g_rpgTopPotato.entries[i];
-			// Rank
-			char numStr[16];
-			Com_sprintf( numStr, sizeof(numStr), (i < 3) ? "^3#%d" : "^7#%d", i + 1 );
-			SCR_DrawVirtualString( winX + 15.0f, currentY + 2.0f, 4.8f, numStr, whiteColor );
-			
-			// Name
-			char pNameStr[64];
-			Com_sprintf( pNameStr, sizeof(pNameStr), "^7%.20s", e->name );
-			SCR_DrawVirtualString( winX + 35.0f, currentY + 2.0f, 4.8f, pNameStr, whiteColor );
-			
-			// Ticks
-			SCR_DrawVirtualString( winX + winW - 95.0f, currentY + 2.0f, 4.8f, va( "%d", e->ticks ), whiteColor );
-		}
-	}
-
-	SCR_DrawVirtualString( winX + 21.0f, winY + winH - 15.0f, 4.0f, "^7Press ^1[ESC]^7 to close Potato Leaderboard", whiteColor );
+	vec4_t tint = { 1.00f, 0.50f, 0.15f, 1.0f };
+	SCR_UIDrawTopList( "^1TOP ^7POTATO", tint, "TICKS", n, names, values, "^7Press ^1ESC^7 to close the Potato Leaderboard" );
 }
 
 
@@ -2586,42 +2448,12 @@ void SCR_SetAvatarIndex( int idx ) {
 }
 
 static void SCR_DrawSettingButton( float x, float y, float w, float h, const char *text, float textSz, qboolean hover ) {
-	if ( hover && s_hSettingsBtnHover > 0 ) {
-		SCR_DrawPic( x, y, w, h, s_hSettingsBtnHover );
-	} else if ( s_hSettingsBtnNormal > 0 ) {
-		SCR_DrawPic( x, y, w, h, s_hSettingsBtnNormal );
-	} else {
-		vec4_t bg = { 0.1f, 0.2f, 0.3f, 0.8f };
-		vec4_t border = { 0.0f, 0.8f, 1.0f, 1.0f };
-		if ( hover ) {
-			bg[0] += 0.1f; bg[1] += 0.1f; bg[2] += 0.1f;
-		}
-		SCR_DrawRoundedGlassPanel( x, y, w, h, 4.0f, bg, border );
-	}
-	float strW = SCR_GetStringWidth( text, textSz );
-	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
-	SCR_DrawVirtualString( x + (w - strW) * 0.5f, y + (h - textSz * 1.1f) * 0.5f, textSz, text, white );
+	vec4_t tint = { 0.20f, 0.70f, 1.00f, 1.0f };
+	SCR_UIButton( x, y, w, h, text, textSz, hover, tint );
 }
 
 static void SCR_DrawSettingSlider( float x, float y, float w, float h, float progress, const char *label, const char *valueText ) {
-	vec4_t labelCol = { 0.8f, 0.8f, 0.8f, 1.0f };
-	SCR_DrawVirtualString( x, y - 10.0f, 4.0f, label, labelCol );
-	SCR_DrawVirtualString( x + w - SCR_GetStringWidth( valueText, 4.0f ), y - 10.0f, 4.0f, valueText, labelCol );
-
-	if ( s_hSettingsSliderTrack > 0 ) {
-		SCR_DrawPic( x, y, w, h, s_hSettingsSliderTrack );
-	} else {
-		vec4_t trackCol = { 0.05f, 0.1f, 0.15f, 1.0f };
-		SCR_FillRect( x, y + h * 0.4f, w, h * 0.2f, trackCol );
-	}
-
-	float thumbX = x + progress * (w - 20.0f);
-	if ( s_hSettingsSliderThumb > 0 ) {
-		SCR_DrawPic( thumbX, y - (20.0f - h) * 0.5f, 20.0f, 20.0f, s_hSettingsSliderThumb );
-	} else {
-		vec4_t thumbCol = { 1.0f, 1.0f, 1.0f, 1.0f };
-		SCR_FillRect( thumbX, y - 4.0f, 20.0f, h + 8.0f, thumbCol );
-	}
+	SCR_UISlider( x, y, w, h, progress, label, valueText );
 }
 
 static qboolean s_draggingSliderX = qfalse;
@@ -2877,18 +2709,17 @@ void SCR_DrawCollectionOverlay( void ) {
 	vec4_t segOn = { 0.10f, 0.75f, 0.95f, 1.0f };
 	vec4_t segDone = { 0.25f, 0.85f, 0.45f, 1.0f };
 
-	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 8.0f, bgColor, borderColor );
-
-	float titleW = SCR_GetStringWidth( "COLLECTION BOOK", 8.0f );
-	SCR_DrawVirtualString( winX + ( winW - titleW ) * 0.5f, winY + 12.0f, 8.0f, "^3COLLECTION BOOK", yellowCol );
-	SCR_DrawVirtualString( winX + winW - 44.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
+	(void)bgColor; (void)borderColor; (void)yellowCol;
+	vec4_t colTint = { 1.0f, 0.80f, 0.20f, 1.0f };
+	SCR_UIWindow( winX, winY, winW, winH, "^3COLLECTION ^7BOOK", colTint, qtrue );
 
 	int totalHave = 0, totalMax = 0;
 	for ( int i = 0; i < 5; i++ ) {
 		totalHave += g_rpgCollection.sets[i].have;
 		totalMax += 4;
 	}
-	SCR_DrawVirtualString( winX + 14.0f, winY + 14.0f, 4.4f, va( "^7Found ^3%d^7 / %d", totalHave, totalMax ), whiteColor );
+	const char *foundStr = va( "^7Found ^3%d^7 / %d", totalHave, totalMax );
+	SCR_DrawVirtualString( winX + winW - 52.0f - SCR_GetStringWidth( foundStr, 4.4f ), winY + 12.0f, 4.4f, foundStr, whiteColor );
 
 	// Four set cards in a 2x2 grid
 	const float gap = 8.0f;
@@ -2898,7 +2729,8 @@ void SCR_DrawCollectionOverlay( void ) {
 		const rpgColSet_t *cs = &g_rpgCollection.sets[s];
 		const float cx = winX + 12.0f + ( s % 2 ) * ( cardW + gap );
 		const float cy = winY + 38.0f + ( s / 2 ) * ( cardH + gap );
-		SCR_DrawRoundedGlassPanel( cx, cy, cardW, cardH, 5.0f, cs->done ? cardDone : cardBg, cs->done ? doneBorder : cardBorder );
+		SCR_UIRowBegin( s );
+		SCR_UIPanel( cx, cy, cardW, cardH, 7.0f, cs->done ? cardDone : cardBg, cs->done ? doneBorder : cardBorder, NULL );
 
 		SCR_DrawVirtualString( cx + 10.0f, cy + 7.0f, 5.0f, va( "^3%s", cs->name[0] ? cs->name : "???" ), whiteColor );
 		SCR_DrawVirtualString( cx + cardW - 38.0f, cy + 7.0f, 5.0f, va( "%s%d/4", cs->done ? "^2" : "^7", cs->have ), whiteColor );
@@ -2917,6 +2749,7 @@ void SCR_DrawCollectionOverlay( void ) {
 		} else if ( cs->reward > 0 ) {
 			SCR_DrawVirtualString( cx + 10.0f, cy + cardH - 16.0f, 4.2f, va( "^7Set bonus: ^3+%d CR", cs->reward ), whiteColor );
 		}
+		SCR_UIRowEnd();
 	}
 
 	// Legendary strip
@@ -2925,7 +2758,8 @@ void SCR_DrawCollectionOverlay( void ) {
 		const float ly = winY + 38.0f + 2 * ( cardH + gap );
 		const float lw = winW - 24.0f;
 		vec4_t legBorder = { 1.0f, 0.80f, 0.20f, 0.55f };
-		SCR_DrawRoundedGlassPanel( winX + 12.0f, ly, lw, 54.0f, 5.0f, cardBg, legBorder );
+		SCR_UIRowBegin( 4 );
+		SCR_UIPanel( winX + 12.0f, ly, lw, 54.0f, 7.0f, cardBg, legBorder, NULL );
 		SCR_DrawVirtualString( winX + 22.0f, ly + 6.0f, 4.8f, va( "^3Legendary Finds  ^7%d/4", cs->have ), whiteColor );
 		for ( int p = 0; p < 4; p++ ) {
 			const float px = winX + 22.0f + p * ( ( lw - 20.0f ) * 0.25f );
@@ -2942,7 +2776,8 @@ void SCR_DrawCollectionOverlay( void ) {
 		}
 	}
 
-	SCR_DrawVirtualString( winX + 14.0f, winY + winH - 14.0f, 3.8f, "^7Loot drops from kills in FA and Legends.  Sell with ^3!sell <key>^7.  ^3ESC^7 to close", whiteColor );
+	SCR_UIRowEnd();
+	SCR_UIFooter( winX, winY, winW, winH, colTint, "^7Loot drops from kills in FA and Legends.  Sell with ^3!sell <key>^7.  ^3ESC^7 to close" );
 }
 
 /*
@@ -2976,6 +2811,114 @@ static void SCR_RPGXPTest_f( void ) {
 	Cvar_Set( "cg_rpg_level", va( "%d", g_rpgStats.level ) );
 	Cvar_Set( "cg_rpg_xp", va( "%d", g_rpgStats.xp % perLevel ) );
 	Cvar_Set( "cg_rpg_xp_max", va( "%d", perLevel ) );
+}
+
+static void SCR_UIScreenTest_f( void ) {
+	const char *w = Cmd_Argc() > 1 ? Cmd_Argv( 1 ) : "";
+	static const char *nm[10] = { "Je'daii Likima", "Defiant", "Rey_Trainer", "Sentinel", "Cozy_Snoozer", "Mecca Chameleon", "Padawan_Kid", "Rinnegan", "DarkLord99", "NoobSlayer" };
+	if ( !Q_stricmp( w, "lb" ) ) {
+		g_topLeaderboardCount = 10;
+		for ( int i = 0; i < 10; i++ ) {
+			g_topLeaderboard[i].rank = i + 1;
+			g_topLeaderboard[i].fr = 2400 - i * 130;
+			g_topLeaderboard[i].level = 30 - i * 2;
+			Q_strncpyz( g_topLeaderboard[i].rankTitle, i < 3 ? "Jedi Master" : "Padawan", sizeof( g_topLeaderboard[i].rankTitle ) );
+			Q_strncpyz( g_topLeaderboard[i].displayName, nm[i], sizeof( g_topLeaderboard[i].displayName ) );
+		}
+		Cvar_Set( "cg_drawLeaderboard", "1" );
+	} else if ( !Q_stricmp( w, "stats" ) ) {
+		g_rpgStats.active = qtrue;
+		g_rpgStats.level = 4; g_rpgStats.xp = 3245; g_rpgStats.elo = 1191; g_rpgStats.fr = 1191;
+		g_rpgStats.credits = 12450; g_rpgStats.wins = 28; g_rpgStats.losses = 27; g_rpgStats.kills = 50; g_rpgStats.deaths = 70;
+		g_rpgStats.highestStreak = 6; g_rpgStats.triviaWins = 3; g_rpgStats.topRivalCount = 5;
+		Q_strncpyz( g_rpgStats.name, "Je'daii Likima", sizeof( g_rpgStats.name ) );
+		Q_strncpyz( g_rpgStats.rankTitle, "^3Youngling", sizeof( g_rpgStats.rankTitle ) );
+		Q_strncpyz( g_rpgStats.favWeapon, "Lightsaber", sizeof( g_rpgStats.favWeapon ) );
+		Q_strncpyz( g_rpgStats.topRivalName, "Defiant", sizeof( g_rpgStats.topRivalName ) );
+		Cvar_Set( "cg_drawStats", "1" );
+	} else if ( !Q_stricmp( w, "wanted" ) || !Q_stricmp( w, "bounties" ) ) {
+		g_rpgBounty.active = qtrue;
+		g_rpgBounty.isWanted = !Q_stricmp( w, "wanted" ) ? qtrue : qfalse;
+		g_rpgBounty.count = 6;
+		for ( int i = 0; i < 6; i++ ) {
+			g_rpgBounty.entries[i].rank = i + 1;
+			g_rpgBounty.entries[i].streak = 9 - i;
+			g_rpgBounty.entries[i].bounty = 900 - i * 120;
+			Q_strncpyz( g_rpgBounty.entries[i].name, nm[i], sizeof( g_rpgBounty.entries[i].name ) );
+		}
+		Cvar_Set( "cg_drawBounty", "1" );
+	} else if ( !Q_stricmp( w, "shop" ) ) {
+		g_rpgShop.active = qtrue; g_rpgShop.credits = 12450; g_rpgShop.count = 10; g_rpgShop.scroll = 0;
+		for ( int i = 0; i < 10; i++ ) {
+			Q_strncpyz( g_rpgShop.items[i].key, va( "item%d", i ), sizeof( g_rpgShop.items[i].key ) );
+			Q_strncpyz( g_rpgShop.items[i].display, va( "^7Shop Item %d ^5(+%d Force)", i + 1, i * 5 ), sizeof( g_rpgShop.items[i].display ) );
+			g_rpgShop.items[i].price = 250 + i * 150;
+			g_rpgShop.items[i].sellBack = 100 + i * 60;
+		}
+		Cvar_Set( "cg_drawShop", "1" );
+	} else if ( !Q_stricmp( w, "inv" ) ) {
+		g_rpgInventory.active = qtrue; g_rpgInventory.invCount = 4; g_rpgInventory.scroll = 0;
+		for ( int i = 0; i < 4; i++ ) {
+			Q_strncpyz( g_rpgInventory.inv[i].key, va( "inv%d", i ), sizeof( g_rpgInventory.inv[i].key ) );
+			Q_strncpyz( g_rpgInventory.inv[i].display, va( "^7Inventory Item %d", i + 1 ), sizeof( g_rpgInventory.inv[i].display ) );
+			g_rpgInventory.inv[i].qty = 1 + i;
+		}
+		Cvar_Set( "cg_drawInventory", "1" );
+	} else if ( !Q_stricmp( w, "quest" ) ) {
+		g_rpgQuest.active = qtrue; g_rpgQuest.questCount = 3;
+		for ( int i = 0; i < 3; i++ ) {
+			g_rpgQuest.quests[i].id = i + 1;
+			Q_strncpyz( g_rpgQuest.quests[i].desc, i == 0 ? "Win 5 ranked duels" : ( i == 1 ? "Get 20 kills in Full Authentic" : "Reach a 3 win streak" ), sizeof( g_rpgQuest.quests[i].desc ) );
+			g_rpgQuest.quests[i].goal = i == 0 ? 5 : ( i == 1 ? 20 : 3 );
+			g_rpgQuest.quests[i].prog = i == 2 ? 3 : ( i == 0 ? 2 : 11 );
+			g_rpgQuest.quests[i].done = i == 2 ? qtrue : qfalse;
+			g_rpgQuest.quests[i].rewardCr = 300 + i * 100;
+			g_rpgQuest.quests[i].rewardFr = 10 + i * 5;
+			Q_strncpyz( g_rpgQuest.quests[i].mode, i == 1 ? "FA" : "Duel", sizeof( g_rpgQuest.quests[i].mode ) );
+		}
+		Cvar_Set( "cg_drawQuest", "1" );
+	} else if ( !Q_stricmp( w, "ach" ) ) {
+		g_rpgAch.active = qtrue; g_rpgAch.count = 9;
+		for ( int i = 0; i < 9; i++ ) {
+			Q_strncpyz( g_rpgAch.entries[i].name, va( "Achievement number %d", i + 1 ), sizeof( g_rpgAch.entries[i].name ) );
+			g_rpgAch.entries[i].rewardCr = 100 * ( i + 1 );
+			g_rpgAch.entries[i].unlocked = ( i % 3 == 0 ) ? qtrue : qfalse;
+		}
+		Cvar_Set( "cg_drawAch", "1" );
+	} else if ( !Q_stricmp( w, "credits" ) ) {
+		g_rpgTopCredits.active = qtrue; g_rpgTopCredits.count = 10;
+		for ( int i = 0; i < 10; i++ ) {
+			g_rpgTopCredits.entries[i].rank = i + 1;
+			g_rpgTopCredits.entries[i].credits = 90000 - i * 7000;
+			Q_strncpyz( g_rpgTopCredits.entries[i].name, nm[i], sizeof( g_rpgTopCredits.entries[i].name ) );
+		}
+		Cvar_Set( "cg_drawTopCredits", "1" );
+	} else if ( !Q_stricmp( w, "potato" ) ) {
+		g_rpgTopPotato.active = qtrue; g_rpgTopPotato.count = 10;
+		for ( int i = 0; i < 10; i++ ) {
+			g_rpgTopPotato.entries[i].rank = i + 1;
+			g_rpgTopPotato.entries[i].ticks = 300 - i * 25;
+			Q_strncpyz( g_rpgTopPotato.entries[i].name, nm[i], sizeof( g_rpgTopPotato.entries[i].name ) );
+		}
+		Cvar_Set( "cg_drawTopPotato", "1" );
+	} else if ( !Q_stricmp( w, "adv" ) ) {
+		g_rpgAdv.active = qtrue; g_rpgAdv.choiceY = 0.0f;
+		Q_strncpyz( g_rpgAdv.title, "The Old Temple", sizeof( g_rpgAdv.title ) );
+		Q_strncpyz( g_rpgAdv.text, "You find a crumbling temple half buried in the sand. A faint blue glow comes from inside.", sizeof( g_rpgAdv.text ) );
+		Q_strncpyz( g_rpgAdv.choice1, "Step inside", sizeof( g_rpgAdv.choice1 ) );
+		Q_strncpyz( g_rpgAdv.choice2, "Search the ruins outside", sizeof( g_rpgAdv.choice2 ) );
+		Q_strncpyz( g_rpgAdv.choice3, "Leave quietly", sizeof( g_rpgAdv.choice3 ) );
+		Cvar_Set( "cg_drawAdv", "1" );
+	} else if ( !Q_stricmp( w, "menu" ) ) {
+		g_rpgMenu.active = qtrue;
+		g_rpgMenu.tab = Cmd_Argc() > 2 ? atoi( Cmd_Argv( 2 ) ) % 4 : 0;
+	} else if ( !Q_stricmp( w, "toast" ) ) {
+		g_rpgToast.active = qtrue; g_rpgToast.isWin = qtrue; g_rpgToast.eloDelta = 18; g_rpgToast.credits = 250; g_rpgToast.xp = 120;
+		g_rpgToast.health = 64; g_rpgToast.bp = 0; g_rpgToast.startTimeMs = cls.realtime;
+		Q_strncpyz( g_rpgToast.opponentName, "Defiant", sizeof( g_rpgToast.opponentName ) );
+	} else {
+		Com_Printf( "uiscreen_test <lb | stats | wanted | bounties | shop | inv | quest | ach | credits | potato | adv | menu [tab] | toast>\n" );
+	}
 }
 
 static void SCR_ColUITest_f( void ) {
@@ -3017,208 +2960,178 @@ void SCR_DrawRPGMenuOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) return;
 	if ( !g_rpgMenu.active ) return;
 
-	float winW = 540.0f;
-	float winH = 390.0f;
-	float winX = 320.0f - winW * 0.5f;
-	float winY = 240.0f - winH * 0.5f;
+	// geometry matches the click handling in cl_keys.cpp
+	const float winW = 540.0f, winH = 390.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 240.0f - winH * 0.5f;
 
-	vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.94f };
-	vec4_t borderColor = { 0.10f, 0.75f, 0.95f, 0.90f };
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	vec4_t cyanColor = { 0.10f, 0.80f, 1.00f, 1.0f };
+	vec4_t tint   = { 0.10f, 0.75f, 0.95f, 1.0f };
+	vec4_t dim    = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t panelBg = { 0.06f, 0.12f, 0.20f, 0.85f };
+	vec4_t panelBorder = { 0.20f, 0.45f, 0.65f, 0.60f };
+	const int now = cls.realtime;
 
-	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 8.0f, bgColor, borderColor );
+	SCR_UIAnimBegin( 12 );
+	SCR_UIWindow( winX, winY, winW, winH, "^3MASTER ^7RPG HUB", tint, qtrue );
 
-	// Title
-	float titleW = SCR_GetStringWidth( "MASTER RPG HUB", 8.0f );
-	SCR_DrawVirtualString( winX + (winW - titleW) * 0.5f, winY + 16.0f, 8.0f, "^3MASTER RPG HUB", yellowCol );
-	SCR_DrawVirtualString( winX + winW - 35.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	// Navigation Tabs
-	const char *tabs[4] = { "1. PROFILE", "2. SETTINGS", "3. RANKS", "4. COMMANDS" };
-	float tabW = 120.0f;
-	float tabY = winY + 38.0f;
-	float tabStartX = winX + (winW - (4 * tabW + 3 * 8.0f)) * 0.5f;
-
-	float mx = (float)g_rpgMouseX;
-	float my = (float)g_rpgMouseY;
-
-	for ( int i = 0; i < 4; i++ ) {
-		float tx = tabStartX + i * (tabW + 8.0f);
-		qboolean isSelected = (qboolean)(g_rpgMenu.tab == i);
-		qboolean isHover = (qboolean)(mx >= tx && mx <= tx + tabW && my >= tabY && my <= tabY + 22.0f);
-
-		vec4_t tabBg = { 0.05f, 0.15f, 0.28f, isSelected ? 0.90f : (isHover ? 0.60f : 0.30f) };
-		vec4_t tabBorder = { 0.10f, 0.75f, 0.95f, isSelected ? 0.95f : 0.40f };
-		SCR_DrawRoundedGlassPanel( tx, tabY, tabW, 22.0f, 4.0f, tabBg, tabBorder );
-
-		float strW = SCR_GetStringWidth( tabs[i], 4.2f );
-		SCR_DrawVirtualString( tx + (tabW - strW) * 0.5f, tabY + 5.0f, 4.2f, isSelected ? va("^3%s", tabs[i]) : va("^7%s", tabs[i]), whiteColor );
+	// ---- tabs with a sliding indicator
+	static int s_menuLastTab = -1;
+	static int s_menuTabMs = 0;
+	static int s_menuLastDrawMs = 0;
+	static float s_menuIndX = -1.0f;
+	const qboolean reopened = ( now - s_menuLastDrawMs > 250 ) ? qtrue : qfalse;
+	const float dt = reopened ? 0.0f : (float)( now - s_menuLastDrawMs ) * 0.001f;
+	s_menuLastDrawMs = now;
+	if ( reopened || s_menuLastTab != g_rpgMenu.tab ) {
+		if ( reopened ) s_menuIndX = -1.0f;
+		s_menuTabMs = now;
+		s_menuLastTab = g_rpgMenu.tab;
 	}
 
-	SCR_FillRect( winX + 15.0f, tabY + 26.0f, winW - 30.0f, 1.0f, borderColor );
+	const char *tabs[4] = { "PROFILE", "SETTINGS", "RANKS", "COMMANDS" };
+	const float tabW = 120.0f;
+	const float tabY = winY + 38.0f;
+	const float tabStartX = winX + ( winW - ( 4 * tabW + 3 * 8.0f ) ) * 0.5f;
+	const float mx = (float)g_rpgMouseX;
+	const float my = (float)g_rpgMouseY;
 
-	float contentY = tabY + 34.0f;
+	const float targetX = tabStartX + (float)g_rpgMenu.tab * ( tabW + 8.0f );
+	if ( s_menuIndX < 0.0f ) s_menuIndX = targetX;
+	else s_menuIndX += ( targetX - s_menuIndX ) * ( 1.0f - expf( -dt * 16.0f ) );
 
-	// Tab Content
+	for ( int i = 0; i < 4; i++ ) {
+		const float tx = tabStartX + (float)i * ( tabW + 8.0f );
+		const qboolean isSel = (qboolean)( g_rpgMenu.tab == i );
+		const qboolean isHover = (qboolean)( mx >= tx && mx <= tx + tabW && my >= tabY && my <= tabY + 22.0f );
+		vec4_t tabBg = { 0.05f, 0.12f, 0.24f, isSel ? 0.95f : ( isHover ? 0.75f : 0.45f ) };
+		SCR_FillRect( tx, tabY, tabW, 22.0f, tabBg );
+		const char *label = va( "%s%d  ^7%s", isSel ? "^3" : "^5", i + 1, tabs[i] );
+		SCR_DrawVirtualString( tx + ( tabW - SCR_GetStringWidth( label, 4.4f ) ) * 0.5f, tabY + 5.5f, 4.4f, label, white );
+	}
+	vec4_t rule = { tint[0], tint[1], tint[2], 0.30f };
+	SCR_FillRect( winX + 15.0f, tabY + 25.0f, winW - 30.0f, 1.0f, rule );
+	SCR_FillRect( s_menuIndX, tabY + 22.5f, tabW, 2.5f, tint );
+
+	const float contentY = tabY + 34.0f;
+	const int tabAge = ( now - s_menuTabMs < s_uiAnimMs ) ? ( now - s_menuTabMs ) : s_uiAnimMs;
+
+	// content fades and slides up a little whenever the tab changes
+	{
+		const float e = SCR_UIEase( (float)tabAge / 200.0f );
+		s_uiBaseAlpha = s_uiAlpha * e;
+		s_uiAlpha = s_uiBaseAlpha;
+		s_uiBaseDY = s_uiDY + ( 1.0f - e ) * 6.0f;
+		s_uiDY = s_uiBaseDY;
+	}
+
 	if ( g_rpgMenu.tab == 0 ) {
-		// PROFILE & CREDENTIALS TAB (!stats & !details sync)
-		float boxX = winX + 25.0f;
-		float boxW = winW - 50.0f;
-		
-		SCR_DrawVirtualString( boxX, contentY, 5.5f, "^5[PLAYER ACCOUNT & STATS PROFILE]", cyanColor );
-		
-		int level = g_rpgStats.level > 0 ? g_rpgStats.level : (cg_rpg_level ? cg_rpg_level->integer : 1);
-		int xp = g_rpgStats.xp > 0 ? g_rpgStats.xp : (cg_rpg_xp ? cg_rpg_xp->integer : 0);
-		int xpMax = cg_rpg_xp_max ? cg_rpg_xp_max->integer : 1000;
-		int fr = g_rpgStats.fr > 0 ? g_rpgStats.fr : (cg_rpg_fr ? cg_rpg_fr->integer : 1000);
-		const char *name = g_rpgStats.name[0] ? g_rpgStats.name : ((cg_rpg_name && cg_rpg_name->string[0]) ? cg_rpg_name->string : "Player");
-		const char *rank = g_rpgStats.rankTitle[0] ? g_rpgStats.rankTitle : ((cg_rpg_rank && cg_rpg_rank->string[0]) ? cg_rpg_rank->string : "Padawan");
-		int credits = g_rpgStats.credits > 0 ? g_rpgStats.credits : g_rpgShop.credits;
+		// ---- PROFILE
+		const float boxX = winX + 25.0f;
+		const float boxW = winW - 50.0f;
+		const int level = g_rpgStats.level > 0 ? g_rpgStats.level : ( cg_rpg_level ? cg_rpg_level->integer : 1 );
+		const int fr = g_rpgStats.fr > 0 ? g_rpgStats.fr : ( cg_rpg_fr ? cg_rpg_fr->integer : 1000 );
+		const char *name = g_rpgStats.name[0] ? g_rpgStats.name : ( ( cg_rpg_name && cg_rpg_name->string[0] ) ? cg_rpg_name->string : "Player" );
+		const char *rank = g_rpgStats.rankTitle[0] ? g_rpgStats.rankTitle : ( ( cg_rpg_rank && cg_rpg_rank->string[0] ) ? cg_rpg_rank->string : "Padawan" );
+		const int credits = g_rpgStats.credits > 0 ? g_rpgStats.credits : g_rpgShop.credits;
 
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 20.0f, 4.4f, va("^7Character Name: ^3%s", name), whiteColor );
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 36.0f, 4.4f, va("^7Rank Title:     ^3%s", rank), whiteColor );
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 52.0f, 4.4f, va("^7Current Level:  ^2Level %d", level), whiteColor );
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 68.0f, 4.8f, va("^7Elo Rating:     ^5%d Elo", fr), whiteColor );
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 84.0f, 4.8f, va("^7Credits:        ^5%d CR", credits), whiteColor );
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 100.0f, 4.8f, va("^7Duel Record:    ^2%d W ^7/ ^1%d L ^7(^3%d Kills^7 / ^1%d Deaths^7)", g_rpgStats.wins, g_rpgStats.losses, g_rpgStats.kills, g_rpgStats.deaths), whiteColor );
+		SCR_UIRowBeginMs( tabAge, 0 );
+		SCR_UIPanel( boxX, contentY + 6.0f, boxW, 84.0f, 8.0f, panelBg, panelBorder, tint );
+		const float avX = boxX + 16.0f, avY = contentY + 16.0f, avS = 64.0f;
+		vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.80f };
+		vec4_t avBg = { 0.03f, 0.06f, 0.11f, 1.0f };
+		SCR_FillRect( avX - 1.0f, avY - 1.0f, avS + 2.0f, avS + 2.0f, avFrame );
+		SCR_FillRect( avX, avY, avS, avS, avBg );
+		qhandle_t hAv = s_hAvatar;
+		if ( !hAv && re ) hAv = re->RegisterShader( "gfx/rpg_hud/avatar_default" );
+		if ( hAv ) SCR_DrawPic( avX, avY, avS, avS, hAv );
+		const float tx = avX + avS + 16.0f;
+		char nameFit[96];
+		SCR_FitText( name, nameFit, sizeof( nameFit ), boxW - avS - 40.0f - 90.0f, 6.4f );
+		SCR_DrawVirtualString( tx, contentY + 14.0f, 6.4f, va( "^7%s", nameFit ), white );
+		const char *lvStr = va( "^3Lv %d", level );
+		SCR_DrawVirtualString( boxX + boxW - 16.0f - SCR_GetStringWidth( lvStr, 6.0f ), contentY + 14.0f, 6.0f, lvStr, white );
+		SCR_DrawVirtualString( tx, contentY + 31.0f, 5.0f, va( "^3%s", rank ), white );
+		SCR_DrawVirtualString( tx, contentY + 46.0f, 4.8f, va( "^5%d Elo   ^7|   ^5%d CR", fr, credits ), white );
+		SCR_DrawVirtualString( tx, contentY + 61.0f, 4.4f, va( "^2%d W ^7/ ^1%d L   ^7(^3%d Kills^7 / ^1%d Deaths^7)", g_rpgStats.wins, g_rpgStats.losses, g_rpgStats.kills, g_rpgStats.deaths ), white );
+		SCR_UIRowEnd();
 
-		// XP Progress Bar
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 120.0f, 4.2f, "^7XP Threshold Progress:", whiteColor );
-		float barX = boxX + 10.0f;
-		float barY = contentY + 134.0f;
-		float barW = boxW - 20.0f;
-		float barH = 12.0f;
-
-		vec4_t barBg = { 0.05f, 0.10f, 0.20f, 0.80f };
-		vec4_t barBorder = { 0.20f, 0.70f, 1.00f, 0.60f };
-		SCR_DrawRoundedGlassPanel( barX, barY, barW, barH, 2.0f, barBg, barBorder );
-
+		// XP progress
+		SCR_UIRowBeginMs( tabAge, 1 );
 		int relativeXP = cg_rpg_xp ? cg_rpg_xp->integer : 0;
-		int relativeXPMax = cg_rpg_xp_max ? cg_rpg_xp_max->integer : 1000;
+		int relativeXPMax = ( cg_rpg_xp_max && cg_rpg_xp_max->integer > 0 ) ? cg_rpg_xp_max->integer : 1000;
 		if ( relativeXP < 0 ) relativeXP = 0;
 		if ( relativeXP > relativeXPMax ) relativeXP = relativeXPMax;
+		const float ratio = (float)relativeXP / (float)relativeXPMax;
+		SCR_DrawVirtualString( boxX, contentY + 100.0f, 4.2f, "^7Level progress", white );
+		const char *xpStr = va( "^7%d / %d XP  ^5(%d%%)", relativeXP, relativeXPMax, (int)( ratio * 100.0f ) );
+		SCR_DrawVirtualString( boxX + boxW - SCR_GetStringWidth( xpStr, 4.2f ), contentY + 100.0f, 4.2f, xpStr, white );
+		vec4_t lo = { 0.08f, 0.55f, 0.90f, 1.0f };
+		vec4_t hi = { 0.30f, 0.85f, 1.00f, 1.0f };
+		SCR_UIBar( boxX, contentY + 114.0f, boxW, 9.0f, ratio * SCR_UIEase( ( (float)tabAge - 150.0f ) / 600.0f ), lo, hi );
+		SCR_UIRowEnd();
 
-		float ratio = (relativeXPMax > 0) ? ((float)relativeXP / (float)relativeXPMax) : 0.0f;
-		if ( ratio > 1.0f ) ratio = 1.0f;
-		if ( ratio > 0.0f ) {
-			vec4_t fillCol = { 0.10f, 0.80f, 0.30f, 0.90f };
-			SCR_FillRect( barX + 1.0f, barY + 1.0f, (barW - 2.0f) * ratio, barH - 2.0f, fillCol );
-		}
-
-		char xpStr[64];
-		Com_sprintf( xpStr, sizeof(xpStr), "^7%d / %d XP (%d%%)", relativeXP, relativeXPMax, (int)(ratio * 100.0f) );
-		float xpW = SCR_GetStringWidth( xpStr, 4.0f );
-		SCR_DrawVirtualString( barX + (barW - xpW) * 0.5f, barY + 2.0f, 4.0f, xpStr, whiteColor );
-
-		// Login Credentials Box (retrieved from database)
-		vec4_t credBg = { 0.08f, 0.18f, 0.10f, 0.35f };
-		vec4_t credBorder = { 0.20f, 0.80f, 0.40f, 0.50f };
-		SCR_DrawRoundedGlassPanel( boxX, contentY + 158.0f, boxW, 58.0f, 4.0f, credBg, credBorder );
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 164.0f, 4.4f, "^2[ACCOUNT CREDENTIALS]", whiteColor );
-
+		// account credentials
+		SCR_UIRowBeginMs( tabAge, 2 );
+		vec4_t credBg = { 0.07f, 0.16f, 0.10f, 0.85f };
+		vec4_t credBorder = { 0.20f, 0.80f, 0.40f, 0.60f };
+		vec4_t green = { 0.25f, 0.85f, 0.45f, 1.0f };
+		SCR_UIPanel( boxX, contentY + 140.0f, boxW, 68.0f, 7.0f, credBg, credBorder, green );
+		SCR_DrawVirtualString( boxX + 14.0f, contentY + 147.0f, 4.0f, "^2ACCOUNT CREDENTIALS", white );
 		const char *uName = g_rpgStats.loginUser[0] ? g_rpgStats.loginUser : "Guest";
 		const char *uPass = g_rpgStats.loginPass[0] ? g_rpgStats.loginPass : "None";
+		SCR_DrawVirtualString( boxX + 14.0f, contentY + 164.0f, 4.4f, va( "^7Username   ^3%s", uName ), white );
+		SCR_DrawVirtualString( boxX + 14.0f, contentY + 181.0f, 4.4f, va( "^7Password   ^3%s", uPass ), white );
+		SCR_UIRowEnd();
 
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 180.0f, 4.2f, va("^7Username: ^3%s", uName), whiteColor );
-		SCR_DrawVirtualString( boxX + 10.0f, contentY + 194.0f, 4.2f, va("^7Password: ^3%s", uPass), whiteColor );
-		// Button: Toggle Ranked Mode
-		float btnX = boxX;
-		float btnY = contentY + 224.0f;
-		float btnW = boxW;
-		float btnH = 24.0f;
-
+		// ranked toggle (same hit box as before); the ranked state pulses softly
+		SCR_UIRowBeginMs( tabAge, 3 );
 		extern int g_clientRankedEnabled;
-		qboolean btnHover = (qboolean)(mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH);
-		vec4_t btnBgRanked = { 0.08f, 0.40f, 0.20f, btnHover ? 0.95f : 0.80f };
-		vec4_t btnBgCasual = { 0.40f, 0.20f, 0.08f, btnHover ? 0.95f : 0.80f };
-		vec4_t btnBorderRanked = { 0.20f, 1.00f, 0.40f, btnHover ? 1.00f : 0.70f };
-		vec4_t btnBorderCasual = { 1.00f, 0.60f, 0.20f, btnHover ? 1.00f : 0.70f };
-
-		if ( g_clientRankedEnabled ) {
-			SCR_DrawRoundedGlassPanel( btnX, btnY, btnW, btnH, 4.0f, btnBgRanked, btnBorderRanked );
-			const char *btnLabel = "^2[ RANKED MATCHES: ENABLED ]";
-			float labelW = SCR_GetStringWidth( btnLabel, 4.4f );
-			SCR_DrawVirtualString( btnX + (btnW - labelW) * 0.5f, btnY + 4.0f, 4.4f, btnLabel, whiteColor );
-		} else {
-			SCR_DrawRoundedGlassPanel( btnX, btnY, btnW, btnH, 4.0f, btnBgCasual, btnBorderCasual );
-			const char *btnLabel = "^3[ CASUAL MODE (NO ELO) ]";
-			float labelW = SCR_GetStringWidth( btnLabel, 4.4f );
-			SCR_DrawVirtualString( btnX + (btnW - labelW) * 0.5f, btnY + 4.0f, 4.4f, btnLabel, whiteColor );
-		}
+		const float btnX = boxX, btnY = contentY + 224.0f, btnW = boxW, btnH = 24.0f;
+		const qboolean btnHover = (qboolean)( mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH );
+		const float pulse = 0.85f + 0.15f * sinf( (float)now * 0.004f );
+		vec4_t rankedTint = { 0.20f * pulse, 1.00f * pulse, 0.40f * pulse, 1.0f };
+		vec4_t casualTint = { 1.00f, 0.60f, 0.20f, 1.0f };
+		SCR_UIButton( btnX, btnY, btnW, btnH, g_clientRankedEnabled ? "^2RANKED MATCHES: ENABLED   (click to switch)" : "^3CASUAL MODE, NO ELO   (click to switch)", 4.4f, btnHover, g_clientRankedEnabled ? rankedTint : casualTint );
+		SCR_UIRowEnd();
 
 	} else if ( g_rpgMenu.tab == 1 ) {
-		// SETTINGS TAB (Unified HUD Tuner & Sliders)
-		SCR_DrawVirtualString( winX + 25.0f, contentY, 5.2f, "^5[HUD CONFIGURATION STUDIO]", cyanColor );
-		
-		int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
+		// ---- SETTINGS (hit boxes unchanged)
+		SCR_DrawVirtualString( winX + 30.0f, contentY - 2.0f, 4.4f, "^5HUD & CHAT SETTINGS", white );
+
+		const int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
 		const char *styleNames[2] = { "Holo", "Edge" };
-		const char *curPos = (cg_rpg_pos && cg_rpg_pos->string[0]) ? cg_rpg_pos->string : "left";
+		const char *curPos = ( cg_rpg_pos && cg_rpg_pos->string[0] ) ? cg_rpg_pos->string : "left";
+		vec4_t btnTint = { 0.20f, 0.70f, 1.00f, 1.0f };
 
-		// Button 1: HUD Style
-		qboolean h1 = (qboolean)(mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 20.0f && my <= contentY + 55.0f);
-		SCR_DrawRoundedGlassPanel( winX + 30.0f, contentY + 20.0f, 210.0f, 35.0f, 4.0f, h1 ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( winX + 40.0f, contentY + 32.0f, 4.2f, va("^7HUD Style: ^3%s", styleNames[curStyle % 2]), whiteColor );
-
-		// Button 2: HUD Position
-		qboolean h2 = (qboolean)(mx >= winX + 270.0f && mx <= winX + 480.0f && my >= contentY + 20.0f && my <= contentY + 55.0f);
-		SCR_DrawRoundedGlassPanel( winX + 270.0f, contentY + 20.0f, 210.0f, 35.0f, 4.0f, h2 ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( winX + 280.0f, contentY + 32.0f, 4.2f, va("^7Position: ^3%s", curPos), whiteColor );
-
-		// Load slider textures
-		if ( s_hSettingsSliderTrack <= 0 && re && re->RegisterShader ) {
-			s_hSettingsSliderTrack = re->RegisterShader( "gfx/rpg_hud/hud_slider_track" );
-			s_hSettingsSliderThumb = re->RegisterShader( "gfx/rpg_hud/hud_slider_thumb" );
-		}
+		SCR_UIRowBeginMs( tabAge, 0 );
+		SCR_UIButton( winX + 30.0f, contentY + 20.0f, 210.0f, 35.0f, va( "^7HUD Style: ^3%s", styleNames[curStyle % 2] ), 4.4f,
+			(qboolean)( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 20.0f && my <= contentY + 55.0f ), btnTint );
+		SCR_UIButton( winX + 270.0f, contentY + 20.0f, 210.0f, 35.0f, va( "^7Position: ^3%s", curPos ), 4.4f,
+			(qboolean)( mx >= winX + 270.0f && mx <= winX + 480.0f && my >= contentY + 20.0f && my <= contentY + 55.0f ), btnTint );
+		SCR_UIRowEnd();
 
 		static cvar_t *cg_partyX = NULL;
 		static cvar_t *cg_partyY = NULL;
 		if ( !cg_partyX ) cg_partyX = Cvar_Get( "cg_partyX", "15", CVAR_ARCHIVE );
 		if ( !cg_partyY ) cg_partyY = Cvar_Get( "cg_partyY", "140", CVAR_ARCHIVE );
 
-		// Dragging slider logic
-		float col2X = winX + 270.0f;
+		// dragging
+		const float col2X = winX + 270.0f;
 		if ( kg.keys[A_MOUSE1].down ) {
 			if ( !s_draggingSliderX && !s_draggingSliderY && !s_draggingPartySliderX && !s_draggingPartySliderY ) {
-				if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 60.0f && my <= contentY + 80.0f ) {
-					s_draggingSliderX = qtrue;
-				}
-				else if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 95.0f && my <= contentY + 115.0f ) {
-					s_draggingSliderY = qtrue;
-				}
-				else if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 130.0f && my <= contentY + 150.0f ) {
-					s_draggingPartySliderX = qtrue;
-				}
-				else if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 165.0f && my <= contentY + 185.0f ) {
-					s_draggingPartySliderY = qtrue;
-				}
+				if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 60.0f && my <= contentY + 80.0f ) s_draggingSliderX = qtrue;
+				else if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 95.0f && my <= contentY + 115.0f ) s_draggingSliderY = qtrue;
+				else if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 130.0f && my <= contentY + 150.0f ) s_draggingPartySliderX = qtrue;
+				else if ( mx >= col2X && mx <= col2X + 200.0f && my >= contentY + 165.0f && my <= contentY + 185.0f ) s_draggingPartySliderY = qtrue;
 			}
-
-			if ( s_draggingSliderX ) {
-				float newProgress = (mx - col2X) / 200.0f;
-				if ( newProgress < 0.0f ) newProgress = 0.0f;
-				if ( newProgress > 1.0f ) newProgress = 1.0f;
-				Cvar_SetValue( "cg_rpg_x", newProgress * 640.0f );
-			}
-			if ( s_draggingSliderY ) {
-				float newProgress = (mx - col2X) / 200.0f;
-				if ( newProgress < 0.0f ) newProgress = 0.0f;
-				if ( newProgress > 1.0f ) newProgress = 1.0f;
-				Cvar_SetValue( "cg_rpg_y", newProgress * 480.0f );
-			}
-			if ( s_draggingPartySliderX ) {
-				float newProgress = (mx - col2X) / 200.0f;
-				if ( newProgress < 0.0f ) newProgress = 0.0f;
-				if ( newProgress > 1.0f ) newProgress = 1.0f;
-				Cvar_SetValue( "cg_partyX", newProgress * 640.0f );
-			}
-			if ( s_draggingPartySliderY ) {
-				float newProgress = (mx - col2X) / 200.0f;
-				if ( newProgress < 0.0f ) newProgress = 0.0f;
-				if ( newProgress > 1.0f ) newProgress = 1.0f;
-				Cvar_SetValue( "cg_partyY", newProgress * 480.0f );
-			}
+			float np = ( mx - col2X ) / 200.0f;
+			if ( np < 0.0f ) np = 0.0f;
+			if ( np > 1.0f ) np = 1.0f;
+			if ( s_draggingSliderX ) Cvar_SetValue( "cg_rpg_x", np * 640.0f );
+			if ( s_draggingSliderY ) Cvar_SetValue( "cg_rpg_y", np * 480.0f );
+			if ( s_draggingPartySliderX ) Cvar_SetValue( "cg_partyX", np * 640.0f );
+			if ( s_draggingPartySliderY ) Cvar_SetValue( "cg_partyY", np * 480.0f );
 		} else {
 			s_draggingSliderX = qfalse;
 			s_draggingSliderY = qfalse;
@@ -3226,123 +3139,104 @@ void SCR_DrawRPGMenuOverlay( void ) {
 			s_draggingPartySliderY = qfalse;
 		}
 
-		// Slider 1: HUD X Offset Tuner
+		SCR_UIRowBeginMs( tabAge, 1 );
 		float curX = cg_rpg_x ? cg_rpg_x->value : 14.0f;
 		if ( curX < 0.0f ) curX = 0.0f;
 		if ( curX > 640.0f ) curX = 640.0f;
-		char xText[32];
-		Com_sprintf( xText, sizeof( xText ), "%d px", (int)curX );
-		SCR_DrawSettingSlider( col2X, contentY + 65.0f, 200.0f, 12.0f, curX / 640.0f, "HUD X COORDINATE", xText );
-
-		// Slider 2: HUD Y Offset Tuner
+		SCR_UISlider( col2X, contentY + 65.0f, 200.0f, 12.0f, curX / 640.0f, "HUD X", va( "%d px", (int)curX ) );
 		float curY = cg_rpg_y ? cg_rpg_y->value : 14.0f;
 		if ( curY < 0.0f ) curY = 0.0f;
 		if ( curY > 480.0f ) curY = 480.0f;
-		char yText[32];
-		Com_sprintf( yText, sizeof( yText ), "%d px", (int)curY );
-		SCR_DrawSettingSlider( col2X, contentY + 100.0f, 200.0f, 12.0f, curY / 480.0f, "HUD Y COORDINATE", yText );
-
-		// Slider 3: Party UI X Position
+		SCR_UISlider( col2X, contentY + 100.0f, 200.0f, 12.0f, curY / 480.0f, "HUD Y", va( "%d px", (int)curY ) );
 		float curPX = cg_partyX ? cg_partyX->value : 15.0f;
 		if ( curPX < 0.0f ) curPX = 0.0f;
 		if ( curPX > 640.0f ) curPX = 640.0f;
-		char pxText[32];
-		Com_sprintf( pxText, sizeof( pxText ), "%d px", (int)curPX );
-		SCR_DrawSettingSlider( col2X, contentY + 135.0f, 200.0f, 12.0f, curPX / 640.0f, "PARTY UI X POSITION", pxText );
-
-		// Slider 4: Party UI Y Position
+		SCR_UISlider( col2X, contentY + 135.0f, 200.0f, 12.0f, curPX / 640.0f, "PARTY X", va( "%d px", (int)curPX ) );
 		float curPY = cg_partyY ? cg_partyY->value : 140.0f;
 		if ( curPY < 0.0f ) curPY = 0.0f;
 		if ( curPY > 480.0f ) curPY = 480.0f;
-		char pyText[32];
-		Com_sprintf( pyText, sizeof( pyText ), "%d px", (int)curPY );
-		SCR_DrawSettingSlider( col2X, contentY + 170.0f, 200.0f, 12.0f, curPY / 480.0f, "PARTY UI Y POSITION", pyText );
+		SCR_UISlider( col2X, contentY + 170.0f, 200.0f, 12.0f, curPY / 480.0f, "PARTY Y", va( "%d px", (int)curPY ) );
+		SCR_UIRowEnd();
 
-		// Avatar Preview Box
-		SCR_DrawVirtualString( winX + 30.0f, contentY + 115.0f, 4.2f, "^7Avatar Selection:", whiteColor );
-		float avBoxX = winX + 160.0f;
-		float avBoxY = contentY + 108.0f;
-		if ( s_hAvatar > 0 ) {
-			SCR_DrawPic( avBoxX, avBoxY, 34.0f, 34.0f, s_hAvatar );
-		}
+		// avatar picker
+		SCR_UIRowBeginMs( tabAge, 2 );
+		SCR_DrawVirtualString( winX + 30.0f, contentY + 117.0f, 4.2f, "^7Avatar", white );
+		const float avBoxX = winX + 160.0f, avBoxY = contentY + 108.0f;
+		vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.80f };
+		SCR_FillRect( avBoxX - 1.0f, avBoxY - 1.0f, 36.0f, 36.0f, avFrame );
+		if ( s_hAvatar > 0 ) SCR_DrawPic( avBoxX, avBoxY, 34.0f, 34.0f, s_hAvatar );
+		SCR_UIButton( avBoxX - 45.0f, avBoxY + 3.0f, 35.0f, 30.0f, "<", 5.0f,
+			(qboolean)( mx >= avBoxX - 45.0f && mx <= avBoxX - 10.0f && my >= avBoxY + 3.0f && my <= avBoxY + 33.0f ), btnTint );
+		SCR_UIButton( avBoxX + 45.0f, avBoxY + 3.0f, 35.0f, 30.0f, ">", 5.0f,
+			(qboolean)( mx >= avBoxX + 45.0f && mx <= avBoxX + 80.0f && my >= avBoxY + 3.0f && my <= avBoxY + 33.0f ), btnTint );
+		SCR_UIRowEnd();
 
-		// Avatar Prev / Next Buttons
-		qboolean hAvL = (qboolean)(mx >= avBoxX - 45.0f && mx <= avBoxX - 10.0f && my >= avBoxY + 3.0f && my <= avBoxY + 33.0f);
-		SCR_DrawRoundedGlassPanel( avBoxX - 45.0f, avBoxY + 3.0f, 35.0f, 30.0f, 3.0f, hAvL ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( avBoxX - 32.0f, avBoxY + 10.0f, 5.0f, "<", whiteColor );
-
-		qboolean hAvR = (qboolean)(mx >= avBoxX + 45.0f && mx <= avBoxX + 80.0f && my >= avBoxY + 3.0f && my <= avBoxY + 33.0f);
-		SCR_DrawRoundedGlassPanel( avBoxX + 45.0f, avBoxY + 3.0f, 35.0f, 30.0f, 3.0f, hAvR ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( avBoxX + 58.0f, avBoxY + 10.0f, 5.0f, ">", whiteColor );
-
-		// Chat Box Customizer Buttons
+		// chat + reset
+		SCR_UIRowBeginMs( tabAge, 3 );
 		cvar_t *cPosCv = Cvar_Get( "cg_chat_pos", "0", CVAR_ARCHIVE );
 		cvar_t *cStyCv = Cvar_Get( "cg_chat_style", "0", CVAR_ARCHIVE );
 		const char *cPosNames[3] = { "Bottom", "Top", "Classic" };
 		const char *cStyNames[4] = { "Dark Glass", "Cyber Cyan", "Solid Black", "No BG" };
-
-		// Chat Position Button
-		qboolean hCPos = (qboolean)(mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 160.0f && my <= contentY + 193.0f);
-		SCR_DrawRoundedGlassPanel( winX + 30.0f, contentY + 160.0f, 210.0f, 33.0f, 4.0f, hCPos ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( winX + 40.0f, contentY + 171.0f, 4.0f, va("^7Chat Pos: ^3%s", cPosNames[cPosCv->integer % 3]), whiteColor );
-
-		// Chat Style Button
-		qboolean hCSty = (qboolean)(mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 200.0f && my <= contentY + 233.0f);
-		SCR_DrawRoundedGlassPanel( winX + 30.0f, contentY + 200.0f, 210.0f, 33.0f, 4.0f, hCSty ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( winX + 40.0f, contentY + 211.0f, 4.0f, va("^7Chat Style: ^3%s", cStyNames[cStyCv->integer % 4]), whiteColor );
-
-		// Button: Reset Defaults
-		qboolean hReset = (qboolean)(mx >= winX + 270.0f && mx <= winX + 470.0f && my >= contentY + 200.0f && my <= contentY + 233.0f);
-		SCR_DrawRoundedGlassPanel( winX + 270.0f, contentY + 200.0f, 200.0f, 33.0f, 4.0f, hReset ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( winX + 310.0f, contentY + 211.0f, 4.2f, "^1RESET DEFAULTS", yellowCol );
+		SCR_UIButton( winX + 30.0f, contentY + 160.0f, 210.0f, 33.0f, va( "^7Chat Pos: ^3%s", cPosNames[cPosCv->integer % 3] ), 4.2f,
+			(qboolean)( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 160.0f && my <= contentY + 193.0f ), btnTint );
+		SCR_UIButton( winX + 30.0f, contentY + 200.0f, 210.0f, 33.0f, va( "^7Chat Style: ^3%s", cStyNames[cStyCv->integer % 4] ), 4.2f,
+			(qboolean)( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 200.0f && my <= contentY + 233.0f ), btnTint );
+		vec4_t redTint = { 0.95f, 0.30f, 0.25f, 1.0f };
+		SCR_UIButton( winX + 270.0f, contentY + 200.0f, 200.0f, 33.0f, "^1RESET DEFAULTS", 4.2f,
+			(qboolean)( mx >= winX + 270.0f && mx <= winX + 470.0f && my >= contentY + 200.0f && my <= contentY + 233.0f ), redTint );
+		SCR_UIRowEnd();
 
 	} else if ( g_rpgMenu.tab == 2 ) {
-		// RANKS & XP TABLE TAB (!ranks sync)
-		SCR_DrawVirtualString( winX + 25.0f, contentY, 5.4f, "^5[SERVER RANKS & ELO THRESHOLDS (!ranks)]", cyanColor );
+		// ---- RANKS
+		SCR_DrawVirtualString( winX + 25.0f, contentY - 2.0f, 4.6f, "^5SERVER RANKS & ELO THRESHOLDS", white );
 
-		// The rank table comes from the server (rpg_ranks); until it arrives show the stock ladder.
 		static const rpgRankEntry_t defaultRanks[5] = {
 			{ 0, "^3Youngling" }, { 1500, "^2Padawan" }, { 2000, "^5Jedi Knight" },
 			{ 2500, "^6Jedi Master" }, { 3000, "^1Grand Master" }
 		};
 		const rpgRankEntry_t *ranks = g_rpgRankCount > 0 ? g_rpgRanks : defaultRanks;
-		int rankCount = g_rpgRankCount > 0 ? g_rpgRankCount : 5;
+		const int rankCount = g_rpgRankCount > 0 ? g_rpgRankCount : 5;
 
-		// current rank = highest threshold not above the player's Elo
-		int myElo = g_rpgStats.fr > 0 ? g_rpgStats.fr : (cg_rpg_fr ? cg_rpg_fr->integer : 1000);
+		const int myElo = g_rpgStats.fr > 0 ? g_rpgStats.fr : ( cg_rpg_fr ? cg_rpg_fr->integer : 1000 );
 		int myRank = 0;
 		for ( int r = 0; r < rankCount; r++ ) {
 			if ( myElo >= ranks[r].threshold ) myRank = r;
 		}
 
-		float ry = contentY + 24.0f;
+		float ry = contentY + 22.0f;
 		for ( int r = 0; r < rankCount; r++ ) {
-			if ( r % 2 == 0 ) {
-				vec4_t rBg = { 0.05f, 0.15f, 0.25f, 0.35f };
-				SCR_FillRect( winX + 20.0f, ry, winW - 40.0f, 26.0f, rBg );
+			SCR_UIRowBeginMs( tabAge, r );
+			vec4_t rBg = { 1.0f, 1.0f, 1.0f, ( r % 2 == 0 ) ? 0.05f : 0.02f };
+			if ( r == myRank ) { rBg[0] = tint[0]; rBg[1] = tint[1]; rBg[2] = tint[2]; rBg[3] = 0.16f; }
+			SCR_FillRect( winX + 20.0f, ry, winW - 40.0f, 26.0f, rBg );
+			if ( r == myRank ) {
+				vec4_t bar = { tint[0], tint[1], tint[2], 0.6f + 0.4f * sinf( (float)now * 0.006f ) };
+				SCR_FillRect( winX + 20.0f, ry, 3.0f, 26.0f, bar );
 			}
 			const char *range = ( r + 1 < rankCount )
 				? va( "^2%d - %d Elo", ranks[r].threshold, ranks[r + 1].threshold - 1 )
 				: va( "^2%d+ Elo", ranks[r].threshold );
-			SCR_DrawVirtualString( winX + 25.0f, ry + 4.0f, 5.4f, ranks[r].title, whiteColor );
-			SCR_DrawVirtualString( winX + 200.0f, ry + 4.0f, 5.4f, range, whiteColor );
+			SCR_DrawVirtualString( winX + 32.0f, ry + 6.0f, 5.2f, ranks[r].title, white );
+			SCR_DrawVirtualString( winX + 200.0f, ry + 6.0f, 5.0f, range, white );
 			if ( r == myRank ) {
-				SCR_DrawVirtualString( winX + 380.0f, ry + 4.0f, 5.4f, va( "^3< You (%d Elo)", myElo ), whiteColor );
+				const char *you = va( "^3YOU  %d Elo", myElo );
+				SCR_DrawVirtualString( winX + winW - 32.0f - SCR_GetStringWidth( you, 4.6f ), ry + 6.5f, 4.6f, you, white );
 			}
+			SCR_UIRowEnd();
 			ry += 30.0f;
 		}
 
-		int perLevel = g_rpgXpPerLevel > 0 ? g_rpgXpPerLevel : 1000;
-		SCR_DrawVirtualString( winX + 25.0f, ry + 16.0f, 4.6f, va( "^7Level = total XP / ^3%d^7 + 1 (every ^3%d XP^7 is one level).", perLevel, perLevel ), whiteColor );
+		const int perLevel = g_rpgXpPerLevel > 0 ? g_rpgXpPerLevel : 1000;
+		SCR_DrawVirtualString( winX + 25.0f, ry + 14.0f, 4.4f, va( "^7Level = total XP / ^3%d^7 + 1  (every ^3%d XP^7 is one level)", perLevel, perLevel ), white );
 
 	} else if ( g_rpgMenu.tab == 3 ) {
-		// COMMANDS DIRECTORY TAB (!help / !cmds sync)
-		SCR_DrawVirtualString( winX + 25.0f, contentY, 5.4f, "^5[ALL SERVER COMMANDS DIRECTORY (!help / !cmds)]", cyanColor );
+		// ---- COMMANDS
+		SCR_DrawVirtualString( winX + 25.0f, contentY - 2.0f, 4.6f, "^5ALL SERVER COMMANDS (!help / !cmds)", white );
 
 		const char *cmdList[][2] = {
-			{ "/login <u > <p>", "Register or log into your account" },
+			{ "/login <u> <p>", "Register or log into your account" },
 			{ "!details / !myinfo", "View account credentials & display name" },
-			{ "!stats / !rank / !ranks", "View stats, rank title & Elo thresholds" },
+			{ "!stats / !rank / !ranks", "Stats, rank title & Elo thresholds" },
 			{ "!top / !topcredits", "Global top leaderboards" },
 			{ "!quests / !achievements", "Daily quests & achievement rewards" },
 			{ "!shop / !buy / !sell / !inv", "Economy shop & item inventory" },
@@ -3351,14 +3245,24 @@ void SCR_DrawRPGMenuOverlay( void ) {
 			{ "!admin / !freeze / !goto", "High admin controls & player management" }
 		};
 
-		float cy = contentY + 22.0f;
+		float cy = contentY + 20.0f;
 		for ( int c = 0; c < 9; c++ ) {
-			SCR_DrawVirtualString( winX + 25.0f, cy, 4.8f, va("^3%-25s ^7%s", cmdList[c][0], cmdList[c][1]), whiteColor );
+			SCR_UIRowBeginMs( tabAge, c );
+			vec4_t zebra = { 1.0f, 1.0f, 1.0f, ( c % 2 == 0 ) ? 0.05f : 0.02f };
+			SCR_FillRect( winX + 20.0f, cy, winW - 40.0f, 22.0f, zebra );
+			SCR_DrawVirtualString( winX + 30.0f, cy + 6.0f, 4.6f, va( "^3%s", cmdList[c][0] ), white );
+			SCR_DrawVirtualString( winX + 230.0f, cy + 6.0f, 4.4f, va( "^7%s", cmdList[c][1] ), white );
+			SCR_UIRowEnd();
 			cy += 24.0f;
 		}
 	}
 
-	SCR_DrawVirtualString( winX + (winW - 160.0f) * 0.5f, winY + winH - 15.0f, 4.0f, "^7Press ^1[ESC]^7 to close Master Hub", whiteColor );
+	// back to the window's own fade for the footer
+	s_uiAlpha = s_uiBaseAlpha = SCR_UIEase( (float)s_uiAnimMs / 260.0f );
+	s_uiDY = s_uiBaseDY = -( 1.0f - s_uiAlpha ) * 16.0f;
+	SCR_UIFooter( winX, winY, winW, winH, tint, "^7Press ^1ESC^7 to close the Master Hub" );
+	(void)dim;
+	SCR_UIAnimEnd( 12 );
 }
 
 // Global Party Studio Team Name & Color Selection State
@@ -5390,19 +5294,19 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 					SCR_DrawLiveBPTracker();
 					SCR_DrawRPGHUDOverlay();
 					SCR_DrawDemoRecording();
-					SCR_DrawLeaderboardOverlay();
-					SCR_DrawStatsOverlay();
+					SCR_UIAnimated( 0, SCR_DrawLeaderboardOverlay );
+					SCR_UIAnimated( 1, SCR_DrawStatsOverlay );
 					SCR_DrawToastOverlay();
 					SCR_DrawInspectOverlay();
-					SCR_DrawBountyOverlay();
-					SCR_DrawShopOverlay();
-					SCR_DrawQuestOverlay();
-					SCR_DrawInventoryOverlay();
-					SCR_DrawCollectionOverlay();
-					SCR_DrawAchievementsOverlay();
-					SCR_DrawTopCreditsOverlay();
-					SCR_DrawTopPotatoOverlay();
-					SCR_DrawAdventureOverlay();
+					SCR_UIAnimated( 2, SCR_DrawBountyOverlay );
+					SCR_UIAnimated( 3, SCR_DrawShopOverlay );
+					SCR_UIAnimated( 4, SCR_DrawQuestOverlay );
+					SCR_UIAnimated( 5, SCR_DrawInventoryOverlay );
+					SCR_UIAnimated( 6, SCR_DrawCollectionOverlay );
+					SCR_UIAnimated( 7, SCR_DrawAchievementsOverlay );
+					SCR_UIAnimated( 8, SCR_DrawTopCreditsOverlay );
+					SCR_UIAnimated( 9, SCR_DrawTopPotatoOverlay );
+					SCR_UIAnimated( 10, SCR_DrawAdventureOverlay );
 					void SCR_DrawRPGMenuOverlay( void );
 					void SCR_DrawPartyStudioOverlay( void );
 					void SCR_DrawAdminOverlay( void );
