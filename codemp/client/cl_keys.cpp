@@ -1473,7 +1473,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 			// 1. HUD Style Button
 			if ( mx >= col1X && mx <= col1X + 160.0f && my >= winY + 90.0f && my <= winY + 130.0f ) {
 				int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
-				curStyle = (curStyle + 1) % 4;
+				curStyle = (curStyle + 1) % 5;
 				Cvar_SetValue( "cg_rpg_style", curStyle );
 				Com_Printf( "^2HUD Style cycled to %d\n", curStyle );
 				return;
@@ -1583,7 +1583,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 				// Button 1: Style
 				if ( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 20.0f && my <= contentY + 55.0f ) {
 					int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
-					Cvar_SetValue( "cg_rpg_style", (curStyle + 1) % 4 );
+					Cvar_SetValue( "cg_rpg_style", (curStyle + 1) % 5 );
 					return;
 				}
 				// Button 2: Position
