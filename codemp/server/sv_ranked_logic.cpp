@@ -3682,7 +3682,7 @@ void SV_Ranked_Trainer_Frame(void) {
 
   for (int i = sv_maxclients->integer; i < sv.num_entities; i++) {
     sharedEntity_t *ent = SV_GentityNum(i);
-    if (!ent || !ent->r.inuse) continue;
+    if (!ent || !ent->r.linked) continue;
     if (ent->s.eType != ET_NPC) continue;
     if (!ent->playerState) continue;
 
@@ -4392,6 +4392,46 @@ qboolean SV_Ranked_GiveForcePower(client_t *cl, const char *powerName, int level
 
 /*
 ==================
+SV_Ranked_SendRankTable
+
+Sends the XP-per-level setting and the rank titles/thresholds from ranked/config.json to the client,
+so the menus never show a stale hard-coded table.
+Format: rpg_ranks <xpPerLevel> <count> <threshold> "<title>" ...
+==================
+*/
+static void SV_Ranked_SendRankTable(client_t *cl) {
+  extern cJSON *rankedConfig;
+  cJSON *xpl = SV_Ranked_GetSetting("xp_per_level");
+  int perLevel = (xpl && xpl->valueint > 0) ? xpl->valueint : 1000;
+
+  char cmd[900];
+  int n = 0;
+  cJSON *titles = rankedConfig ? cJSON_GetObjectItemCaseSensitive(rankedConfig, "rank_titles") : NULL;
+  cJSON *thresh = rankedConfig ? cJSON_GetObjectItemCaseSensitive(rankedConfig, "rank_thresholds") : NULL;
+  std::string body;
+  if (titles && thresh && cJSON_IsArray(titles) && cJSON_IsArray(thresh)) {
+    const int cnt = std::min(cJSON_GetArraySize(titles), cJSON_GetArraySize(thresh));
+    for (int i = 0; i < cnt && n < 8; ++i) {
+      cJSON *t = cJSON_GetArrayItem(titles, i);
+      cJSON *th = cJSON_GetArrayItem(thresh, i);
+      if (!t || !cJSON_IsString(t) || !t->valuestring || !th || !cJSON_IsNumber(th))
+        continue;
+      char title[32];
+      Q_strncpyz(title, t->valuestring, sizeof(title));
+      for (char *c = title; *c; ++c) {
+        if (*c == '"' || *c == '\\' || *c == '\n' || *c == '\r' || *c == ';')
+          *c = ' ';
+      }
+      body += va(" %d \"%s\"", th->valueint, title);
+      ++n;
+    }
+  }
+  Com_sprintf(cmd, sizeof(cmd), "rpg_ranks %d %d%s", perLevel, n, body.c_str());
+  SV_SendServerCommand(cl, "%s", cmd);
+}
+
+/*
+==================
 SV_Ranked_SyncClientRPG
 Calculates current client XP in level, XP needed for next level, and Level, then sends `rpg_sync` command to client.
 ==================
@@ -4399,6 +4439,8 @@ Calculates current client XP in level, XP needed for next level, and Level, then
 void SV_Ranked_SyncClientRPG(client_t *cl) {
   if (!cl || cl->state < CS_CONNECTED)
     return;
+
+  SV_Ranked_SendRankTable(cl);
 
   int clientNum = cl - svs.clients;
   rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
