@@ -2644,6 +2644,23 @@ void CL_KeyDownEvent( int key, unsigned time )
 		}
 	}
 
+	// Collection UI Modal Input Handling
+	if ( g_rpgCollection.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+		if ( key == A_ESCAPE ) {
+			g_rpgCollection.active = qfalse;
+			return;
+		}
+		if ( key == A_MOUSE1 ) {
+			float winW = 560.0f, winH = 372.0f;
+			float winX = 320.0f - winW * 0.5f, winY = 240.0f - winH * 0.5f;
+			float mx = (float)g_rpgMouseX, my = (float)g_rpgMouseY;
+			if ( mx >= winX + winW - 48.0f && mx <= winX + winW - 6.0f && my >= winY + 6.0f && my <= winY + 26.0f ) {
+				g_rpgCollection.active = qfalse;
+			}
+			return;
+		}
+	}
+
 	// Stats UI Modal Input Handling
 	if ( g_rpgStats.active && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
 		if ( key == A_MOUSE1 ) {
@@ -2802,6 +2819,10 @@ void CL_KeyDownEvent( int key, unsigned time )
 			if ( cg_drawInventory && cg_drawInventory->integer ) {
 				Cvar_Set( "cg_drawInventory", "0" );
 				g_rpgInventory.active = qfalse;
+				return;
+			}
+			if ( g_rpgCollection.active ) {
+				g_rpgCollection.active = qfalse;
 				return;
 			}
 			if ( cg_drawAch && cg_drawAch->integer ) {

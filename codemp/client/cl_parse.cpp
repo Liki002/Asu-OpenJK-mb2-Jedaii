@@ -1224,6 +1224,31 @@ void CL_ParseCommandString( msg_t *msg ) {
 				g_rpgInventory.invCount++;
 			}
 		}
+	} else if ( !Q_strncmp( s, "col_clear", 9 ) ) {
+		memset( &g_rpgCollection.sets, 0, sizeof( g_rpgCollection.sets ) );
+		g_rpgCollection.setCount = 0;
+	} else if ( !Q_strncmp( s, "col_set", 7 ) ) {
+		int idx = 0, have = 0, done = 0, reward = 0;
+		char nameBuf[48] = "";
+		if ( sscanf( s, "col_set %d %d %d %d \"%47[^\"]\"", &idx, &have, &done, &reward, nameBuf ) >= 5 && idx >= 0 && idx < 5 ) {
+			rpgColSet_t *cs = &g_rpgCollection.sets[idx];
+			cs->have = have; cs->done = done; cs->reward = reward;
+			Q_strncpyz( cs->name, nameBuf, sizeof( cs->name ) );
+			if ( idx + 1 > g_rpgCollection.setCount ) g_rpgCollection.setCount = idx + 1;
+		}
+	} else if ( !Q_strncmp( s, "col_piece", 9 ) ) {
+		int idx = 0, slot = 0, qty = 0, rarity = 0;
+		char nameBuf[40] = "";
+		if ( sscanf( s, "col_piece %d %d %d %d \"%39[^\"]\"", &idx, &slot, &qty, &rarity, nameBuf ) >= 5 &&
+		     idx >= 0 && idx < 5 && slot >= 0 && slot < 4 ) {
+			g_rpgCollection.sets[idx].piece[slot].qty = qty;
+			g_rpgCollection.sets[idx].piece[slot].rarity = rarity;
+			Q_strncpyz( g_rpgCollection.sets[idx].piece[slot].name, nameBuf, sizeof( g_rpgCollection.sets[idx].piece[slot].name ) );
+		}
+	} else if ( !Q_strncmp( s, "col_open", 8 ) ) {
+		g_rpgCollection.active = qtrue;
+	} else if ( !Q_strncmp( s, "col_close", 9 ) ) {
+		g_rpgCollection.active = qfalse;
 	} else if ( !Q_strncmp( s, "inv_open", 8 ) ) {
 		g_rpgInventory.active = qtrue;
 		Cvar_Set( "cg_drawInventory", "1" );

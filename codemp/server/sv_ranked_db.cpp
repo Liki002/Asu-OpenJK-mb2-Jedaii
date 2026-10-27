@@ -2751,6 +2751,55 @@ void SV_Ranked_ShowCollection(client_t *cl) {
     }
   }
   SV_SendServerCommand(cl, "print \"^5Loot drops from kills in FA and Legends. Sell with ^3!sell <key>^5.\n\"");
+
+  // Structured data for the client collection screen:
+  //   col_set <idx> <have> <done> <rewardCredits> "<name>"
+  //   col_piece <idx> <slot> <qty> <rarity> "<display>"   (qty 0 = not found yet)
+  // Set 4 is the legendary finds (no set bonus).
+  SV_SendServerCommand(cl, "col_clear");
+  for (int s = 0; sv_lootSets[s].id != NULL; s++) {
+    int have = 0;
+    for (int p = 0; p < 4; p++) {
+      cJSON *it = inv ? cJSON_GetObjectItemCaseSensitive(inv, sv_lootSets[s].pieces[p]) : NULL;
+      if (it && it->valueint > 0)
+        have++;
+    }
+    qboolean isDone = (done && cJSON_GetObjectItemCaseSensitive(done, sv_lootSets[s].id)) ? qtrue : qfalse;
+    SV_SendServerCommand(cl, va("col_set %d %d %d %d \"%s\"", s, have, isDone ? 1 : 0,
+                                sv_lootSets[s].rewardCredits, sv_lootSets[s].name));
+    for (int p = 0; p < 4; p++) {
+      const char *key = sv_lootSets[s].pieces[p];
+      cJSON *it = inv ? cJSON_GetObjectItemCaseSensitive(inv, key) : NULL;
+      int qty = (it && it->valueint > 0) ? it->valueint : 0;
+      int rarity = 0;
+      for (int i = 0; sv_lootItems[i].key != NULL; i++) {
+        if (!Q_stricmp(sv_lootItems[i].key, key)) {
+          rarity = sv_lootRarity[i];
+          break;
+        }
+      }
+      SV_SendServerCommand(cl, va("col_piece %d %d %d %d \"%s\"", s, p, qty, rarity,
+                                  qty > 0 ? SV_Ranked_GetItemDisplayName(key) : "???"));
+    }
+  }
+  {
+    int have = 0;
+    for (int p = 0; p < 4; p++) {
+      const shopItem_t *li = &sv_lootItems[16 + p];
+      cJSON *it = inv ? cJSON_GetObjectItemCaseSensitive(inv, li->key) : NULL;
+      if (it && it->valueint > 0)
+        have++;
+    }
+    SV_SendServerCommand(cl, va("col_set 4 %d 0 0 \"Legendary Finds\"", have));
+    for (int p = 0; p < 4; p++) {
+      const shopItem_t *li = &sv_lootItems[16 + p];
+      cJSON *it = inv ? cJSON_GetObjectItemCaseSensitive(inv, li->key) : NULL;
+      int qty = (it && it->valueint > 0) ? it->valueint : 0;
+      SV_SendServerCommand(cl, va("col_piece 4 %d %d 3 \"%s\"", p, qty,
+                                  qty > 0 ? li->display : "???"));
+    }
+  }
+  SV_SendServerCommand(cl, "col_open");
 }
 
 // ===========================================================================

@@ -60,6 +60,7 @@ cvar_t		*cg_drawAch;
 cvar_t		*cg_drawTopCredits;
 cvar_t		*cg_drawTopPotato;
 cvar_t		*cg_drawAdv;
+static void SCR_ColUITest_f( void );
 int g_rpgXpPerLevel = 1000;
 int g_rpgRankCount = 0;
 rpgRankEntry_t g_rpgRanks[8];
@@ -643,6 +644,7 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
 	Cmd_AddCommand( "hudsettings", SCR_HUDSettings_f, "Toggle HUD settings configuration studio overlay" );
 	Cmd_AddCommand( "rpgmenu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
+	Cmd_AddCommand( "colui_test", SCR_ColUITest_f, "Open the collection book with sample data" );
 	Cmd_AddCommand( "menu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "settings", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "partymenu", SCR_PartyMenu_f, "Toggle Party Management Studio overlay" );
@@ -2757,6 +2759,174 @@ void SCR_DrawHotPotatoOverheadIcon( void ) {
 			}
 		}
 	}
+}
+
+/*
+==================
+SCR_DrawCollectionOverlay
+
+Loot collection book (!collection): four set cards with their pieces and a strip for the legendary finds.
+Data comes from the server (col_set / col_piece).
+==================
+*/
+rpgCollectionOverlay_t g_rpgCollection = {qfalse, 0, {}};
+
+static void SCR_ColRarityColor( int rarity, vec4_t out ) {
+	static const vec4_t cols[4] = {
+		{ 0.78f, 0.80f, 0.85f, 1.0f },
+		{ 0.30f, 0.85f, 0.40f, 1.0f },
+		{ 0.40f, 0.62f, 1.00f, 1.0f },
+		{ 1.00f, 0.80f, 0.20f, 1.0f }
+	};
+	if ( rarity < 0 ) rarity = 0;
+	if ( rarity > 3 ) rarity = 3;
+	out[0] = cols[rarity][0]; out[1] = cols[rarity][1]; out[2] = cols[rarity][2]; out[3] = cols[rarity][3];
+}
+
+static void SCR_DrawColPieces( const rpgColSet_t *cs, float x, float y, float w, float rowH, float charSize ) {
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	for ( int p = 0; p < 4; p++ ) {
+		const float py = y + p * rowH;
+		vec4_t rc;
+		if ( cs->piece[p].qty > 0 ) {
+			SCR_ColRarityColor( cs->piece[p].rarity, rc );
+		} else {
+			rc[0] = 0.25f; rc[1] = 0.30f; rc[2] = 0.38f; rc[3] = 1.0f;
+		}
+		SCR_FillRect( x, py + 1.0f, 7.0f, 7.0f, rc );
+		if ( cs->piece[p].qty > 0 ) {
+			SCR_DrawVirtualString( x + 12.0f, py, charSize, cs->piece[p].name, white );
+			if ( cs->piece[p].qty > 1 ) {
+				SCR_DrawVirtualString( x + w - 26.0f, py, charSize, va( "^5x%d", cs->piece[p].qty ), white );
+			}
+		} else {
+			vec4_t dim = { 0.45f, 0.52f, 0.60f, 1.0f };
+			SCR_DrawVirtualString( x + 12.0f, py, charSize, "???", dim );
+		}
+	}
+}
+
+void SCR_DrawCollectionOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !g_rpgCollection.active ) return;
+
+	const float winW = 560.0f, winH = 372.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 240.0f - winH * 0.5f;
+
+	vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.94f };
+	vec4_t borderColor = { 0.10f, 0.75f, 0.95f, 0.90f };
+	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
+	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
+	vec4_t cardBg = { 0.06f, 0.12f, 0.20f, 0.85f };
+	vec4_t cardDone = { 0.06f, 0.22f, 0.14f, 0.85f };
+	vec4_t cardBorder = { 0.20f, 0.45f, 0.65f, 0.60f };
+	vec4_t doneBorder = { 0.25f, 0.85f, 0.45f, 0.80f };
+	vec4_t segOff = { 0.14f, 0.22f, 0.32f, 1.0f };
+	vec4_t segOn = { 0.10f, 0.75f, 0.95f, 1.0f };
+	vec4_t segDone = { 0.25f, 0.85f, 0.45f, 1.0f };
+
+	SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 8.0f, bgColor, borderColor );
+
+	float titleW = SCR_GetStringWidth( "COLLECTION BOOK", 8.0f );
+	SCR_DrawVirtualString( winX + ( winW - titleW ) * 0.5f, winY + 12.0f, 8.0f, "^3COLLECTION BOOK", yellowCol );
+	SCR_DrawVirtualString( winX + winW - 44.0f, winY + 10.0f, 5.0f, "^1[ESC]", yellowCol );
+
+	int totalHave = 0, totalMax = 0;
+	for ( int i = 0; i < 5; i++ ) {
+		totalHave += g_rpgCollection.sets[i].have;
+		totalMax += 4;
+	}
+	SCR_DrawVirtualString( winX + 14.0f, winY + 14.0f, 4.4f, va( "^7Found ^3%d^7 / %d", totalHave, totalMax ), whiteColor );
+
+	// Four set cards in a 2x2 grid
+	const float gap = 8.0f;
+	const float cardW = ( winW - 24.0f - gap ) * 0.5f;
+	const float cardH = 118.0f;
+	for ( int s = 0; s < 4; s++ ) {
+		const rpgColSet_t *cs = &g_rpgCollection.sets[s];
+		const float cx = winX + 12.0f + ( s % 2 ) * ( cardW + gap );
+		const float cy = winY + 38.0f + ( s / 2 ) * ( cardH + gap );
+		SCR_DrawRoundedGlassPanel( cx, cy, cardW, cardH, 5.0f, cs->done ? cardDone : cardBg, cs->done ? doneBorder : cardBorder );
+
+		SCR_DrawVirtualString( cx + 10.0f, cy + 7.0f, 5.0f, va( "^3%s", cs->name[0] ? cs->name : "???" ), whiteColor );
+		SCR_DrawVirtualString( cx + cardW - 38.0f, cy + 7.0f, 5.0f, va( "%s%d/4", cs->done ? "^2" : "^7", cs->have ), whiteColor );
+
+		// four progress segments
+		const float segW = ( cardW - 20.0f - 3 * 3.0f ) * 0.25f;
+		for ( int k = 0; k < 4; k++ ) {
+			SCR_FillRect( cx + 10.0f + k * ( segW + 3.0f ), cy + 24.0f, segW, 4.0f,
+				k < cs->have ? ( cs->done ? segDone : segOn ) : segOff );
+		}
+
+		SCR_DrawColPieces( cs, cx + 10.0f, cy + 36.0f, cardW - 20.0f, 14.0f, 4.4f );
+
+		if ( cs->done ) {
+			SCR_DrawVirtualString( cx + 10.0f, cy + cardH - 16.0f, 4.2f, "^2COMPLETE", whiteColor );
+		} else if ( cs->reward > 0 ) {
+			SCR_DrawVirtualString( cx + 10.0f, cy + cardH - 16.0f, 4.2f, va( "^7Set bonus: ^3+%d CR", cs->reward ), whiteColor );
+		}
+	}
+
+	// Legendary strip
+	{
+		const rpgColSet_t *cs = &g_rpgCollection.sets[4];
+		const float ly = winY + 38.0f + 2 * ( cardH + gap );
+		const float lw = winW - 24.0f;
+		vec4_t legBorder = { 1.0f, 0.80f, 0.20f, 0.55f };
+		SCR_DrawRoundedGlassPanel( winX + 12.0f, ly, lw, 54.0f, 5.0f, cardBg, legBorder );
+		SCR_DrawVirtualString( winX + 22.0f, ly + 6.0f, 4.8f, va( "^3Legendary Finds  ^7%d/4", cs->have ), whiteColor );
+		for ( int p = 0; p < 4; p++ ) {
+			const float px = winX + 22.0f + p * ( ( lw - 20.0f ) * 0.25f );
+			const float py = ly + 26.0f;
+			vec4_t rc;
+			if ( cs->piece[p].qty > 0 ) SCR_ColRarityColor( 3, rc );
+			else { rc[0] = 0.25f; rc[1] = 0.30f; rc[2] = 0.38f; rc[3] = 1.0f; }
+			SCR_FillRect( px, py + 1.0f, 7.0f, 7.0f, rc );
+			if ( cs->piece[p].qty > 0 ) SCR_DrawVirtualString( px + 12.0f, py, 4.2f, cs->piece[p].name, whiteColor );
+			else {
+				vec4_t dim = { 0.45f, 0.52f, 0.60f, 1.0f };
+				SCR_DrawVirtualString( px + 12.0f, py, 4.2f, "???", dim );
+			}
+		}
+	}
+
+	SCR_DrawVirtualString( winX + 14.0f, winY + winH - 14.0f, 3.8f, "^7Loot drops from kills in FA and Legends.  Sell with ^3!sell <key>^7.  ^3ESC^7 to close", whiteColor );
+}
+
+/*
+==================
+colui_test
+
+Fills the collection book with sample data so the layout can be checked without a server.
+==================
+*/
+static void SCR_ColUITest_f( void ) {
+	memset( &g_rpgCollection.sets, 0, sizeof( g_rpgCollection.sets ) );
+	static const char *setNames[5] = { "Rebel Alliance Kit", "Imperial Cache", "Jedi Order Relics", "Sith Artifacts", "Legendary Finds" };
+	static const char *pieceNames[5][4] = {
+		{ "^7Rebel Comlink", "^7Field Ration", "^2Pilot Helmet", "^5Hero's Medal" },
+		{ "^7Access Keycard", "^7Scrap Plate", "^2Officer Cap", "^5Code Cylinder" },
+		{ "^7Holorecord", "^7Training Remote", "^2Kyber Shard", "^5Jedi Robe" },
+		{ "^7Sith Talisman", "^7Tome Page", "^2Dark Amulet", "^5Reactor Core" },
+		{ "^3Heart of the Force", "^3Legend 2", "^3Legend 3", "^3Legend 4" }
+	};
+	static const int rar[4] = { 0, 0, 1, 2 };
+	static const int have[5][4] = { { 2, 1, 1, 1 }, { 1, 0, 1, 0 }, { 1, 1, 0, 0 }, { 0, 0, 0, 0 }, { 1, 0, 0, 0 } };
+	for ( int s = 0; s < 5; s++ ) {
+		rpgColSet_t *cs = &g_rpgCollection.sets[s];
+		Q_strncpyz( cs->name, setNames[s], sizeof( cs->name ) );
+		cs->reward = ( s < 2 ) ? 400 : ( s < 4 ? 450 : 0 );
+		for ( int p = 0; p < 4; p++ ) {
+			cs->piece[p].qty = have[s][p];
+			cs->piece[p].rarity = ( s == 4 ) ? 3 : rar[p];
+			Q_strncpyz( cs->piece[p].name, have[s][p] ? pieceNames[s][p] : "???", sizeof( cs->piece[p].name ) );
+			if ( have[s][p] ) cs->have++;
+		}
+		cs->done = ( s == 0 );
+	}
+	g_rpgCollection.setCount = 5;
+	g_rpgCollection.active = qtrue;
 }
 
 /*
@@ -5159,6 +5329,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 					SCR_DrawShopOverlay();
 					SCR_DrawQuestOverlay();
 					SCR_DrawInventoryOverlay();
+					SCR_DrawCollectionOverlay();
 					SCR_DrawAchievementsOverlay();
 					SCR_DrawTopCreditsOverlay();
 					SCR_DrawTopPotatoOverlay();
@@ -5172,7 +5343,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 					SCR_DrawCantinaGamesOverlay();
 
 					// Draw dynamic virtual mouse cursor ONLY on active interactive menus (Shop, Inventory, Adventure, RPG Menu, Party Studio, Admin, Games)
-					if ( g_rpgShop.active || g_rpgInventory.active || g_rpgAdv.active || g_rpgMenu.active || g_rpgPartyStudio.active || g_rpgAdmin.active || g_cantinaGames.active ) {
+					if ( g_rpgShop.active || g_rpgInventory.active || g_rpgCollection.active || g_rpgAdv.active || g_rpgMenu.active || g_rpgPartyStudio.active || g_rpgAdmin.active || g_cantinaGames.active ) {
 						if ( s_hGlobalCursor <= 0 && re && re->RegisterShader ) {
 							s_hGlobalCursor = re->RegisterShader( "gfx/rpg_hud/rpg_mouse" );
 							if ( s_hGlobalCursor <= 0 ) s_hGlobalCursor = re->RegisterShader( "ui/assets/selectcursor.tga" );
@@ -5310,6 +5481,7 @@ void CL_ResetRPGOverlays( void ) {
 	g_rpgShop.active = qfalse;
 	g_rpgQuest.active = qfalse;
 	g_rpgInventory.active = qfalse;
+	g_rpgCollection.active = qfalse;
 	g_rpgAch.active = qfalse;
 	g_rpgTopCredits.active = qfalse;
 	g_rpgTopPotato.active = qfalse;

@@ -919,6 +919,22 @@ typedef struct {
 
 extern rpgInventoryOverlay_t g_rpgInventory;
 
+// --- Collection Overlay (!collection) ---
+typedef struct {
+	char name[48];
+	int  have, done, reward;
+	struct { int qty, rarity; char name[40]; } piece[4];
+} rpgColSet_t;
+
+typedef struct {
+	qboolean active;
+	int      setCount;
+	rpgColSet_t sets[5];
+} rpgCollectionOverlay_t;
+
+extern rpgCollectionOverlay_t g_rpgCollection;
+void SCR_DrawCollectionOverlay( void );
+
 // --- Achievements Overlay ---
 typedef struct {
 	char name[64];
