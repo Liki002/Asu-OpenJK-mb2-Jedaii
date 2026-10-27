@@ -562,14 +562,17 @@ Console command: rpg_hud_style <classic|bottom|0|1>
 */
 static void SCR_RPGHUDStyle_f( void ) {
 	if ( Cmd_Argc() < 2 ) {
-		Com_Printf( "^3Usage: ^7rpg_hud_style <classic | bottom | style2 | style3 | holo | 0 | 1 | 2 | 3 | 4>\n" );
+		Com_Printf( "^3Usage: ^7rpg_hud_style <classic | bottom | style2 | style3 | holo | edge | 0 | 1 | 2 | 3 | 4 | 5>\n" );
 		return;
 	}
 	const char *style = Cmd_Argv( 1 );
 	if ( Cmd_Argc() >= 3 && !Q_stricmp( style, "style" ) ) {
 		style = Cmd_Argv( 2 );
 	}
-	if ( !Q_stricmp( style, "holo" ) || !Q_stricmp( style, "4" ) ) {
+	if ( !Q_stricmp( style, "edge" ) || !Q_stricmp( style, "5" ) ) {
+		Cvar_Set( "cg_rpg_style", "5" );
+		Com_Printf( "^2RPG HUD style set to EDGE CARD (Style 5)\n" );
+	} else if ( !Q_stricmp( style, "holo" ) || !Q_stricmp( style, "4" ) ) {
 		Cvar_Set( "cg_rpg_style", "4" );
 		Com_Printf( "^2RPG HUD style set to HOLO CARD (Style 4)\n" );
 	} else if ( !Q_stricmp( style, "bottom" ) || !Q_stricmp( style, "1" ) ) {
@@ -1049,6 +1052,17 @@ static void SCR_FitText( const char *in, char *out, int outSize, float maxW, flo
 	}
 }
 
+// Fills a rectangle with the top-left and bottom-right corners cut at 45 degrees
+static void SCR_FillChamfer( float x, float y, float w, float h, float cut, const float *color ) {
+	const float step = 0.5f;
+	SCR_FillRect( x, y + cut, w, h - 2.0f * cut, color );
+	for ( float i = 0.0f; i < cut; i += step ) {
+		const float inset = cut - i;
+		SCR_FillRect( x + inset, y + i, w - inset, step, color );
+		SCR_FillRect( x, y + h - i - step, w - inset, step, color );
+	}
+}
+
 static void SCR_DrawStatsCaption( float x, float y, float size ) {
 	vec4_t shadow = { 0.0f, 0.0f, 0.0f, 0.85f };
 	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
@@ -1091,7 +1105,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
-	if ( style < 0 || style > 4 ) style = 0;
+	if ( style < 0 || style > 5 ) style = 0;
 
 	// Hide HUD when full screen menus/overlays are active
 	if ( (cg_drawStats && cg_drawStats->integer) ||
@@ -1120,8 +1134,11 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		panelH = 32.0f;
 		(void)maxStrW;
 	} else if ( style == 4 ) {
-		panelW = 230.0f;
+		panelW = 200.0f;
 		panelH = 58.0f;
+	} else if ( style == 5 ) {
+		panelW = 176.0f;
+		panelH = 36.0f;
 	} else {
 		panelW = 175.0f;
 		panelH = 35.0f;
@@ -1179,7 +1196,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// STYLE 4: HOLO CARD - code-drawn, same look as the duel result announcer.
 	// Slides in when it appears; the XP bar eases to its value, has a moving sheen and flashes on every XP gain.
 	// ========================================================
-	if ( style == 4 ) {
+	if ( style == 4 || style == 5 ) {
+		const qboolean edge = ( style == 5 ) ? qtrue : qfalse;	// compact card with cut corners, no avatar and no stats row
+		const float cut = 7.0f;
 		static int s_holoShownMs = 0;
 		static int s_holoLastDrawMs = 0;
 		static int s_holoLastTotalXP = -1;
@@ -1225,69 +1244,80 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		// panel: dark navy glass, 1px border, accent bar on the left
 		vec4_t bg = { 0.04f, 0.07f, 0.14f, 0.88f * a };
-		SCR_FillRect( panelX, panelY, panelW, panelH, bg );
 		vec4_t border = { 0.20f, 0.50f, 0.80f, 0.55f * a };
 		if ( levelUp ) { border[0] = 0.95f; border[1] = 0.78f; border[2] = 0.20f; border[3] = ( 0.55f + 0.4f * lvPulse ) * a; }
-		SCR_FillRect( panelX, panelY, panelW, 1.0f, border );
-		SCR_FillRect( panelX, panelY + panelH - 1.0f, panelW, 1.0f, border );
-		SCR_FillRect( panelX, panelY, 1.0f, panelH, border );
-		SCR_FillRect( panelX + panelW - 1.0f, panelY, 1.0f, panelH, border );
 		vec4_t accent = { 0.10f, 0.75f, 0.95f, a };
 		if ( levelUp ) { accent[0] = 1.0f; accent[1] = 0.80f; accent[2] = 0.20f; }
-		SCR_FillRect( panelX, panelY, 3.0f, panelH, accent );
-
-		// avatar
-		const float avSize = 34.0f;
-		const float avX = panelX + 8.0f;
-		const float avY = panelY + ( panelH - avSize ) * 0.5f;
-		vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.70f * a };
-		SCR_FillRect( avX - 1.0f, avY - 1.0f, avSize + 2.0f, avSize + 2.0f, avFrame );
-		vec4_t avBg = { 0.03f, 0.06f, 0.11f, a };
-		SCR_FillRect( avX, avY, avSize, avSize, avBg );
-		if ( s_hAvatar ) {
-			vec4_t av = { 1.0f, 1.0f, 1.0f, a };
-			re->SetColor( av );
-			SCR_DrawPic( avX, avY, avSize, avSize, s_hAvatar );
-			re->SetColor( NULL );
+		if ( edge ) {
+			SCR_FillChamfer( panelX - 1.0f, panelY - 1.0f, panelW + 2.0f, panelH + 2.0f, cut + 1.0f, border );
+			SCR_FillChamfer( panelX, panelY, panelW, panelH, cut, bg );
+			SCR_FillRect( panelX, panelY + cut, 2.0f, panelH - 2.0f * cut, accent );
 		} else {
-			SCR_DrawJediVectorEmblem( avX + avSize * 0.5f, avY + avSize * 0.5f, avSize * 0.5f );
+			SCR_FillRect( panelX, panelY, panelW, panelH, bg );
+			SCR_FillRect( panelX, panelY, panelW, 1.0f, border );
+			SCR_FillRect( panelX, panelY + panelH - 1.0f, panelW, 1.0f, border );
+			SCR_FillRect( panelX, panelY, 1.0f, panelH, border );
+			SCR_FillRect( panelX + panelW - 1.0f, panelY, 1.0f, panelH, border );
+			SCR_FillRect( panelX, panelY, 3.0f, panelH, accent );
 		}
 
-		const float textX = avX + avSize + 8.0f;
+		// avatar
+		const float avSize = edge ? 0.0f : 34.0f;
+		const float avX = panelX + 8.0f;
+		const float avY = panelY + ( panelH - avSize ) * 0.5f;
+		if ( !edge ) {
+			vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.70f * a };
+			SCR_FillRect( avX - 1.0f, avY - 1.0f, avSize + 2.0f, avSize + 2.0f, avFrame );
+			vec4_t avBg = { 0.03f, 0.06f, 0.11f, a };
+			SCR_FillRect( avX, avY, avSize, avSize, avBg );
+			if ( s_hAvatar ) {
+				vec4_t av = { 1.0f, 1.0f, 1.0f, a };
+				re->SetColor( av );
+				SCR_DrawPic( avX, avY, avSize, avSize, s_hAvatar );
+				re->SetColor( NULL );
+			} else {
+				SCR_DrawJediVectorEmblem( avX + avSize * 0.5f, avY + avSize * 0.5f, avSize * 0.5f );
+			}
+		}
+
+		const float textX = edge ? panelX + 11.0f : avX + avSize + 8.0f;
 		const float rightX = panelX + panelW - 8.0f;
 		vec4_t whiteA = { 1.0f, 1.0f, 1.0f, a };
 
 		// row 1: name (shortened to fit) and level badge pinned right
 		char lvStr[32];
 		Com_sprintf( lvStr, sizeof( lvStr ), "^3Lv %d", level );
-		const float lvW = SCR_GetStringWidth( lvStr, 5.0f );
+		const float nameSize = edge ? 4.4f : 5.0f;
+		const float row1Y = panelY + ( edge ? 3.0f : 4.0f );
+		const float row2Y = panelY + ( edge ? 13.0f : 16.0f );
+		const float lvW = SCR_GetStringWidth( lvStr, nameSize );
 		char nameFit[96];
-		SCR_FitText( playerName, nameFit, sizeof( nameFit ), rightX - textX - lvW - 8.0f, 5.0f );
-		SCR_DrawVirtualString( textX, panelY + 4.0f, 5.0f, va( "^7%s", nameFit ), whiteA );
-		SCR_DrawVirtualString( rightX - lvW, panelY + 4.0f, 5.0f, lvStr, whiteA );
+		SCR_FitText( playerName, nameFit, sizeof( nameFit ), rightX - textX - lvW - 8.0f, nameSize );
+		SCR_DrawVirtualString( textX, row1Y, nameSize, va( "^7%s", nameFit ), whiteA );
+		SCR_DrawVirtualString( rightX - lvW, row1Y, nameSize, lvStr, whiteA );
 
 		// row 2: rank and Elo on the left, XP numbers on the right (or LEVEL UP while it is flashing)
-		SCR_DrawVirtualString( textX, panelY + 16.0f, 3.6f, va( "^3%s ^7| ^2%d Elo", rankTitle, fr ), whiteA );
+		SCR_DrawVirtualString( textX, row2Y, 3.4f, va( "^3%s ^7| ^2%d Elo", rankTitle, fr ), whiteA );
 		if ( levelUp && ( levelAge / 250 ) % 2 == 0 ) {
 			const char *lu = "^3LEVEL UP!";
-			SCR_DrawVirtualString( rightX - SCR_GetStringWidth( lu, 3.6f ), panelY + 16.0f, 3.6f, lu, whiteA );
+			SCR_DrawVirtualString( rightX - SCR_GetStringWidth( lu, 3.4f ), row2Y, 3.4f, lu, whiteA );
 		} else {
 			const char *xs = va( "^7%d ^5/ %d XP", relativeXP, xpMax );
-			SCR_DrawVirtualString( rightX - SCR_GetStringWidth( xs, 3.4f ), panelY + 16.0f, 3.4f, xs, whiteA );
+			SCR_DrawVirtualString( rightX - SCR_GetStringWidth( xs, 3.2f ), row2Y, 3.2f, xs, whiteA );
 		}
 
 		// row 3: kills / deaths / wins / losses, spelled out, inside the card
-		{
+		if ( !edge ) {
 			vec4_t statsCol = { 1.0f, 1.0f, 1.0f, a };
-			SCR_DrawVirtualString( textX, panelY + 27.0f, 3.2f,
+			SCR_DrawVirtualString( textX, panelY + 27.0f, 3.0f,
 				va( "^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses ), statsCol );
 		}
 
 		// row 4: the animated XP bar
 		const float barX = textX;
-		const float barY = panelY + panelH - 12.0f;
+		const float barY = panelY + panelH - ( edge ? 10.0f : 12.0f );
 		const float barW = rightX - barX;
-		const float barH = 6.0f;
+		const float barH = edge ? 4.0f : 6.0f;
 		vec4_t trackBorder = { 0.20f, 0.50f, 0.80f, 0.55f * a };
 		vec4_t track = { 0.02f, 0.04f, 0.09f, 0.95f * a };
 		SCR_FillRect( barX - 1.0f, barY - 1.0f, barW + 2.0f, barH + 2.0f, trackBorder );
@@ -2900,6 +2930,7 @@ void SCR_DrawSettingsOverlay( void ) {
 	else if ( curStyle == 2 ) styleLabel = "STYLE: TECH";
 	else if ( curStyle == 3 ) styleLabel = "STYLE: MINIMAL";
 	else if ( curStyle == 4 ) styleLabel = "STYLE: HOLO";
+	else if ( curStyle == 5 ) styleLabel = "STYLE: EDGE";
 
 	qboolean styleHover = (qboolean)( mx >= col1X && mx <= col1X + 160.0f && my >= winY + 90.0f && my <= winY + 130.0f );
 	SCR_DrawSettingButton( col1X, winY + 90.0f, 160.0f, 40.0f, styleLabel, 4.0f, styleHover );
@@ -3357,13 +3388,13 @@ void SCR_DrawRPGMenuOverlay( void ) {
 		SCR_DrawVirtualString( winX + 25.0f, contentY, 5.2f, "^5[HUD CONFIGURATION STUDIO]", cyanColor );
 		
 		int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
-		const char *styleNames[5] = { "Classic", "Sleek Bar", "Tech Hex", "Minimal", "Holo" };
+		const char *styleNames[6] = { "Classic", "Sleek Bar", "Tech Hex", "Minimal", "Holo", "Edge" };
 		const char *curPos = (cg_rpg_pos && cg_rpg_pos->string[0]) ? cg_rpg_pos->string : "left";
 
 		// Button 1: HUD Style
 		qboolean h1 = (qboolean)(mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 20.0f && my <= contentY + 55.0f);
 		SCR_DrawRoundedGlassPanel( winX + 30.0f, contentY + 20.0f, 210.0f, 35.0f, 4.0f, h1 ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( winX + 40.0f, contentY + 32.0f, 4.2f, va("^7HUD Style: ^3%s", styleNames[curStyle % 5]), whiteColor );
+		SCR_DrawVirtualString( winX + 40.0f, contentY + 32.0f, 4.2f, va("^7HUD Style: ^3%s", styleNames[curStyle % 6]), whiteColor );
 
 		// Button 2: HUD Position
 		qboolean h2 = (qboolean)(mx >= winX + 270.0f && mx <= winX + 480.0f && my >= contentY + 20.0f && my <= contentY + 55.0f);
