@@ -11,6 +11,7 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 
 #### 1. Client Fixes
 - **No more "Could not load generic shader!" after changing resolution**: `CL_ShutdownRef` in `codemp/client/cl_main.cpp` now always unloads the renderer DLL on `vid_restart`. MBII's own `rd-rend2-mbii` / `rd-vanilla-mbii` DLLs keep static state and cannot be re-initialised in place.
+- **Console version text**: the bottom-right console text now reads `Jedaii-MBII-MP v1.1.0` (`JEDAII_VERSION` in `codemp/qcommon/game_version.h`) instead of `OpenJK-MP: v1.0.1.0`. The engine `VERSION_*` numbers are unchanged.
 - **Jedaii logo as the exe icon**: `codemp/win32/icon.ico` rebuilt from the Jedaii logo (16-256 px).
 
 #### 2. Server-Driven RPG Menu Data

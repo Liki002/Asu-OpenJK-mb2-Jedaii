@@ -39,3 +39,6 @@ along with this program; if not, see <http://www.gnu.org/licenses/>.
 	#define	JK_VERSION		"OpenJK-MP: v" VERSION_STRING_DOTTED
 	#define JK_VERSION_OLD	"JAmp: v" VERSION_STRING_DOTTED
 #endif
+
+// Shown in the console (bottom right). Bump the number on each Jedaii release.
+#define JEDAII_VERSION	"Jedaii-MBII-MP v1.1.0"
