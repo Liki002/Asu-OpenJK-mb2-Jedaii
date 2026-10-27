@@ -1032,15 +1032,68 @@ static void SCR_FitText( const char *in, char *out, int outSize, float maxW, flo
 	}
 }
 
-// Fills a rectangle with the top-left and bottom-right corners cut at 45 degrees
+// ---- Code-drawn UI kit (Holo look) --------------------------------------------------------------
+// Fills a rectangle with the top-left and bottom-right corners cut at 45 degrees (one row per screen pixel)
 static void SCR_FillChamfer( float x, float y, float w, float h, float cut, const float *color ) {
-	const float step = 0.5f;
+	int n = (int)ceilf( cut * 2.25f );
+	if ( n < 1 ) n = 1;
+	const float step = cut / (float)n;
 	SCR_FillRect( x, y + cut, w, h - 2.0f * cut, color );
-	for ( float i = 0.0f; i < cut; i += step ) {
-		const float inset = cut - i;
-		SCR_FillRect( x + inset, y + i, w - inset, step, color );
-		SCR_FillRect( x, y + h - i - step, w - inset, step, color );
+	for ( int i = 0; i < n; i++ ) {
+		const float inset = cut - step * ( (float)i + 0.5f );
+		SCR_FillRect( x + inset, y + step * (float)i, w - inset, step, color );
+		SCR_FillRect( x, y + h - step * (float)( i + 1 ), w - inset, step, color );
 	}
+}
+
+// 1px outline of the same shape (does not tint the inside of the panel)
+static void SCR_StrokeChamfer( float x, float y, float w, float h, float cut, const float *color ) {
+	int n = (int)ceilf( cut * 2.25f );
+	if ( n < 1 ) n = 1;
+	const float step = cut / (float)n;
+	SCR_FillRect( x + cut, y, w - cut, 1.0f, color );
+	SCR_FillRect( x, y + h - 1.0f, w - cut, 1.0f, color );
+	SCR_FillRect( x, y + cut, 1.0f, h - cut, color );
+	SCR_FillRect( x + w - 1.0f, y, 1.0f, h - cut, color );
+	for ( int i = 0; i < n; i++ ) {
+		const float inset = cut - step * ( (float)i + 0.5f );
+		SCR_FillRect( x + inset - 0.3f, y + step * (float)i, 1.3f, step, color );
+		SCR_FillRect( x + w - inset - 1.0f, y + h - step * (float)( i + 1 ), 1.3f, step, color );
+	}
+}
+
+// Dark navy glass panel with a thin border and an accent bar on the left. cut = 0 gives square corners.
+static void SCR_UIPanel( float x, float y, float w, float h, float cut, const float *bg, const float *border, const float *accent ) {
+	if ( cut > 0.0f ) {
+		SCR_FillChamfer( x, y, w, h, cut, bg );
+		SCR_StrokeChamfer( x, y, w, h, cut, border );
+		if ( accent ) SCR_FillRect( x, y + cut, 2.0f, h - 2.0f * cut, accent );
+	} else {
+		SCR_FillRect( x, y, w, h, bg );
+		SCR_FillRect( x, y, w, 1.0f, border );
+		SCR_FillRect( x, y + h - 1.0f, w, 1.0f, border );
+		SCR_FillRect( x, y, 1.0f, h, border );
+		SCR_FillRect( x + w - 1.0f, y, 1.0f, h, border );
+		if ( accent ) SCR_FillRect( x, y, 3.0f, h, accent );
+	}
+}
+
+// Small bordered key / button chip with centred text
+static void SCR_UIChip( float x, float y, float w, float h, const char *text, float size, const float *fill, const float *border, const float *textCol ) {
+	SCR_FillRect( x, y, w, h, fill );
+	SCR_FillRect( x, y, w, 1.0f, border );
+	SCR_FillRect( x, y + h - 1.0f, w, 1.0f, border );
+	SCR_FillRect( x, y, 1.0f, h, border );
+	SCR_FillRect( x + w - 1.0f, y, 1.0f, h, border );
+	SCR_DrawVirtualString( x + ( w - SCR_GetStringWidth( text, size ) ) * 0.5f, y + ( h - size * 1.2f ) * 0.5f, size, text, textCol );
+}
+
+// Window title: coloured title text with a tinted rule underneath
+static void SCR_UITitle( float x, float y, float w, const char *title, float size, const float *tint ) {
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_DrawVirtualString( x, y, size, title, white );
+	vec4_t line = { tint[0], tint[1], tint[2], 0.85f };
+	SCR_FillRect( x, y + size * 1.5f + 3.0f, w, 1.0f, line );
 }
 
 static void SCR_DrawStatsCaption( float x, float y, float size ) {
@@ -1101,13 +1154,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float titleW = SCR_GetStringWidth( rankTitle, 4.3f );
 	float maxStrW = (nameW > titleW) ? nameW : titleW;
 	float panelW, panelH;
-	if ( style == 1 ) {
-		panelW = 176.0f;
-		panelH = 36.0f;
-	} else {
-		panelW = 200.0f;
-		panelH = 58.0f;
-	}
+	panelW = 200.0f;
+	panelH = 48.0f;
 	(void)maxStrW;
 
 	// Preset position defaults
@@ -1163,7 +1211,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// Slides in when it appears; the XP bar eases to its value, has a moving sheen and flashes on every XP gain.
 	// ========================================================
 	if ( style == 0 || style == 1 ) {
-		const qboolean edge = ( style == 1 ) ? qtrue : qfalse;	// compact card with cut corners, no avatar and no stats row
+		const qboolean edge = ( style == 1 ) ? qtrue : qfalse;	// same card with cut corners
 		const float cut = 7.0f;
 		static int s_holoShownMs = 0;
 		static int s_holoLastDrawMs = 0;
@@ -1214,24 +1262,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		if ( levelUp ) { border[0] = 0.95f; border[1] = 0.78f; border[2] = 0.20f; border[3] = ( 0.55f + 0.4f * lvPulse ) * a; }
 		vec4_t accent = { 0.10f, 0.75f, 0.95f, a };
 		if ( levelUp ) { accent[0] = 1.0f; accent[1] = 0.80f; accent[2] = 0.20f; }
-		if ( edge ) {
-			SCR_FillChamfer( panelX - 1.0f, panelY - 1.0f, panelW + 2.0f, panelH + 2.0f, cut + 1.0f, border );
-			SCR_FillChamfer( panelX, panelY, panelW, panelH, cut, bg );
-			SCR_FillRect( panelX, panelY + cut, 2.0f, panelH - 2.0f * cut, accent );
-		} else {
-			SCR_FillRect( panelX, panelY, panelW, panelH, bg );
-			SCR_FillRect( panelX, panelY, panelW, 1.0f, border );
-			SCR_FillRect( panelX, panelY + panelH - 1.0f, panelW, 1.0f, border );
-			SCR_FillRect( panelX, panelY, 1.0f, panelH, border );
-			SCR_FillRect( panelX + panelW - 1.0f, panelY, 1.0f, panelH, border );
-			SCR_FillRect( panelX, panelY, 3.0f, panelH, accent );
-		}
+		SCR_UIPanel( panelX, panelY, panelW, panelH, edge ? cut : 0.0f, bg, border, accent );
 
 		// avatar
-		const float avSize = edge ? 0.0f : 34.0f;
+		const float avSize = 34.0f;
 		const float avX = panelX + 8.0f;
 		const float avY = panelY + ( panelH - avSize ) * 0.5f;
-		if ( !edge ) {
+		{
 			vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.70f * a };
 			SCR_FillRect( avX - 1.0f, avY - 1.0f, avSize + 2.0f, avSize + 2.0f, avFrame );
 			vec4_t avBg = { 0.03f, 0.06f, 0.11f, a };
@@ -1246,16 +1283,16 @@ void SCR_DrawRPGHUDOverlay( void ) {
 			}
 		}
 
-		const float textX = edge ? panelX + 11.0f : avX + avSize + 8.0f;
+		const float textX = avX + avSize + 8.0f;
 		const float rightX = panelX + panelW - 8.0f;
 		vec4_t whiteA = { 1.0f, 1.0f, 1.0f, a };
 
 		// row 1: name (shortened to fit) and level badge pinned right
 		char lvStr[32];
 		Com_sprintf( lvStr, sizeof( lvStr ), "^3Lv %d", level );
-		const float nameSize = edge ? 4.4f : 5.0f;
-		const float row1Y = panelY + ( edge ? 3.0f : 4.0f );
-		const float row2Y = panelY + ( edge ? 13.0f : 16.0f );
+		const float nameSize = 5.0f;
+		const float row1Y = panelY + 4.0f;
+		const float row2Y = panelY + 16.0f;
 		const float lvW = SCR_GetStringWidth( lvStr, nameSize );
 		char nameFit[96];
 		SCR_FitText( playerName, nameFit, sizeof( nameFit ), rightX - textX - lvW - 8.0f, nameSize );
@@ -1273,7 +1310,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		}
 
 		// row 3: kills / deaths / wins / losses, spelled out, inside the card
-		if ( !edge ) {
+		{
 			vec4_t statsCol = { 1.0f, 1.0f, 1.0f, a };
 			SCR_DrawVirtualString( textX, panelY + 27.0f, 3.0f,
 				va( "^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses ), statsCol );
@@ -1281,9 +1318,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		// row 4: the animated XP bar
 		const float barX = textX;
-		const float barY = panelY + panelH - ( edge ? 10.0f : 12.0f );
+		const float barY = panelY + panelH - 12.0f;
 		const float barW = rightX - barX;
-		const float barH = edge ? 4.0f : 6.0f;
+		const float barH = 6.0f;
 		vec4_t trackBorder = { 0.20f, 0.50f, 0.80f, 0.55f * a };
 		vec4_t track = { 0.02f, 0.04f, 0.09f, 0.95f * a };
 		SCR_FillRect( barX - 1.0f, barY - 1.0f, barW + 2.0f, barH + 2.0f, trackBorder );
@@ -1796,108 +1833,89 @@ void SCR_DrawBountyOverlay( void ) {
 	if ( !cg_drawBounty || !cg_drawBounty->integer ) return;
 	if ( !g_rpgBounty.active ) return;
 
-	// Modal Window Dimensions (Vertical 300x400 centered card using wanted_bg.tga)
+	const qboolean wanted = g_rpgBounty.isWanted;
+	const int rows = ( g_rpgBounty.count > 10 ) ? 10 : g_rpgBounty.count;
+	const float rowH = 19.0f;
+
+	// keep the close-button area at the top, the window grows with the number of rows
 	float winW = 300.0f;
-	float winH = 400.0f;
+	float winH = 92.0f + ( rows > 0 ? rows : 2 ) * rowH;
 	float winX = 320.0f - winW * 0.5f;
 	float winY = 40.0f;
 
-	vec4_t borderColor;
-	if ( g_rpgBounty.isWanted ) {
-		borderColor[0] = 1.00f; borderColor[1] = 0.20f; borderColor[2] = 0.20f; borderColor[3] = 0.85f;
-	} else {
-		borderColor[0] = 0.00f; borderColor[1] = 0.70f; borderColor[2] = 1.00f; borderColor[3] = 0.85f;
+	vec4_t tint   = { 0.95f, 0.75f, 0.20f, 1.0f };
+	if ( wanted ) { tint[0] = 1.00f; tint[1] = 0.30f; tint[2] = 0.25f; }
+	vec4_t bg     = { 0.04f, 0.07f, 0.14f, 0.94f };
+	vec4_t border = { tint[0] * 0.8f, tint[1] * 0.8f, tint[2] * 0.8f, 0.70f };
+	vec4_t dim    = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIPanel( winX, winY, winW, winH, 10.0f, bg, border, tint );
+
+	// title + close chip
+	SCR_UITitle( winX + 18.0f, winY + 10.0f, winW - 36.0f, wanted ? "^1WANTED ^7TARGETS" : "^3ACTIVE ^7BOUNTIES", 7.0f, tint );
+	vec4_t chipFill = { 0.30f, 0.06f, 0.06f, 0.9f };
+	vec4_t chipBorder = { 0.90f, 0.30f, 0.25f, 0.9f };
+	SCR_UIChip( winX + winW - 40.0f, winY + 8.0f, 34.0f, 15.0f, "ESC", 3.6f, chipFill, chipBorder, white );
+
+	// column headers
+	const float headY = winY + 42.0f;
+	const float colName = winX + 40.0f;
+	const float colStreak = winX + 180.0f;
+	const float rightEdge = winX + winW - 18.0f;
+	SCR_DrawVirtualString( winX + 20.0f, headY, 3.6f, "#", dim );
+	SCR_DrawVirtualString( colName, headY, 3.6f, "PLAYER", dim );
+	if ( wanted ) SCR_DrawVirtualString( colStreak, headY, 3.6f, "STREAK", dim );
+	const char *bountyHead = wanted ? "BOUNTY" : "REWARD";
+	SCR_DrawVirtualString( rightEdge - SCR_GetStringWidth( bountyHead, 3.6f ), headY, 3.6f, bountyHead, dim );
+
+	if ( rows == 0 ) {
+		SCR_DrawVirtualString( winX + 20.0f, headY + 22.0f, 4.6f, "^7No active targets found.", white );
 	}
 
-	if ( s_hWantedBg <= 0 && re && re->RegisterShader ) {
-		s_hWantedBg = re->RegisterShader( "gfx/rpg_hud/wanted_bg" );
-	}
+	float rowY = headY + 14.0f;
+	for ( int i = 0; i < rows; i++ ) {
+		bountyEntry_t *e = &g_rpgBounty.entries[i];
 
-	if ( s_hWantedBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hWantedBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.90f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+		if ( i % 2 == 0 ) {
+			vec4_t zebra = { 1.0f, 1.0f, 1.0f, 0.05f };
+			SCR_FillRect( winX + 12.0f, rowY, winW - 24.0f, rowH - 1.0f, zebra );
+		}
 
-		// Header background (fallback only)
-		vec4_t headerBg;
-		if ( g_rpgBounty.isWanted ) {
-			headerBg[0] = 0.40f; headerBg[1] = 0.08f; headerBg[2] = 0.08f; headerBg[3] = 0.88f;
+		// rank: gold / silver / bronze chips for the top three
+		vec4_t chip = { 0.0f, 0.0f, 0.0f, 0.0f };
+		vec4_t numCol = { 0.75f, 0.85f, 1.0f, 1.0f };
+		if ( e->rank == 1 )      { chip[0] = 1.00f; chip[1] = 0.80f; chip[2] = 0.20f; chip[3] = 1.0f; }
+		else if ( e->rank == 2 ) { chip[0] = 0.78f; chip[1] = 0.84f; chip[2] = 0.90f; chip[3] = 1.0f; }
+		else if ( e->rank == 3 ) { chip[0] = 0.80f; chip[1] = 0.50f; chip[2] = 0.25f; chip[3] = 1.0f; }
+		const float ty = rowY + ( rowH - 1.0f - 4.8f * 1.2f ) * 0.5f;
+		if ( chip[3] > 0.0f ) {
+			SCR_FillRect( winX + 18.0f, rowY + 2.0f, 14.0f, rowH - 5.0f, chip );
+			vec4_t dark = { 0.05f, 0.05f, 0.08f, 1.0f };
+			const char *rs = va( "%d", e->rank );
+			SCR_DrawVirtualString( winX + 25.0f - SCR_GetStringWidth( rs, 4.6f ) * 0.5f, ty, 4.6f, rs, dark );
 		} else {
-			headerBg[0] = 0.08f; headerBg[1] = 0.18f; headerBg[2] = 0.35f; headerBg[3] = 0.88f;
+			SCR_DrawVirtualString( winX + 22.0f, ty, 4.6f, va( "%d", e->rank ), numCol );
 		}
-		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 22.0f, 3.0f, headerBg, NULL );
-	}
 
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-	if ( g_rpgBounty.isWanted ) {
-		float titleW = SCR_GetStringWidth( "WANTED TARGETS", 8.2f );
-		float titleX = winX + (winW - titleW) * 0.5f;
-		SCR_DrawVirtualString( titleX, winY + 42.0f, 8.2f, "^1WANTED TARGETS", yellowCol );
-	} else {
-		float titleW = SCR_GetStringWidth( "ACTIVE BOUNTIES", 8.2f );
-		float titleX = winX + (winW - titleW) * 0.5f;
-		SCR_DrawVirtualString( titleX, winY + 42.0f, 8.2f, "^3ACTIVE BOUNTIES", yellowCol );
-	}
+		char nameFit[64];
+		SCR_FitText( e->name, nameFit, sizeof( nameFit ), colStreak - colName - 8.0f, 4.8f );
+		SCR_DrawVirtualString( colName, ty, 4.8f, va( "^7%s", nameFit ), white );
 
-	// Close Button instruction (nudged 3 ticks down from 18.0f)
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 21.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	// Table Headers (moved 6 ticks right, 8 ticks down from original 67.0f)
-	float startY = winY + 75.0f;
-	SCR_DrawVirtualString( winX + 26.0f, startY, 4.8f, "^5#", yellowCol );
-	SCR_DrawVirtualString( winX + 46.0f, startY, 4.8f, "^5PLAYER NAME", yellowCol );
-	if ( g_rpgBounty.isWanted ) {
-		SCR_DrawVirtualString( winX + 181.0f, startY, 4.8f, "^5STREAK", yellowCol );
-		SCR_DrawVirtualString( winX + winW - 84.0f, startY, 4.8f, "^5BOUNTY", yellowCol );
-	} else {
-		SCR_DrawVirtualString( winX + winW - 84.0f, startY, 4.8f, "^5BOUNTY REWARD", yellowCol );
-	}
-
-	vec4_t divColor = { 0.20f, 0.65f, 1.00f, 0.35f };
-	SCR_FillRect( winX + 10.0f, startY + 16.0f, winW - 20.0f, 1.0f, divColor );
-
-	if ( g_rpgBounty.count == 0 ) {
-		SCR_DrawVirtualString( winX + winW * 0.5f - 70.0f, startY + 40.0f, 4.8f, "^7No active targets found.", whiteColor );
-	} else {
-		float rowY = startY + 20.0f;
-		for ( int i = 0; i < g_rpgBounty.count && i < 10; i++ ) {
-			bountyEntry_t *e = &g_rpgBounty.entries[i];
-
-			// Highlight top 1
-			if ( i == 0 ) {
-				vec4_t topBg = { 0.80f, 0.60f, 0.10f, 0.15f };
-				SCR_FillRect( winX + 10.0f, rowY - 1.0f, winW - 20.0f, 21.0f, topBg );
-			}
-
-			// Rank (moved 6 ticks right)
-			SCR_DrawVirtualString( winX + 26.0f, rowY, 4.8f, va( "^3%d", e->rank ), whiteColor );
-
-			// Name (moved 6 ticks right - un-truncated name printing)
-			char nameFormatted[64];
-			Com_sprintf( nameFormatted, sizeof( nameFormatted ), "^7%s", e->name );
-			SCR_DrawVirtualString( winX + 46.0f, rowY, 4.8f, nameFormatted, whiteColor );
-
-			// Values (moved 6 ticks right)
-			if ( g_rpgBounty.isWanted ) {
-				SCR_DrawVirtualString( winX + 181.0f, rowY, 4.8f, va( "^5%d wins", e->streak ), whiteColor );
-				if ( e->bounty > 0 ) {
-					SCR_DrawVirtualString( winX + winW - 84.0f, rowY, 4.8f, va( "^3%d CR", e->bounty ), whiteColor );
-				} else {
-					SCR_DrawVirtualString( winX + winW - 84.0f, rowY, 4.8f, "^7-", whiteColor );
-				}
-			} else {
-				SCR_DrawVirtualString( winX + winW - 84.0f, rowY, 4.8f, va( "^3%d CR", e->bounty ), whiteColor );
-			}
-
-			rowY += 23.0f;
+		if ( wanted ) {
+			SCR_DrawVirtualString( colStreak, ty, 4.4f, va( "^5%d wins", e->streak ), white );
 		}
+		const char *bs = ( e->bounty > 0 ) ? va( "^3%d CR", e->bounty ) : "^7-";
+		float bw = SCR_GetStringWidth( bs, 4.8f );
+		SCR_DrawVirtualString( rightEdge - bw, ty, 4.8f, bs, white );
+
+		rowY += rowH;
 	}
 
-	// Footer instruction (nudged 5 ticks right)
-	const char *closeStr = g_rpgBounty.isWanted ? "^7Press ^3F8^7, ^3ESC^7, or type ^3!wanted^7 to close" : "^7Press ^3F8^7, ^3ESC^7, or type ^3!bountylist^7 to close";
-	SCR_DrawVirtualString( winX + 26.0f, winY + winH - 15.0f, 4.0f, closeStr, whiteColor );
+	// footer
+	vec4_t line = { tint[0], tint[1], tint[2], 0.35f };
+	SCR_FillRect( winX + 18.0f, winY + winH - 22.0f, winW - 36.0f, 1.0f, line );
+	const char *closeStr = wanted ? "^7Press ^3F8^7, ^3ESC^7 or type ^3!wanted^7 to close" : "^7Press ^3F8^7, ^3ESC^7 or type ^3!bountylist^7 to close";
+	SCR_DrawVirtualString( winX + 18.0f, winY + winH - 16.0f, 3.8f, closeStr, white );
 }
 
 
@@ -2486,77 +2504,62 @@ void SCR_DrawAdventureOverlay( void ) {
 	if ( !cg_drawAdv || !cg_drawAdv->integer ) return;
 	if ( !g_rpgAdv.active ) return;
 
+	// same geometry as the click handling in cl_keys.cpp
 	float winW = 412.0f;
 	float winH = 220.0f;
 	float winX = 320.0f - winW * 0.5f;
 	float winY = 130.0f;
 
-	if ( s_hAdvBg <= 0 && re && re->RegisterShader ) {
-		s_hAdvBg = re->RegisterShader( "gfx/rpg_hud/adv_bg" );
-	}
+	vec4_t tint   = { 0.70f, 0.35f, 0.95f, 1.0f };
+	vec4_t bg     = { 0.04f, 0.07f, 0.14f, 0.94f };
+	vec4_t border = { 0.55f, 0.30f, 0.80f, 0.75f };
+	vec4_t dim    = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white  = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIPanel( winX, winY, winW, winH, 10.0f, bg, border, tint );
 
-	if ( s_hAdvBg > 0 ) {
-		SCR_DrawPic( winX, winY, winW, winH, s_hAdvBg );
-	} else {
-		vec4_t bgColor = { 0.03f, 0.06f, 0.12f, 0.92f };
-		vec4_t borderColor = { 0.70f, 0.30f, 0.90f, 0.85f };
-		SCR_DrawRoundedGlassPanel( winX, winY, winW, winH, 6.0f, bgColor, borderColor );
+	// title + close chip
+	char title[160];
+	Com_sprintf( title, sizeof( title ), "^6ADVENTURE ^7| ^3%s", g_rpgAdv.title[0] ? g_rpgAdv.title : "Quest" );
+	SCR_UITitle( winX + 18.0f, winY + 9.0f, winW - 36.0f - 40.0f, title, 5.6f, tint );
+	vec4_t chipFill = { 0.30f, 0.06f, 0.06f, 0.9f };
+	vec4_t chipBorder = { 0.90f, 0.30f, 0.25f, 0.9f };
+	SCR_UIChip( winX + winW - 42.0f, winY + 8.0f, 36.0f, 15.0f, "ESC", 3.6f, chipFill, chipBorder, white );
 
-		vec4_t headerBg = { 0.30f, 0.10f, 0.40f, 0.88f };
-		SCR_DrawRoundedGlassPanel( winX + 4.0f, winY + 4.0f, winW - 8.0f, 24.0f, 3.0f, headerBg, NULL );
-	}
-
-	vec4_t yellowCol = { 1.0f, 0.85f, 0.20f, 1.0f };
-	vec4_t whiteColor = { 1.0f, 1.0f, 1.0f, 1.0f };
-
-	SCR_DrawVirtualString( winX + 16.0f, winY + 15.0f, 5.2f, va( "^6ADVENTURE: ^3%s", g_rpgAdv.title[0] ? g_rpgAdv.title : "Quest" ), yellowCol );
-	SCR_DrawVirtualString( winX + winW - 40.0f, winY + 15.0f, 5.0f, "^1[ESC]", yellowCol );
-
-	// Story Text (word-wrapped to prevent extending outside UI borders)
+	// story text (word-wrapped inside the panel)
 	float startY = winY + 36.0f;
-	g_rpgAdv.choiceY = SCR_DrawVirtualStringWrapped( winX + 16.0f, startY, 4.4f, winW - 32.0f, g_rpgAdv.text, whiteColor ) + 8.0f;
+	g_rpgAdv.choiceY = SCR_DrawVirtualStringWrapped( winX + 18.0f, startY, 4.4f, winW - 36.0f, g_rpgAdv.text, white ) + 8.0f;
 	float choiceY = g_rpgAdv.choiceY;
 
-	// Virtual Mouse Position
 	float mx = (float)g_rpgMouseX;
 	float my = (float)g_rpgMouseY;
 
-	// Choices (positioned dynamically relative to end of wrapped story text)
-	if ( g_rpgAdv.choice1[0] ) {
-		qboolean hover = (qboolean)( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= choiceY - 6.0f && my <= choiceY + 12.0f );
+	const char *choices[3] = { g_rpgAdv.choice1, g_rpgAdv.choice2, g_rpgAdv.choice3 };
+	for ( int i = 0; i < 3; i++ ) {
+		if ( !choices[i][0] ) continue;
+		const float rx = winX + 16.0f, rw = winW - 32.0f, ry = choiceY - 6.0f, rh = 16.0f;
+		const qboolean hover = (qboolean)( mx >= rx && mx <= rx + rw && my >= ry && my <= ry + rh + 2.0f );
+
+		vec4_t rowBg = { 1.0f, 1.0f, 1.0f, 0.05f };
+		vec4_t bar = { tint[0], tint[1], tint[2], 0.8f };
 		if ( hover ) {
-			vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.35f };
-			SCR_FillRect( winX + 16.0f, choiceY - 6.0f, winW - 32.0f, 16.0f, hCol );
-			SCR_DrawVirtualString( winX + 24.0f, choiceY, 5.2f, va( "^5[1] %s", g_rpgAdv.choice1 ), whiteColor );
-		} else {
-			SCR_DrawVirtualString( winX + 24.0f, choiceY, 5.2f, va( "^3[1] %s", g_rpgAdv.choice1 ), whiteColor );
+			rowBg[0] = 0.20f; rowBg[1] = 0.65f; rowBg[2] = 1.00f; rowBg[3] = 0.30f;
+			bar[0] = 0.30f; bar[1] = 0.85f; bar[2] = 1.00f; bar[3] = 1.0f;
 		}
-		choiceY += 18.0f;
-	}
-	if ( g_rpgAdv.choice2[0] ) {
-		qboolean hover = (qboolean)( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= choiceY - 6.0f && my <= choiceY + 12.0f );
-		if ( hover ) {
-			vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.35f };
-			SCR_FillRect( winX + 16.0f, choiceY - 6.0f, winW - 32.0f, 16.0f, hCol );
-			SCR_DrawVirtualString( winX + 24.0f, choiceY, 5.2f, va( "^5[2] %s", g_rpgAdv.choice2 ), whiteColor );
-		} else {
-			SCR_DrawVirtualString( winX + 24.0f, choiceY, 5.2f, va( "^3[2] %s", g_rpgAdv.choice2 ), whiteColor );
-		}
-		choiceY += 18.0f;
-	}
-	if ( g_rpgAdv.choice3[0] ) {
-		qboolean hover = (qboolean)( mx >= winX + 16.0f && mx <= winX + winW - 16.0f && my >= choiceY - 6.0f && my <= choiceY + 12.0f );
-		if ( hover ) {
-			vec4_t hCol = { 0.20f, 0.70f, 1.00f, 0.35f };
-			SCR_FillRect( winX + 16.0f, choiceY - 6.0f, winW - 32.0f, 16.0f, hCol );
-			SCR_DrawVirtualString( winX + 24.0f, choiceY, 5.2f, va( "^5[3] %s", g_rpgAdv.choice3 ), whiteColor );
-		} else {
-			SCR_DrawVirtualString( winX + 24.0f, choiceY, 5.2f, va( "^3[3] %s", g_rpgAdv.choice3 ), whiteColor );
-		}
+		SCR_FillRect( rx, ry, rw, rh, rowBg );
+		SCR_FillRect( rx, ry, 2.0f, rh, bar );
+
+		// number chip, then the choice text
+		vec4_t chipFill = { 0.06f, 0.10f, 0.20f, 0.95f };
+		SCR_UIChip( rx + 6.0f, ry + 2.0f, 12.0f, rh - 4.0f, va( "%d", i + 1 ), 4.0f, chipFill, bar, white );
+		SCR_DrawVirtualString( rx + 24.0f, choiceY, 5.0f, va( "%s%s", hover ? "^5" : "^7", choices[i] ), white );
 		choiceY += 18.0f;
 	}
 
-	SCR_DrawVirtualString( winX + 20.0f, winY + winH - 12.0f, 4.5f, "^7Click or press ^31^7, ^32^7, ^33^7 to choose  |  ^1!adv^7 or ^1[ESC]^7 to close", whiteColor );
+	vec4_t line = { tint[0], tint[1], tint[2], 0.35f };
+	SCR_FillRect( winX + 18.0f, winY + winH - 22.0f, winW - 36.0f, 1.0f, line );
+	const char *hint = g_rpgAdv.choice1[0] ? "^7Click or press ^31^7, ^32^7, ^33^7 to choose  |  ^1!adv^7 or ^1ESC^7 to close"
+										   : "^7Press ^3Space^7, ^3Enter^7 or ^3ESC^7 to close";
+	SCR_DrawVirtualString( winX + 18.0f, winY + winH - 16.0f, 3.8f, hint, white );
 }
 
 static const char *s_avatarPaths[] = {
