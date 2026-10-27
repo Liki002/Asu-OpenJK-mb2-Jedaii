@@ -3642,19 +3642,6 @@ void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex) {
 static vec3_t s_trainerSpawnOrigins[MAX_GENTITIES];
 static qboolean s_hasTrainerOrigin[MAX_GENTITIES] = {qfalse};
 static int s_lastServerId = -1;
-static vec3_t s_trainerPrevOrigin[MAX_GENTITIES];
-static qboolean s_hasTrainerPrev[MAX_GENTITIES] = {qfalse};
-
-// Moves a trainer back to a saved position (all copies of its origin) and relinks it for collision.
-static void SV_Trainer_SetOrigin(sharedEntity_t *ent, const vec3_t org) {
-  if (VectorCompare(ent->r.currentOrigin, org)) return;
-  VectorCopy(org, ent->r.currentOrigin);
-  VectorCopy(org, ent->s.origin);
-  VectorCopy(org, ent->s.pos.trBase);
-  VectorCopy(org, ent->playerState->origin);
-  VectorClear(ent->s.pos.trDelta);
-  SV_LinkEntity(ent);
-}
 
 static qboolean SV_IsTrainerNPC(sharedEntity_t *ent) {
   if (!ent) return qfalse;
@@ -3675,27 +3662,6 @@ static qboolean SV_IsStationaryTrainer(sharedEntity_t *ent) {
 // Knocked-down / get-up animations (BOTH_KNOCKDOWN1 .. BOTH_GETUP_FROLL_R)
 static qboolean SV_IsKnockAnim(int anim) {
   return (anim >= BOTH_KNOCKDOWN1 && anim <= BOTH_GETUP_FROLL_R) ? qtrue : qfalse;
-}
-
-/*
-==================
-SV_Ranked_Trainer_PreFrame
-Runs BEFORE the game module's frame: remembers where each trainer stands so a kick applied during
-that frame can be undone afterwards.
-==================
-*/
-void SV_Ranked_Trainer_PreFrame(void) {
-  if (!sv_mapname || Q_stricmp(sv_mapname->string, "um_dojo_v2")) {
-    return;
-  }
-  for (int i = sv_maxclients->integer; i < sv.num_entities; i++) {
-    sharedEntity_t *ent = SV_GentityNum(i);
-    s_hasTrainerPrev[i] = qfalse;
-    if (!ent || !ent->r.linked || ent->s.eType != ET_NPC || !ent->playerState) continue;
-    if (!SV_IsTrainerNPC(ent)) continue;
-    VectorCopy(ent->r.currentOrigin, s_trainerPrevOrigin[i]);
-    s_hasTrainerPrev[i] = qtrue;
-  }
 }
 
 /*
@@ -3757,16 +3723,15 @@ void SV_Ranked_Trainer_Frame(void) {
         VectorCopy(ent->r.currentOrigin, s_trainerSpawnOrigins[i]);
         s_hasTrainerOrigin[i] = qtrue;
       } else {
-        SV_Trainer_SetOrigin(ent, s_trainerSpawnOrigins[i]);
+        VectorCopy(s_trainerSpawnOrigins[i], ent->r.currentOrigin);
+        VectorCopy(s_trainerSpawnOrigins[i], ent->s.origin);
+        VectorCopy(s_trainerSpawnOrigins[i], ent->s.pos.trBase);
+        VectorCopy(s_trainerSpawnOrigins[i], ent->playerState->origin);
       }
     } else {
       // 3. Combat trainers (Reborns, Kyle, Maul) fight and move freely,
       // but if kicked (G_TossTheMofo sets PMF_TIME_KNOCKBACK and velocity), clear the kick impulse
       if (ent->playerState->pm_flags & PMF_TIME_KNOCKBACK) {
-        // the kick may already have moved the trainer during this game frame: put it back where it stood
-        if (s_hasTrainerPrev[i]) {
-          SV_Trainer_SetOrigin(ent, s_trainerPrevOrigin[i]);
-        }
         ent->playerState->pm_flags &= ~PMF_TIME_KNOCKBACK;
         ent->playerState->pm_time = 0;
         ent->playerState->velocity[0] = 0.0f;
