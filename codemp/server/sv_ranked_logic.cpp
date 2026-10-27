@@ -3672,14 +3672,6 @@ static qboolean SV_IsStationaryTrainer(sharedEntity_t *ent) {
   return qfalse;
 }
 
-static qboolean SV_IsReyBlocker(sharedEntity_t *ent) {
-  if (!ent) return qfalse;
-  if (ent->targetname && strstr(ent->targetname, "rey")) return qtrue;
-  if (ent->script_targetname && strstr(ent->script_targetname, "rey")) return qtrue;
-  if (ent->behaviorSet[0] && strstr(ent->behaviorSet[0], "blocker")) return qtrue;
-  return qfalse;
-}
-
 // Knocked-down / get-up animations (BOTH_KNOCKDOWN1 .. BOTH_GETUP_FROLL_R)
 static qboolean SV_IsKnockAnim(int anim) {
   return (anim >= BOTH_KNOCKDOWN1 && anim <= BOTH_GETUP_FROLL_R) ? qtrue : qfalse;
@@ -3745,17 +3737,12 @@ void SV_Ranked_Trainer_Frame(void) {
 
     // 2. Stationary trainers: Dummy droids & Rey blockers stay locked on their mats
     if (SV_IsStationaryTrainer(ent)) {
-      const qboolean isRey = SV_IsReyBlocker(ent);
-      if (isRey) {
-        ent->playerState->pm_flags |= PMF_DUCKED;
-      }
       // no knocked-down / get-up animation either: stand back up instantly
       if (SV_IsKnockAnim(ent->playerState->legsAnim) || SV_IsKnockAnim(ent->playerState->torsoAnim) ||
           SV_IsKnockAnim(ent->s.legsAnim) || SV_IsKnockAnim(ent->s.torsoAnim)) {
-        int resetAnim = isRey ? BOTH_CROUCH1IDLE : BOTH_STAND1;
-        ent->playerState->legsAnim = ent->playerState->torsoAnim = resetAnim;
+        ent->playerState->legsAnim = ent->playerState->torsoAnim = BOTH_STAND1;
         ent->playerState->legsTimer = ent->playerState->torsoTimer = 0;
-        ent->s.legsAnim = ent->s.torsoAnim = resetAnim;
+        ent->s.legsAnim = ent->s.torsoAnim = BOTH_STAND1;
         ent->s.legsFlip = (qboolean)!ent->s.legsFlip;
         ent->s.torsoFlip = (qboolean)!ent->s.torsoFlip;
       }
