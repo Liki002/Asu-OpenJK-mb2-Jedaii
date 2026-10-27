@@ -588,7 +588,7 @@ Console command: rpg_hud_style <classic|bottom|0|1>
 */
 static void SCR_RPGHUDStyle_f( void ) {
 	if ( Cmd_Argc() < 2 ) {
-		Com_Printf( "^3Usage: ^7rpg_hud_style <holo | edge | 0 | 1>\n" );
+		Com_Printf( "^3Usage: ^7rpg_hud_style <holo | edge | holomini | edgemini | 0-3>\n" );
 		return;
 	}
 	const char *style = Cmd_Argv( 1 );
@@ -598,6 +598,12 @@ static void SCR_RPGHUDStyle_f( void ) {
 	if ( !Q_stricmp( style, "edge" ) || !Q_stricmp( style, "1" ) ) {
 		Cvar_Set( "cg_rpg_style", "1" );
 		Com_Printf( "^2RPG HUD style set to EDGE CARD\n" );
+	} else if ( !Q_stricmp( style, "holomini" ) || !Q_stricmp( style, "mini" ) || !Q_stricmp( style, "2" ) ) {
+		Cvar_Set( "cg_rpg_style", "2" );
+		Com_Printf( "^2RPG HUD style set to HOLO MINI\n" );
+	} else if ( !Q_stricmp( style, "edgemini" ) || !Q_stricmp( style, "3" ) ) {
+		Cvar_Set( "cg_rpg_style", "3" );
+		Com_Printf( "^2RPG HUD style set to EDGE MINI\n" );
 	} else {
 		Cvar_Set( "cg_rpg_style", "0" );
 		Com_Printf( "^2RPG HUD style set to HOLO CARD\n" );
@@ -1390,7 +1396,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
-	if ( style < 0 || style > 1 ) style = 0;
+	if ( style < 0 || style > 3 ) style = 0;
 
 	// Hide HUD when full screen menus/overlays are active
 	if ( (cg_drawStats && cg_drawStats->integer) ||
@@ -1414,8 +1420,13 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float titleW = SCR_GetStringWidth( rankTitle, 4.3f );
 	float maxStrW = (nameW > titleW) ? nameW : titleW;
 	float panelW, panelH;
-	panelW = 200.0f;
-	panelH = 48.0f;
+	if ( style >= 2 ) {
+		panelW = 142.0f;	// mini cards: shorter and narrower, no stats row and no XP numbers
+		panelH = 30.0f;
+	} else {
+		panelW = 200.0f;
+		panelH = 48.0f;
+	}
 	(void)maxStrW;
 
 	// Preset position defaults
@@ -1470,9 +1481,10 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// STYLE 4: HOLO CARD - code-drawn, same look as the duel result announcer.
 	// Slides in when it appears; the XP bar eases to its value, has a moving sheen and flashes on every XP gain.
 	// ========================================================
-	if ( style == 0 || style == 1 ) {
-		const qboolean edge = ( style == 1 ) ? qtrue : qfalse;	// same card with cut corners
-		const float cut = 7.0f;
+	if ( style >= 0 && style <= 3 ) {
+		const qboolean mini = ( style >= 2 ) ? qtrue : qfalse;
+		const qboolean edge = ( style == 1 || style == 3 ) ? qtrue : qfalse;	// same card with cut corners
+		const float cut = mini ? 5.0f : 7.0f;
 		static int s_holoShownMs = 0;
 		static int s_holoLastDrawMs = 0;
 		static int s_holoLastTotalXP = -1;
@@ -1525,8 +1537,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		SCR_UIPanel( panelX, panelY, panelW, panelH, edge ? cut : 0.0f, bg, border, accent );
 
 		// avatar
-		const float avSize = 34.0f;
-		const float avX = panelX + 8.0f;
+		const float avSize = mini ? 22.0f : 34.0f;
+		const float avX = panelX + ( mini ? 6.0f : 8.0f );
 		const float avY = panelY + ( panelH - avSize ) * 0.5f;
 		{
 			vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.70f * a };
@@ -1543,16 +1555,16 @@ void SCR_DrawRPGHUDOverlay( void ) {
 			}
 		}
 
-		const float textX = avX + avSize + 8.0f;
-		const float rightX = panelX + panelW - 8.0f;
+		const float textX = avX + avSize + ( mini ? 6.0f : 8.0f );
+		const float rightX = panelX + panelW - ( mini ? 6.0f : 8.0f );
 		vec4_t whiteA = { 1.0f, 1.0f, 1.0f, a };
 
 		// row 1: name (shortened to fit) and level badge pinned right
 		char lvStr[32];
 		Com_sprintf( lvStr, sizeof( lvStr ), "^3Lv %d", level );
-		const float nameSize = 5.0f;
-		const float row1Y = panelY + 4.0f;
-		const float row2Y = panelY + 16.0f;
+		const float nameSize = mini ? 4.2f : 5.0f;
+		const float row1Y = panelY + ( mini ? 3.0f : 4.0f );
+		const float row2Y = panelY + ( mini ? 12.5f : 16.0f );
 		const float lvW = SCR_GetStringWidth( lvStr, nameSize );
 		char nameFit[96];
 		SCR_FitText( playerName, nameFit, sizeof( nameFit ), rightX - textX - lvW - 8.0f, nameSize );
@@ -1560,17 +1572,17 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		SCR_DrawVirtualString( rightX - lvW, row1Y, nameSize, lvStr, whiteA );
 
 		// row 2: rank and Elo on the left, XP numbers on the right (or LEVEL UP while it is flashing)
-		SCR_DrawVirtualString( textX, row2Y, 3.4f, va( "^3%s ^7| ^2%d Elo", rankTitle, fr ), whiteA );
+		SCR_DrawVirtualString( textX, row2Y, mini ? 3.0f : 3.4f, va( "^3%s ^7| ^2%d Elo", rankTitle, fr ), whiteA );
 		if ( levelUp && ( levelAge / 250 ) % 2 == 0 ) {
 			const char *lu = "^3LEVEL UP!";
 			SCR_DrawVirtualString( rightX - SCR_GetStringWidth( lu, 3.4f ), row2Y, 3.4f, lu, whiteA );
-		} else {
+		} else if ( !mini ) {
 			const char *xs = va( "^7%d ^5/ %d XP", relativeXP, xpMax );
 			SCR_DrawVirtualString( rightX - SCR_GetStringWidth( xs, 3.2f ), row2Y, 3.2f, xs, whiteA );
 		}
 
 		// row 3: kills / deaths / wins / losses, spelled out, inside the card
-		{
+		if ( !mini ) {
 			vec4_t statsCol = { 1.0f, 1.0f, 1.0f, a };
 			SCR_DrawVirtualString( textX, panelY + 27.0f, 3.0f,
 				va( "^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses ), statsCol );
@@ -1578,9 +1590,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 		// row 4: the animated XP bar
 		const float barX = textX;
-		const float barY = panelY + panelH - 12.0f;
+		const float barY = panelY + panelH - ( mini ? 8.0f : 12.0f );
 		const float barW = rightX - barX;
-		const float barH = 6.0f;
+		const float barH = mini ? 4.0f : 6.0f;
 		vec4_t trackBorder = { 0.20f, 0.50f, 0.80f, 0.55f * a };
 		vec4_t track = { 0.02f, 0.04f, 0.09f, 0.95f * a };
 		SCR_FillRect( barX - 1.0f, barY - 1.0f, barW + 2.0f, barH + 2.0f, trackBorder );
@@ -2540,7 +2552,8 @@ void SCR_DrawSettingsOverlay( void ) {
 	}
 
 	int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
-	const char *styleLabel = ( curStyle == 1 ) ? "STYLE: EDGE" : "STYLE: HOLO";
+	static const char *styleLabels[4] = { "STYLE: HOLO", "STYLE: EDGE", "STYLE: HOLO MINI", "STYLE: EDGE MINI" };
+	const char *styleLabel = styleLabels[curStyle & 3];
 
 	qboolean styleHover = (qboolean)( mx >= col1X && mx <= col1X + 160.0f && my >= winY + 90.0f && my <= winY + 130.0f );
 	SCR_DrawSettingButton( col1X, winY + 90.0f, 160.0f, 40.0f, styleLabel, 4.0f, styleHover );
@@ -3113,12 +3126,12 @@ void SCR_DrawRPGMenuOverlay( void ) {
 		SCR_DrawVirtualString( winX + 30.0f, contentY - 2.0f, 4.4f, "^5HUD & CHAT SETTINGS", white );
 
 		const int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
-		const char *styleNames[2] = { "Holo", "Edge" };
+		const char *styleNames[4] = { "Holo", "Edge", "Holo Mini", "Edge Mini" };
 		const char *curPos = ( cg_rpg_pos && cg_rpg_pos->string[0] ) ? cg_rpg_pos->string : "left";
 		vec4_t btnTint = { 0.20f, 0.70f, 1.00f, 1.0f };
 
 		SCR_UIRowBeginMs( tabAge, 0 );
-		SCR_UIButton( winX + 30.0f, contentY + 20.0f, 210.0f, 35.0f, va( "^7HUD Style: ^3%s", styleNames[curStyle % 2] ), 4.4f,
+		SCR_UIButton( winX + 30.0f, contentY + 20.0f, 210.0f, 35.0f, va( "^7HUD Style: ^3%s", styleNames[curStyle & 3] ), 4.4f,
 			(qboolean)( mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 20.0f && my <= contentY + 55.0f ), btnTint );
 		SCR_UIButton( winX + 270.0f, contentY + 20.0f, 210.0f, 35.0f, va( "^7Position: ^3%s", curPos ), 4.4f,
 			(qboolean)( mx >= winX + 270.0f && mx <= winX + 480.0f && my >= contentY + 20.0f && my <= contentY + 55.0f ), btnTint );
