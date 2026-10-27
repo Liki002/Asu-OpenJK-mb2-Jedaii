@@ -562,31 +562,19 @@ Console command: rpg_hud_style <classic|bottom|0|1>
 */
 static void SCR_RPGHUDStyle_f( void ) {
 	if ( Cmd_Argc() < 2 ) {
-		Com_Printf( "^3Usage: ^7rpg_hud_style <classic | bottom | style2 | style3 | holo | edge | 0 | 1 | 2 | 3 | 4 | 5>\n" );
+		Com_Printf( "^3Usage: ^7rpg_hud_style <holo | edge | 0 | 1>\n" );
 		return;
 	}
 	const char *style = Cmd_Argv( 1 );
 	if ( Cmd_Argc() >= 3 && !Q_stricmp( style, "style" ) ) {
 		style = Cmd_Argv( 2 );
 	}
-	if ( !Q_stricmp( style, "edge" ) || !Q_stricmp( style, "5" ) ) {
-		Cvar_Set( "cg_rpg_style", "5" );
-		Com_Printf( "^2RPG HUD style set to EDGE CARD (Style 5)\n" );
-	} else if ( !Q_stricmp( style, "holo" ) || !Q_stricmp( style, "4" ) ) {
-		Cvar_Set( "cg_rpg_style", "4" );
-		Com_Printf( "^2RPG HUD style set to HOLO CARD (Style 4)\n" );
-	} else if ( !Q_stricmp( style, "bottom" ) || !Q_stricmp( style, "1" ) ) {
+	if ( !Q_stricmp( style, "edge" ) || !Q_stricmp( style, "1" ) ) {
 		Cvar_Set( "cg_rpg_style", "1" );
-		Com_Printf( "^2RPG HUD style set to BOTTOM SLEEK BAR (Style 1)\n" );
-	} else if ( !Q_stricmp( style, "style2" ) || !Q_stricmp( style, "2" ) ) {
-		Cvar_Set( "cg_rpg_style", "2" );
-		Com_Printf( "^2RPG HUD style set to STYLE V2 (Style 2)\n" );
-	} else if ( !Q_stricmp( style, "style3" ) || !Q_stricmp( style, "3" ) ) {
-		Cvar_Set( "cg_rpg_style", "3" );
-		Com_Printf( "^2RPG HUD style set to STYLE V3 (Style 3)\n" );
+		Com_Printf( "^2RPG HUD style set to EDGE CARD\n" );
 	} else {
 		Cvar_Set( "cg_rpg_style", "0" );
-		Com_Printf( "^2RPG HUD style set to CLASSIC PANEL V1 (Style 0)\n" );
+		Com_Printf( "^2RPG HUD style set to HOLO CARD\n" );
 	}
 }
 
@@ -1004,14 +992,6 @@ Renders client-side RPG HUD Overlay (Supports Style 0 Classic & Style 1 Bottom S
 */
 static float s_visualXP = -1.0f;
 static int s_lastState = -1;
-static qhandle_t s_hBox = 0;
-static qhandle_t s_hBoxFillV1 = 0;
-static qhandle_t s_hBoxV2 = 0;
-static qhandle_t s_hBoxFillV2 = 0;
-static qhandle_t s_hBoxV3 = 0;
-static qhandle_t s_hBoxFillV3 = 0;
-static qhandle_t s_hBarBg = 0;
-static qhandle_t s_hBarFill = 0;
 static qhandle_t s_hAvatar = 0;
 static qhandle_t s_hAvatarFrame = 0;
 static qhandle_t s_hModalBg = 0;
@@ -1080,15 +1060,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	}
 
 	// Register HD TGA Shaders dynamically whenever active
-	if ( s_hBox <= 0 && re && re->RegisterShader ) {
-		s_hBox         = re->RegisterShader( "gfx/rpg_hud/panel_bg" );
-		s_hBoxFillV1   = re->RegisterShader( "gfx/rpg_hud/panel_bg_fill_v1" );
-		s_hBoxV2       = re->RegisterShader( "gfx/rpg_hud/panel_bg_v2" );
-		s_hBoxFillV2   = re->RegisterShader( "gfx/rpg_hud/panel_bg_fill_v2" );
-		s_hBoxV3       = re->RegisterShader( "gfx/rpg_hud/panel_bg_v3" );
-		s_hBoxFillV3   = re->RegisterShader( "gfx/rpg_hud/panel_bg_fill_v3" );
-		s_hBarBg       = re->RegisterShader( "gfx/rpg_hud/bar_bg" );
-		s_hBarFill     = re->RegisterShader( "gfx/rpg_hud/bar_fill" );
+	if ( s_hModalBg <= 0 && re && re->RegisterShader ) {
 		s_hAvatarFrame = re->RegisterShader( "gfx/rpg_hud/avatar_frame" );
 		s_hModalBg     = re->RegisterShader( "gfx/rpg_hud/leaderboard_bg" );
 		s_hInventoryBg = re->RegisterShader( "gfx/rpg_hud/inventory_bg" );
@@ -1105,7 +1077,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 
 
 	int style = cg_rpg_style ? cg_rpg_style->integer : 0;
-	if ( style < 0 || style > 5 ) style = 0;
+	if ( style < 0 || style > 1 ) style = 0;
 
 	// Hide HUD when full screen menus/overlays are active
 	if ( (cg_drawStats && cg_drawStats->integer) ||
@@ -1130,23 +1102,17 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float maxStrW = (nameW > titleW) ? nameW : titleW;
 	float panelW, panelH;
 	if ( style == 1 ) {
-		panelW = 250.0f;
-		panelH = 32.0f;
-		(void)maxStrW;
-	} else if ( style == 4 ) {
-		panelW = 200.0f;
-		panelH = 58.0f;
-	} else if ( style == 5 ) {
 		panelW = 176.0f;
 		panelH = 36.0f;
 	} else {
-		panelW = 175.0f;
-		panelH = 35.0f;
+		panelW = 200.0f;
+		panelH = 58.0f;
 	}
+	(void)maxStrW;
 
 	// Preset position defaults
-	float defaultX = (style == 1) ? (320.0f - panelW * 0.5f) : 14.0f;
-	float defaultY = (style == 1) ? 428.0f : 14.0f;
+	float defaultX = 14.0f;
+	float defaultY = 14.0f;
 
 	if ( cg_rpg_pos && cg_rpg_pos->string[0] ) {
 		if ( !Q_stricmp( cg_rpg_pos->string, "right" ) || !Q_stricmp( cg_rpg_pos->string, "topright" ) ) {
@@ -1196,8 +1162,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	// STYLE 4: HOLO CARD - code-drawn, same look as the duel result announcer.
 	// Slides in when it appears; the XP bar eases to its value, has a moving sheen and flashes on every XP gain.
 	// ========================================================
-	if ( style == 4 || style == 5 ) {
-		const qboolean edge = ( style == 5 ) ? qtrue : qfalse;	// compact card with cut corners, no avatar and no stats row
+	if ( style == 0 || style == 1 ) {
+		const qboolean edge = ( style == 1 ) ? qtrue : qfalse;	// compact card with cut corners, no avatar and no stats row
 		const float cut = 7.0f;
 		static int s_holoShownMs = 0;
 		static int s_holoLastDrawMs = 0;
@@ -1368,205 +1334,6 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		return;
 	}
 
-	// ========================================================
-	// STYLE 1: BOTTOM SLEEK BAR (Expanded Floating Elements)
-	// ========================================================
-	if ( style == 1 ) {
-		float avatarX = panelX + 3.0f;
-		float avatarY = panelY + 1.0f;
-		float avatarSize = 26.0f;
-
-		if ( s_hAvatar && s_hAvatarFrame ) {
-			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatarFrame );
-			SCR_DrawPic( avatarX + 1.0f, avatarY + 1.0f, avatarSize - 2.0f, avatarSize - 2.0f, s_hAvatar );
-		} else if ( s_hAvatar ) {
-			SCR_DrawPic( avatarX + 1.0f, avatarY + 1.0f, avatarSize - 2.0f, avatarSize - 2.0f, s_hAvatar );
-		} else {
-			float cx = avatarX + avatarSize * 0.5f;
-			float cy = avatarY + avatarSize * 0.5f;
-			SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
-		}
-
-		// Player Info Column next to Circular Avatar
-		float textX = avatarX + avatarSize + 8.0f;
-
-		// Line 1: Player Name + Level Badge
-		char lvStr[32];
-		Com_sprintf( lvStr, sizeof(lvStr), "^3Lv %d", level );
-		float lvW = SCR_GetStringWidth( lvStr, 5.2f );
-		char nameFit[96];
-		SCR_FitText( playerName, nameFit, sizeof(nameFit), panelX + panelW - textX - lvW - 12.0f, 5.2f );
-		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, va( "^7%s", nameFit ), whiteColor );
-		SCR_DrawVirtualString( panelX + panelW - lvW - 6.0f, panelY + 2.0f, 5.2f, lvStr, whiteColor );
-
-		// Line 2: Rank Title, Force Rating ELO & Kills/Deaths/Wins/Losses
-		char rankStr[128];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7| ^2%d Elo", rankTitle, fr );
-		SCR_DrawVirtualString( textX, panelY + 13.0f, 3.8f, rankStr, whiteColor );
-
-		// Line 3: Sleek Horizontal XP Bar (TGA Background)
-		float barX = textX;
-		float barY = panelY + 25.0f;
-		float barW = panelX + panelW - barX - 4.0f;
-		float barH = 8.0f;
-
-		if ( s_hBarBg ) {
-			SCR_DrawPic( barX, barY, barW, barH, s_hBarBg );
-		} else {
-			vec4_t barBorder = { 0.00f, 0.60f, 0.95f, 0.40f };
-			vec4_t barBg     = { 0.02f, 0.04f, 0.08f, 0.40f };
-			SCR_DrawMBIICapsule( barX, barY, barW, barH, barBg, barBorder );
-		}
-
-		float fillX = barX;
-		float fillY = barY;
-		float maxFillW = barW;
-		float fillW = maxFillW * xpRatio;
-		float fillH = barH;
-
-		if ( fillW > 0.0f ) {
-			if ( s_hBarFill ) {
-				SCR_DrawPic( fillX, fillY, fillW, fillH, s_hBarFill );
-			} else {
-				vec4_t cyanFill = { 0.00f, 0.70f, 0.95f, 0.95f };
-				SCR_DrawMBIICapsule( fillX, fillY, fillW, fillH, cyanFill, NULL );
-			}
-		}
-
-		// XP Numeric Readout Overlay
-		char xpText[64];
-		Com_sprintf( xpText, sizeof(xpText), "^2%d^7 / ^2%d XP", relativeXP, xpMax );
-		float textWidthPixels = SCR_GetStringWidth( xpText, 3.8f );
-		float xpTextX = barX + barW - textWidthPixels - 3.0f;
-		if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
-		SCR_DrawVirtualString( xpTextX, barY - 10.0f, 3.8f, xpText, whiteColor );
-
-		// kills / deaths / wins / losses, spelled out, under the bar
-		SCR_DrawStatsCaption( textX, panelY + panelH + 2.0f, 3.4f );
-		return;
-	}
-
-	// ========================================================
-	// STYLE 0/2/3: GLASS PANEL CARD (V1, V2, V3 Options)
-	// ========================================================
-	qhandle_t drawOutline = 0;
-	qhandle_t drawFill = 0;
-	float fillXRatio = 0.20f;
-	float fillWRatio = 0.74f;
-	float fillYRatio = 0.52f;
-	float fillHRatio = 0.18f;
-
-	if ( style == 2 ) {
-		drawOutline = s_hBoxV2;
-		drawFill = s_hBoxFillV2;
-		fillXRatio = 0.21f;
-		fillWRatio = 0.74f;
-		fillYRatio = 0.55f;
-		fillHRatio = 0.20f;
-	} else if ( style == 3 ) {
-		drawOutline = s_hBoxV3;
-		drawFill = s_hBoxFillV3;
-		fillXRatio = 0.19f;
-		fillWRatio = 0.74f;
-		fillYRatio = 0.55f;
-		fillHRatio = 0.14f;
-	} else {
-		drawOutline = s_hBox;
-		drawFill = s_hBoxFillV1;
-		fillXRatio = 0.20f;
-		fillWRatio = 0.74f;
-		fillYRatio = 0.52f;
-		fillHRatio = 0.18f;
-	}
-
-	if ( drawOutline > 0 ) {
-		SCR_DrawPic( panelX, panelY, panelW, panelH, drawOutline );
-	} else {
-		vec4_t bgColor     = { 0.02f, 0.05f, 0.10f, 0.20f };
-		vec4_t borderColor = { 0.00f, 0.70f, 1.00f, 0.40f };
-		SCR_DrawMBIICapsule( panelX, panelY, panelW, panelH, bgColor, borderColor );
-	}
-
-	// Avatar (Fitted inside circular frame)
-	float avatarX = panelX + panelW * 0.04f;
-	float avatarY = panelY + panelH * 0.14f;
-	float avatarSize = panelH * 0.72f;
-
-	if ( style == 3 ) {
-		avatarX = panelX + 5.0f;
-		avatarSize = 20.0f;
-		avatarY = panelY + 7.5f;
-	}
-
-	if ( s_hAvatar ) {
-		if ( drawOutline <= 0 && s_hAvatarFrame > 0 ) {
-			SCR_DrawPic( avatarX, avatarY, avatarSize, avatarSize, s_hAvatarFrame );
-			SCR_DrawPic( avatarX + 1.5f, avatarY + 1.5f, avatarSize - 3.0f, avatarSize - 3.0f, s_hAvatar );
-		} else {
-			SCR_DrawPic( avatarX + 1.5f, avatarY + 1.5f, avatarSize - 3.0f, avatarSize - 3.0f, s_hAvatar );
-		}
-	} else {
-		float cx = avatarX + avatarSize * 0.5f;
-		float cy = avatarY + avatarSize * 0.5f;
-		SCR_DrawJediVectorEmblem( cx, cy, avatarSize * 0.5f );
-	}
-
-	// Right Content Column
-	float textX = panelX + panelW * 0.20f;
-
-	// Line 1: Player Name & Level Badge
-	float cardTextW = panelW * 0.74f;
-	char lvStr[32];
-	Com_sprintf( lvStr, sizeof(lvStr), "^3Lv %d", level );
-	float lvW = SCR_GetStringWidth( lvStr, 3.8f );
-	char nameFit[96];
-	SCR_FitText( playerName, nameFit, sizeof(nameFit), cardTextW - lvW - 6.0f, 3.8f );
-	
-	float nameY;
-	if ( style == 0 ) {
-		nameY = panelY + 8.5f;
-	} else if ( style == 2 ) {
-		nameY = panelY + 2.0f;
-	} else {
-		nameY = panelY + 3.5f;
-	}
-	SCR_DrawVirtualString( textX, nameY, 3.8f, va( "^7%s", nameFit ), whiteColor );
-	SCR_DrawVirtualString( textX + cardTextW - lvW, nameY, 3.8f, lvStr, whiteColor );
-
-	// Line 2: Rank Title, Force Rating ELO & K/D/W/L
-	char rankStr[128];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7| ^2%d Elo", rankTitle, fr );
-	
-	if ( style == 0 ) {
-		SCR_DrawVirtualString( textX, panelY + 13.0f, 3.0f, rankStr, whiteColor );
-	} else if ( style == 2 ) {
-		SCR_DrawVirtualString( textX, panelY + 12.0f, 3.0f, rankStr, whiteColor );
-	} else {
-		SCR_DrawVirtualString( textX, panelY + 13.0f, 3.0f, rankStr, whiteColor );
-	}
-
-	// Line 3: XP Bar (drawn dynamically inside baked-in card slots using style-specific filler textures)
-	float fX = panelX + panelW * fillXRatio;
-	float fY = panelY + panelH * fillYRatio;
-	float fW = panelW * fillWRatio;
-	float fH = panelH * fillHRatio;
-
-	float fillW = fW * xpRatio;
-	if ( fillW > 0.0f && drawFill > 0 ) {
-		SCR_DrawPic( fX, fY, fillW, fH, drawFill );
-	}
-
-	char xpText[64];
-	Com_sprintf( xpText, sizeof(xpText), "^2%d^7 / ^2%d XP", relativeXP, xpMax );
-
-	// kills / deaths / wins / losses, spelled out, under the card
-	SCR_DrawStatsCaption( panelX + 4.0f, panelY + panelH + 1.0f, 3.0f );
-
-	float textWidthPixels = SCR_GetStringWidth( xpText, 2.6f );
-	float xpTextX = fX + fW - textWidthPixels - 4.0f;
-	if ( xpTextX < fX + 3.0f ) xpTextX = fX + 3.0f;
-	float xpTextY = fY + (fH - 2.6f * 1.35f) * 0.5f + 0.6f;
-	SCR_DrawVirtualString( xpTextX, xpTextY, 2.6f, xpText, whiteColor );
 }
 
 topLeaderboardEntry_t g_topLeaderboard[10];
@@ -2925,12 +2692,7 @@ void SCR_DrawSettingsOverlay( void ) {
 	}
 
 	int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
-	const char *styleLabel = "STYLE: CLASSIC";
-	if ( curStyle == 1 ) styleLabel = "STYLE: SLEEK";
-	else if ( curStyle == 2 ) styleLabel = "STYLE: TECH";
-	else if ( curStyle == 3 ) styleLabel = "STYLE: MINIMAL";
-	else if ( curStyle == 4 ) styleLabel = "STYLE: HOLO";
-	else if ( curStyle == 5 ) styleLabel = "STYLE: EDGE";
+	const char *styleLabel = ( curStyle == 1 ) ? "STYLE: EDGE" : "STYLE: HOLO";
 
 	qboolean styleHover = (qboolean)( mx >= col1X && mx <= col1X + 160.0f && my >= winY + 90.0f && my <= winY + 130.0f );
 	SCR_DrawSettingButton( col1X, winY + 90.0f, 160.0f, 40.0f, styleLabel, 4.0f, styleHover );
@@ -3388,13 +3150,13 @@ void SCR_DrawRPGMenuOverlay( void ) {
 		SCR_DrawVirtualString( winX + 25.0f, contentY, 5.2f, "^5[HUD CONFIGURATION STUDIO]", cyanColor );
 		
 		int curStyle = cg_rpg_style ? cg_rpg_style->integer : 0;
-		const char *styleNames[6] = { "Classic", "Sleek Bar", "Tech Hex", "Minimal", "Holo", "Edge" };
+		const char *styleNames[2] = { "Holo", "Edge" };
 		const char *curPos = (cg_rpg_pos && cg_rpg_pos->string[0]) ? cg_rpg_pos->string : "left";
 
 		// Button 1: HUD Style
 		qboolean h1 = (qboolean)(mx >= winX + 30.0f && mx <= winX + 240.0f && my >= contentY + 20.0f && my <= contentY + 55.0f);
 		SCR_DrawRoundedGlassPanel( winX + 30.0f, contentY + 20.0f, 210.0f, 35.0f, 4.0f, h1 ? borderColor : bgColor, borderColor );
-		SCR_DrawVirtualString( winX + 40.0f, contentY + 32.0f, 4.2f, va("^7HUD Style: ^3%s", styleNames[curStyle % 6]), whiteColor );
+		SCR_DrawVirtualString( winX + 40.0f, contentY + 32.0f, 4.2f, va("^7HUD Style: ^3%s", styleNames[curStyle % 2]), whiteColor );
 
 		// Button 2: HUD Position
 		qboolean h2 = (qboolean)(mx >= winX + 270.0f && mx <= winX + 480.0f && my >= contentY + 20.0f && my <= contentY + 55.0f);
@@ -5539,14 +5301,6 @@ This will be called twice if rendering in stereo mode
 void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 
 	if ( cls.state != s_lastState ) {
-		s_hBox = 0;
-		s_hBoxFillV1 = 0;
-		s_hBoxV2 = 0;
-		s_hBoxFillV2 = 0;
-		s_hBoxV3 = 0;
-		s_hBoxFillV3 = 0;
-		s_hBarBg = 0;
-		s_hBarFill = 0;
 		s_hAvatar = 0;
 		s_hAvatarFrame = 0;
 		s_hModalBg = 0;
@@ -5749,14 +5503,6 @@ Resets all dynamically cached shader references.
 */
 void CL_ResetShaderHandles( void ) {
 	s_uiFont = -1;
-	s_hBox = 0;
-	s_hBoxFillV1 = 0;
-	s_hBoxV2 = 0;
-	s_hBoxFillV2 = 0;
-	s_hBoxV3 = 0;
-	s_hBoxFillV3 = 0;
-	s_hBarBg = 0;
-	s_hBarFill = 0;
 	s_hAvatar = 0;
 	s_hAvatarFrame = 0;
 	s_hModalBg = 0;
