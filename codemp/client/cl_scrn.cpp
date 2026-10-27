@@ -1121,7 +1121,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		(void)maxStrW;
 	} else if ( style == 4 ) {
 		panelW = 230.0f;
-		panelH = 46.0f;
+		panelH = 58.0f;
 	} else {
 		panelW = 175.0f;
 		panelH = 35.0f;
@@ -1239,7 +1239,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		// avatar
 		const float avSize = 34.0f;
 		const float avX = panelX + 8.0f;
-		const float avY = panelY + 5.0f;
+		const float avY = panelY + ( panelH - avSize ) * 0.5f;
 		vec4_t avFrame = { 0.20f, 0.50f, 0.80f, 0.70f * a };
 		SCR_FillRect( avX - 1.0f, avY - 1.0f, avSize + 2.0f, avSize + 2.0f, avFrame );
 		vec4_t avBg = { 0.03f, 0.06f, 0.11f, a };
@@ -1276,7 +1276,14 @@ void SCR_DrawRPGHUDOverlay( void ) {
 			SCR_DrawVirtualString( rightX - SCR_GetStringWidth( xs, 3.4f ), panelY + 16.0f, 3.4f, xs, whiteA );
 		}
 
-		// row 3: the animated XP bar
+		// row 3: kills / deaths / wins / losses, spelled out, inside the card
+		{
+			vec4_t statsCol = { 1.0f, 1.0f, 1.0f, a };
+			SCR_DrawVirtualString( textX, panelY + 27.0f, 3.2f,
+				va( "^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses ), statsCol );
+		}
+
+		// row 4: the animated XP bar
 		const float barX = textX;
 		const float barY = panelY + panelH - 12.0f;
 		const float barW = rightX - barX;
@@ -1328,7 +1335,6 @@ void SCR_DrawRPGHUDOverlay( void ) {
 			SCR_FillRect( barX + barW * 0.25f * k, barY, 1.0f, barH, tick );
 		}
 
-		SCR_DrawStatsCaption( panelX + 3.0f, panelY + panelH + 2.0f, 3.2f );
 		return;
 	}
 
