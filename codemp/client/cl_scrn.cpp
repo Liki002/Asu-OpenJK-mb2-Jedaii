@@ -60,6 +60,9 @@ cvar_t		*cg_drawAch;
 cvar_t		*cg_drawTopCredits;
 cvar_t		*cg_drawTopPotato;
 cvar_t		*cg_drawAdv;
+int g_rpgXpPerLevel = 1000;
+int g_rpgRankCount = 0;
+rpgRankEntry_t g_rpgRanks[8];
 rpgPlayerStats_t g_rpgStats = {qfalse, 0, 1, 0, 1000, 1000, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "Padawan", "", "", "", "", "Lightsaber"};
 
 
@@ -3050,27 +3053,40 @@ void SCR_DrawRPGMenuOverlay( void ) {
 		// RANKS & XP TABLE TAB (!ranks sync)
 		SCR_DrawVirtualString( winX + 25.0f, contentY, 5.4f, "^5[SERVER RANKS & ELO THRESHOLDS (!ranks)]", cyanColor );
 
-		const char *rankList[5][3] = {
-			{ "^3Youngling", "^2- 0 Elo+", "^7Starter Rank" },
-			{ "^2Padawan", "^2- 1500 Elo+", "^7Apprentice Rank" },
-			{ "^5Jedi Knight", "^2- 2000 Elo+", "^7Elite Knight Rank" },
-			{ "^6Jedi Master", "^2- 2500 Elo+", "^7Master Rank" },
-			{ "^1Grand Master", "^2- 3000 Elo+", "^7Supreme Council Rank" }
+		// The rank table comes from the server (rpg_ranks); until it arrives show the stock ladder.
+		static const rpgRankEntry_t defaultRanks[5] = {
+			{ 0, "^3Youngling" }, { 1500, "^2Padawan" }, { 2000, "^5Jedi Knight" },
+			{ 2500, "^6Jedi Master" }, { 3000, "^1Grand Master" }
 		};
+		const rpgRankEntry_t *ranks = g_rpgRankCount > 0 ? g_rpgRanks : defaultRanks;
+		int rankCount = g_rpgRankCount > 0 ? g_rpgRankCount : 5;
+
+		// current rank = highest threshold not above the player's Elo
+		int myElo = g_rpgStats.fr > 0 ? g_rpgStats.fr : (cg_rpg_fr ? cg_rpg_fr->integer : 1000);
+		int myRank = 0;
+		for ( int r = 0; r < rankCount; r++ ) {
+			if ( myElo >= ranks[r].threshold ) myRank = r;
+		}
 
 		float ry = contentY + 24.0f;
-		for ( int r = 0; r < 5; r++ ) {
+		for ( int r = 0; r < rankCount; r++ ) {
 			if ( r % 2 == 0 ) {
 				vec4_t rBg = { 0.05f, 0.15f, 0.25f, 0.35f };
 				SCR_FillRect( winX + 20.0f, ry, winW - 40.0f, 26.0f, rBg );
 			}
-			SCR_DrawVirtualString( winX + 25.0f, ry + 4.0f, 5.4f, rankList[r][0], whiteColor );
-			SCR_DrawVirtualString( winX + 200.0f, ry + 4.0f, 5.4f, rankList[r][1], whiteColor );
-			SCR_DrawVirtualString( winX + 360.0f, ry + 4.0f, 5.4f, rankList[r][2], whiteColor );
+			const char *range = ( r + 1 < rankCount )
+				? va( "^2%d - %d Elo", ranks[r].threshold, ranks[r + 1].threshold - 1 )
+				: va( "^2%d+ Elo", ranks[r].threshold );
+			SCR_DrawVirtualString( winX + 25.0f, ry + 4.0f, 5.4f, ranks[r].title, whiteColor );
+			SCR_DrawVirtualString( winX + 200.0f, ry + 4.0f, 5.4f, range, whiteColor );
+			if ( r == myRank ) {
+				SCR_DrawVirtualString( winX + 380.0f, ry + 4.0f, 5.4f, va( "^3< You (%d Elo)", myElo ), whiteColor );
+			}
 			ry += 30.0f;
 		}
 
-		SCR_DrawVirtualString( winX + 25.0f, ry + 16.0f, 4.6f, "^7Levels scale dynamically from 1 to 100 via ^3XP = 100 + (L-1)*150 + (L-1)^2*25^7.", whiteColor );
+		int perLevel = g_rpgXpPerLevel > 0 ? g_rpgXpPerLevel : 1000;
+		SCR_DrawVirtualString( winX + 25.0f, ry + 16.0f, 4.6f, va( "^7Level = total XP / ^3%d^7 + 1 (every ^3%d XP^7 is one level).", perLevel, perLevel ), whiteColor );
 
 	} else if ( g_rpgMenu.tab == 3 ) {
 		// COMMANDS DIRECTORY TAB (!help / !cmds sync)

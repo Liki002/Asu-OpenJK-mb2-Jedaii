@@ -807,7 +807,43 @@ void CL_ParseCommandString( msg_t *msg ) {
 		cl_isRankedServer = qtrue;
 	}
 
-	if ( !Q_strncmp( s, "rpg_sync", 8 ) ) {
+	if ( !Q_strncmp( s, "rpg_ranks", 9 ) ) {
+		// rpg_ranks <xpPerLevel> <count> <threshold> "<title>" ...
+		const char *p = s + 9;
+		char *endp = NULL;
+		int perLevel = (int)strtol( p, &endp, 10 );
+		if ( endp != p && perLevel > 0 ) {
+			p = endp;
+			int count = (int)strtol( p, &endp, 10 );
+			if ( endp != p && count >= 0 ) {
+				p = endp;
+				if ( count > 8 ) count = 8;
+				int got = 0;
+				rpgRankEntry_t tmp[8];
+				for ( ; got < count; got++ ) {
+					int th = (int)strtol( p, &endp, 10 );
+					if ( endp == p ) break;
+					p = endp;
+					while ( *p == ' ' ) p++;
+					if ( *p != '"' ) break;
+					p++;
+					const char *q = strchr( p, '"' );
+					if ( !q ) break;
+					int len = (int)( q - p );
+					if ( len > (int)sizeof( tmp[0].title ) - 1 ) len = (int)sizeof( tmp[0].title ) - 1;
+					tmp[got].threshold = th;
+					memcpy( tmp[got].title, p, len );
+					tmp[got].title[len] = '\0';
+					p = q + 1;
+				}
+				g_rpgXpPerLevel = perLevel;
+				if ( got == count ) {
+					memcpy( g_rpgRanks, tmp, sizeof( rpgRankEntry_t ) * got );
+					g_rpgRankCount = got;
+				}
+			}
+		}
+	} else if ( !Q_strncmp( s, "rpg_sync", 8 ) ) {
 		int currentXP = 0, maxXP = 1000, level = 1, fr = 1000;
 		char rankBuf[64] = "";
 		char nameBuf[64] = "";
@@ -888,10 +924,11 @@ void CL_ParseCommandString( msg_t *msg ) {
 			// Also update HUD cvars for real-time styles syncing
 			Cvar_Set( "cg_rpg_level", va( "%d", lvl ) );
 			Cvar_Set( "cg_rpg_fr", va( "%d", fr ) );
-			int curXpInLevel = xp % 1000;
+			int perLevel = g_rpgXpPerLevel > 0 ? g_rpgXpPerLevel : 1000;
+			int curXpInLevel = xp % perLevel;
 			if ( curXpInLevel < 0 ) curXpInLevel = 0;
 			Cvar_Set( "cg_rpg_xp", va( "%d", curXpInLevel ) );
-			Cvar_Set( "cg_rpg_xp_max", "1000" );
+			Cvar_Set( "cg_rpg_xp_max", va( "%d", perLevel ) );
 			if ( rankBuf[0] ) Cvar_Set( "cg_rpg_rank", rankBuf );
 			if ( nameBuf[0] ) Cvar_Set( "cg_rpg_name", nameBuf );
 		}

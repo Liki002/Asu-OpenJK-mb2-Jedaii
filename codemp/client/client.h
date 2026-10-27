@@ -658,6 +658,12 @@ typedef struct {
 
 extern rpgPlayerStats_t g_rpgStats;
 
+// Rank table and XP per level, sent by the server (rpg_ranks) from ranked/config.json
+typedef struct { int threshold; char title[32]; } rpgRankEntry_t;
+extern int g_rpgXpPerLevel;
+extern int g_rpgRankCount;
+extern rpgRankEntry_t g_rpgRanks[8];
+
 
 void SCR_DrawRPGHUDOverlay( void );
 void SCR_DrawLeaderboardOverlay( void );
