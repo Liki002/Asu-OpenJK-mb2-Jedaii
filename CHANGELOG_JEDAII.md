@@ -26,7 +26,6 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 #### 4. Server (earlier today)
 - **Level-up sound from the engine** (`sv_ranked_levelup_sound`), removal of the `!duel_end` / `!forfeit` chat commands (the `duel_end` console hook stays), Dojo trainer kick-displacement guard (`SV_Ranked_Trainer_Frame`).
 - **Trainer kick guard now actually works**: `SV_Ranked_Trainer_Frame` ran before the game module's frame, so a kick was applied after the cleanup and still reached the snapshot. It now runs right after `GVM_RunFrame` in `SV_Frame` (`sv_main.cpp`), also resets the trajectory and cancels knocked-down / get-up animations on stationary trainers (dummies, blockers). Fighting trainers (Reborns, Kyle, Maul) are put back where they stood before the kick frame (`SV_Ranked_Trainer_PreFrame`), so they cannot be kicked out of place; the entity is relinked after every correction.
-- **Trainer detection fixed**: the guard looked for "trainer" in the NPC's `targetname` / `script_targetname` / `behaviorSet`, but on `um_dojo_v2` only the *spawners* carry those names, so it never matched any trainer. Every `ET_NPC` on that map is now treated as a trainer, and dummy droids / Rey blockers are recognised by their spawn position (stationary, locked to their mat). Fighting trainers are restored when the knockback flag is set or their speed exceeds 360 u/s. The Rey crouch-stance commit was reverted (server engine change that was not requested).
 
 ---
 

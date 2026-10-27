@@ -3645,45 +3645,6 @@ static int s_lastServerId = -1;
 static vec3_t s_trainerPrevOrigin[MAX_GENTITIES];
 static qboolean s_hasTrainerPrev[MAX_GENTITIES] = {qfalse};
 
-// 0 = not seen yet, 1 = fighting trainer (Reborns, Kyle, Maul), 2 = stationary (dummy droids, Rey blockers)
-static int s_trainerClass[MAX_GENTITIES];
-
-// The NPCs on um_dojo_v2 are spawned by NPC_spawners that carry the "trainer" names; the spawned NPCs themselves have
-// no targetname / script_targetname / behaviorSet, so they cannot be recognised by name. Every ET_NPC on this map is a
-// trainer, and the stationary ones stand at the spawner positions of the map (dummy droids and Rey blockers).
-static const float s_stationaryHomes[][2] = {{-2355.0f, 490.0f}, {-2355.0f, -490.0f}, {-2798.0f, 490.0f}, {-2798.0f, -490.0f}};
-
-static void SV_Trainer_ResetOnNewMap(void) {
-  if (sv.serverId != s_lastServerId) {
-    s_lastServerId = sv.serverId;
-    for (int j = 0; j < MAX_GENTITIES; j++) {
-      s_hasTrainerOrigin[j] = qfalse;
-      s_hasTrainerPrev[j] = qfalse;
-      s_trainerClass[j] = 0;
-    }
-  }
-}
-
-static qboolean SV_IsTrainerNPC(sharedEntity_t *ent) {
-  return (ent && ent->s.eType == ET_NPC && ent->playerState) ? qtrue : qfalse;
-}
-
-// Classifies a trainer the first time it is seen (at its spawn position)
-static int SV_Trainer_Class(int i, sharedEntity_t *ent) {
-  if (s_trainerClass[i] == 0) {
-    s_trainerClass[i] = 1;
-    for (size_t h = 0; h < sizeof(s_stationaryHomes) / sizeof(s_stationaryHomes[0]); h++) {
-      const float dx = ent->r.currentOrigin[0] - s_stationaryHomes[h][0];
-      const float dy = ent->r.currentOrigin[1] - s_stationaryHomes[h][1];
-      if (dx * dx + dy * dy < 80.0f * 80.0f) {
-        s_trainerClass[i] = 2;
-        break;
-      }
-    }
-  }
-  return s_trainerClass[i];
-}
-
 // Moves a trainer back to a saved position (all copies of its origin) and relinks it for collision.
 static void SV_Trainer_SetOrigin(sharedEntity_t *ent, const vec3_t org) {
   if (VectorCompare(ent->r.currentOrigin, org)) return;
@@ -3695,6 +3656,22 @@ static void SV_Trainer_SetOrigin(sharedEntity_t *ent, const vec3_t org) {
   SV_LinkEntity(ent);
 }
 
+static qboolean SV_IsTrainerNPC(sharedEntity_t *ent) {
+  if (!ent) return qfalse;
+  if (ent->targetname && strstr(ent->targetname, "trainer")) return qtrue;
+  if (ent->script_targetname && strstr(ent->script_targetname, "trainer")) return qtrue;
+  if (ent->behaviorSet[0] && strstr(ent->behaviorSet[0], "trainer")) return qtrue;
+  return qfalse;
+}
+
+static qboolean SV_IsStationaryTrainer(sharedEntity_t *ent) {
+  if (!ent) return qfalse;
+  if (ent->behaviorSet[0] && (strstr(ent->behaviorSet[0], "dummy") || strstr(ent->behaviorSet[0], "blocker"))) return qtrue;
+  if (ent->targetname && (strstr(ent->targetname, "dummy") || strstr(ent->targetname, "rey"))) return qtrue;
+  if (ent->script_targetname && (strstr(ent->script_targetname, "dummy") || strstr(ent->script_targetname, "rey"))) return qtrue;
+  return qfalse;
+}
+
 // Knocked-down / get-up animations (BOTH_KNOCKDOWN1 .. BOTH_GETUP_FROLL_R)
 static qboolean SV_IsKnockAnim(int anim) {
   return (anim >= BOTH_KNOCKDOWN1 && anim <= BOTH_GETUP_FROLL_R) ? qtrue : qfalse;
@@ -3703,21 +3680,19 @@ static qboolean SV_IsKnockAnim(int anim) {
 /*
 ==================
 SV_Ranked_Trainer_PreFrame
-
 Runs BEFORE the game module's frame: remembers where each trainer stands so a kick applied during
 that frame can be undone afterwards.
 ==================
 */
 void SV_Ranked_Trainer_PreFrame(void) {
-  SV_Trainer_ResetOnNewMap();
   if (!sv_mapname || Q_stricmp(sv_mapname->string, "um_dojo_v2")) {
     return;
   }
   for (int i = sv_maxclients->integer; i < sv.num_entities; i++) {
     sharedEntity_t *ent = SV_GentityNum(i);
     s_hasTrainerPrev[i] = qfalse;
-    if (!ent || !ent->r.linked || !SV_IsTrainerNPC(ent)) continue;
-    SV_Trainer_Class(i, ent);
+    if (!ent || !ent->r.linked || ent->s.eType != ET_NPC || !ent->playerState) continue;
+    if (!SV_IsTrainerNPC(ent)) continue;
     VectorCopy(ent->r.currentOrigin, s_trainerPrevOrigin[i]);
     s_hasTrainerPrev[i] = qtrue;
   }
@@ -3726,47 +3701,57 @@ void SV_Ranked_Trainer_PreFrame(void) {
 /*
 ==================
 SV_Ranked_Trainer_Frame
-
 Runs AFTER the game module's frame (see SV_Frame), so the kick the game just applied is undone
 before the snapshot is built and clients never see the trainer fall or slide.
-Human players (clients 0..sv_maxclients-1) are ignored, so dueling kicks work normally.
-Stationary trainers (dummy droids, Rey blockers) stay locked to their spawn mats.
-Fighting trainers (Reborns, Kyle, Maul) fight and move freely but cannot be kicked out of place.
+Prevents Dojo NPC trainers from being displaced or knocked down by fly kicks.
+Human players (clients 0..sv_maxclients-1) are completely ignored so dueling kicks work 100% normally.
+Stationary trainers (Dummies, Rey blockers) stay locked to their spawn mats.
+Combat trainers (Reborns, Kyle, Maul) can fight and move freely, but their knockdown/kick impulse is canceled.
 ==================
 */
 void SV_Ranked_Trainer_Frame(void) {
-  SV_Trainer_ResetOnNewMap();
+  if (sv.serverId != s_lastServerId) {
+    s_lastServerId = sv.serverId;
+    for (int j = 0; j < MAX_GENTITIES; j++) {
+      s_hasTrainerOrigin[j] = qfalse;
+    }
+  }
+
   if (!sv_mapname || Q_stricmp(sv_mapname->string, "um_dojo_v2")) {
     return;
   }
 
   for (int i = sv_maxclients->integer; i < sv.num_entities; i++) {
     sharedEntity_t *ent = SV_GentityNum(i);
-    if (!ent || !ent->r.linked || !SV_IsTrainerNPC(ent)) continue;
+    if (!ent || !ent->r.linked) continue;
+    if (ent->s.eType != ET_NPC) continue;
+    if (!ent->playerState) continue;
 
-    const int cls = SV_Trainer_Class(i, ent);
-    playerState_t *ps = ent->playerState;
+    if (!SV_IsTrainerNPC(ent)) continue;
 
-    // 1. Cancel knockdown (from kicks or Force Push/Pull)
-    if (ps->forceHandExtend == HANDEXTEND_KNOCKDOWN) {
-      ps->forceHandExtend = HANDEXTEND_NONE;
-      ps->forceHandExtendTime = 0;
+    // 1. Cancel knockdown animation (from kicks or Force Push/Pull)
+    if (ent->playerState->forceHandExtend == HANDEXTEND_KNOCKDOWN) {
+      ent->playerState->forceHandExtend = HANDEXTEND_NONE;
+      ent->playerState->forceHandExtendTime = 0;
     }
 
-    if (cls == 2) {
-      // 2. Stationary trainers stay locked on their mats and never play knocked-down / get-up animations
-      if (SV_IsKnockAnim(ps->legsAnim) || SV_IsKnockAnim(ps->torsoAnim) ||
+    // 2. Stationary trainers: Dummy droids & Rey blockers stay locked on their mats
+    if (SV_IsStationaryTrainer(ent)) {
+      // no knocked-down / get-up animation either: stand back up instantly
+      if (SV_IsKnockAnim(ent->playerState->legsAnim) || SV_IsKnockAnim(ent->playerState->torsoAnim) ||
           SV_IsKnockAnim(ent->s.legsAnim) || SV_IsKnockAnim(ent->s.torsoAnim)) {
-        ps->legsAnim = ps->torsoAnim = BOTH_STAND1;
-        ps->legsTimer = ps->torsoTimer = 0;
+        ent->playerState->legsAnim = ent->playerState->torsoAnim = BOTH_STAND1;
+        ent->playerState->legsTimer = ent->playerState->torsoTimer = 0;
         ent->s.legsAnim = ent->s.torsoAnim = BOTH_STAND1;
         ent->s.legsFlip = (qboolean)!ent->s.legsFlip;
         ent->s.torsoFlip = (qboolean)!ent->s.torsoFlip;
       }
       VectorClear(ent->s.pos.trDelta);
-      VectorClear(ps->velocity);
-      ps->pm_time = 0;
-      ps->pm_flags &= ~PMF_TIME_KNOCKBACK;
+      ent->playerState->velocity[0] = 0.0f;
+      ent->playerState->velocity[1] = 0.0f;
+      ent->playerState->velocity[2] = 0.0f;
+      ent->playerState->pm_time = 0;
+      ent->playerState->pm_flags &= ~PMF_TIME_KNOCKBACK;
 
       if (!s_hasTrainerOrigin[i]) {
         VectorCopy(ent->r.currentOrigin, s_trainerSpawnOrigins[i]);
@@ -3775,19 +3760,19 @@ void SV_Ranked_Trainer_Frame(void) {
         SV_Trainer_SetOrigin(ent, s_trainerSpawnOrigins[i]);
       }
     } else {
-      // 3. Fighting trainers: a kick sets the knockback flag and/or a big velocity. Put the trainer back
-      // where it stood before the frame and drop the impulse.
-      const float speed2d = sqrtf(ps->velocity[0] * ps->velocity[0] + ps->velocity[1] * ps->velocity[1]);
-      if ((ps->pm_flags & PMF_TIME_KNOCKBACK) || speed2d > 360.0f) {
+      // 3. Combat trainers (Reborns, Kyle, Maul) fight and move freely,
+      // but if kicked (G_TossTheMofo sets PMF_TIME_KNOCKBACK and velocity), clear the kick impulse
+      if (ent->playerState->pm_flags & PMF_TIME_KNOCKBACK) {
+        // the kick may already have moved the trainer during this game frame: put it back where it stood
         if (s_hasTrainerPrev[i]) {
           SV_Trainer_SetOrigin(ent, s_trainerPrevOrigin[i]);
         }
-        ps->pm_flags &= ~PMF_TIME_KNOCKBACK;
-        ps->pm_time = 0;
-        ps->velocity[0] = 0.0f;
-        ps->velocity[1] = 0.0f;
-        if (ps->velocity[2] > 0.0f) {
-          ps->velocity[2] = 0.0f;
+        ent->playerState->pm_flags &= ~PMF_TIME_KNOCKBACK;
+        ent->playerState->pm_time = 0;
+        ent->playerState->velocity[0] = 0.0f;
+        ent->playerState->velocity[1] = 0.0f;
+        if (ent->playerState->velocity[2] > 0.0f) {
+          ent->playerState->velocity[2] = 0.0f;
         }
       }
     }
