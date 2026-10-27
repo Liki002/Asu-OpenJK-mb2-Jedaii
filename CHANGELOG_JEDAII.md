@@ -18,6 +18,11 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 - **Live rank table**: the server now sends `rpg_ranks <xpPerLevel> <count> <threshold> "<title>" ...` (from `ranked/config.json`, `xp_per_level`) whenever it syncs RPG data (`SV_Ranked_SendRankTable` in `sv_ranked_logic.cpp`). The `!rpgmenu` RANKS tab draws that table, shows each rank's Elo range and marks the player's current rank.
 - **XP per level**: `stats_sync` and the XP bar use the server's `xp_per_level` instead of a hard-coded 1000. The wrong "XP = 100 + (L-1)*150 ..." footnote was replaced with the real formula.
 
+#### 2b. UI Text and HUD Layout
+- **Proportional UI font**: all client overlay text (`SCR_DrawVirtualString` / `SCR_GetStringWidth` in `cl_scrn.cpp`) now uses the MBII proportional font (`ergoec`, falling back to `arialnb` / `ocr_a`) instead of the fixed-width character sheet, so letters are evenly spaced. Text with emoji glyphs (0x80-0x8F) still uses the old path.
+- **RPG HUD**: the XP text now matches the bar (`245 / 1000 XP`), kills/deaths/wins/losses are spelled out, long names are shortened with `..` and the level badge is pinned to the card edge, and the wide bar style has a fixed width so it no longer resizes with the name.
+- **Test commands**: `rpgui_test [name] [style]` fills the HUD with sample data.
+
 #### 3. Collection Book (`!collection` / `!col`)
 - **New client screen**: four set cards (progress segments, piece list with rarity colours, set bonus / COMPLETE) plus a Legendary Finds strip. `SCR_DrawCollectionOverlay` in `cl_scrn.cpp`, input in `cl_keys.cpp` (ESC / close button).
 - **Server data**: `SV_Ranked_ShowCollection` now also sends `col_clear`, `col_set`, `col_piece`, `col_open`. The chat text output is unchanged.

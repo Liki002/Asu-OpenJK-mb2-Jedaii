@@ -61,6 +61,7 @@ cvar_t		*cg_drawTopCredits;
 cvar_t		*cg_drawTopPotato;
 cvar_t		*cg_drawAdv;
 static void SCR_ColUITest_f( void );
+static void SCR_RPGUITest_f( void );
 int g_rpgXpPerLevel = 1000;
 int g_rpgRankCount = 0;
 rpgRankEntry_t g_rpgRanks[8];
@@ -140,7 +141,46 @@ float SCR_GetCharWidthFactor( int ch ) {
 	return 0.50f;
 }
 
+// ---------------------------------------------------------------------------
+// UI text: proportional MBII/JKA font instead of the fixed-width char sheet.
+// Falls back to the old char sheet when no font can be registered or the text has emoji glyphs.
+// ---------------------------------------------------------------------------
+static int s_uiFont = -1;	// -1 = not tried yet, 0 = none available
+
+static int SCR_UIFont( void ) {
+	if ( s_uiFont < 0 ) {
+		s_uiFont = 0;
+		if ( re && re->RegisterFont ) {
+			static const char *names[] = { "ergoec", "arialnb", "ocr_a", NULL };
+			for ( int i = 0; names[i] && s_uiFont <= 0; i++ ) {
+				s_uiFont = re->RegisterFont( names[i] );
+				if ( s_uiFont < 0 ) s_uiFont = 0;
+			}
+		}
+	}
+	return s_uiFont;
+}
+
+static qboolean SCR_HasEmojiGlyph( const char *str ) {
+	for ( const unsigned char *p = (const unsigned char *)str; *p; p++ ) {
+		if ( *p >= 0x80 && *p <= 0x8F ) return qtrue;
+	}
+	return qfalse;
+}
+
+// Font scale that gives roughly the same glyph height as the old char cells for a given charSize
+static float SCR_UIFontScale( int font, float charSize ) {
+	float renderH = (charSize < 7.0f) ? (charSize * 1.35f) : charSize;
+	int h = re->Font_HeightPixels( font, 1.0f );
+	if ( h < 1 ) h = 1;
+	return renderH * 1.30f / (float)h;
+}
+
 float SCR_GetStringWidth( const char *str, float charSize ) {
+	int font = SCR_UIFont();
+	if ( font && !SCR_HasEmojiGlyph( str ) ) {
+		return (float)re->Font_StrLenPixels( str, font, SCR_UIFontScale( font, charSize ) );
+	}
 	float renderH = (charSize < 7.0f) ? (charSize * 1.35f) : charSize;
 	return (float)Q_PrintStrlen( str ) * renderH * 0.50f;
 }
@@ -644,6 +684,7 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "rpg_hud_pos", SCR_RPGHUDPos_f, "Position RPG HUD: left, right, bottomright, bottomleft, bottomcenter" );
 	Cmd_AddCommand( "hudsettings", SCR_HUDSettings_f, "Toggle HUD settings configuration studio overlay" );
 	Cmd_AddCommand( "rpgmenu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
+	Cmd_AddCommand( "rpgui_test", SCR_RPGUITest_f, "Fill the RPG HUD with sample data: rpgui_test [name] [style]" );
 	Cmd_AddCommand( "colui_test", SCR_ColUITest_f, "Open the collection book with sample data" );
 	Cmd_AddCommand( "menu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "settings", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
@@ -779,6 +820,13 @@ static void SCR_DrawVirtualString( float x, float y, float charSize, const char 
 	} else {
 		color[0] = 1.0f; color[1] = 1.0f; color[2] = 1.0f; color[3] = 1.0f;
 	}
+
+	int font = SCR_UIFont();
+	if ( font && !SCR_HasEmojiGlyph( string ) ) {
+		re->Font_DrawString( (int)( x + 0.5f ), (int)( y + 0.5f ), string, color, font, -1, SCR_UIFontScale( font, charSize ) );
+		return;
+	}
+
 	re->SetColor( color );
 
 	float renderH = (charSize < 7.0f) ? (charSize * 1.35f) : charSize;
@@ -976,6 +1024,24 @@ static qhandle_t s_hSettingsSliderTrack = 0;
 static qhandle_t s_hSettingsSliderThumb = 0;
 static qhandle_t s_hGlobalCursor = 0;
 
+// Shortens a string with ".." so it fits in maxW (never cuts a ^ color code in half)
+static void SCR_FitText( const char *in, char *out, int outSize, float maxW, float size ) {
+	Q_strncpyz( out, in, outSize );
+	if ( SCR_GetStringWidth( out, size ) <= maxW ) return;
+	int len = (int)strlen( out );
+	while ( len > 1 ) {
+		len--;
+		if ( len > 0 && out[len - 1] == '^' ) len--;
+		out[len] = 0;
+		char tmp[160];
+		Com_sprintf( tmp, sizeof( tmp ), "%s..", out );
+		if ( SCR_GetStringWidth( tmp, size ) <= maxW ) {
+			Q_strncpyz( out, tmp, outSize );
+			return;
+		}
+	}
+}
+
 void SCR_DrawRPGHUDOverlay( void ) {
 	if ( cls.state != CA_ACTIVE ) {
 		return;
@@ -1035,9 +1101,9 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float maxStrW = (nameW > titleW) ? nameW : titleW;
 	float panelW, panelH;
 	if ( style == 1 ) {
-		panelW = (maxStrW + 115.0f);
-		if ( panelW < 180.0f ) panelW = 180.0f;
+		panelW = 250.0f;
 		panelH = 32.0f;
+		(void)maxStrW;
 	} else {
 		panelW = 175.0f;
 		panelH = 35.0f;
@@ -1114,13 +1180,17 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		float textX = avatarX + avatarSize + 8.0f;
 
 		// Line 1: Player Name + Level Badge
-		char nameLvlStr[128];
-		Com_sprintf( nameLvlStr, sizeof(nameLvlStr), "^7%s ^3Lv %d", playerName, level );
-		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, nameLvlStr, whiteColor );
+		char lvStr[32];
+		Com_sprintf( lvStr, sizeof(lvStr), "^3Lv %d", level );
+		float lvW = SCR_GetStringWidth( lvStr, 5.2f );
+		char nameFit[96];
+		SCR_FitText( playerName, nameFit, sizeof(nameFit), panelX + panelW - textX - lvW - 12.0f, 5.2f );
+		SCR_DrawVirtualString( textX, panelY + 2.0f, 5.2f, va( "^7%s", nameFit ), whiteColor );
+		SCR_DrawVirtualString( panelX + panelW - lvW - 6.0f, panelY + 2.0f, 5.2f, lvStr, whiteColor );
 
 		// Line 2: Rank Title, Force Rating ELO & Kills/Deaths/Wins/Losses
 		char rankStr[128];
-		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %d  ^2%dK ^1%dD  ^2%dW ^1%dL", rankTitle, fr, g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses );
+		Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7| ^2%d Elo ^7| ^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", rankTitle, fr, g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses );
 		SCR_DrawVirtualString( textX, panelY + 13.0f, 3.8f, rankStr, whiteColor );
 
 		// Line 3: Sleek Horizontal XP Bar (TGA Background)
@@ -1153,10 +1223,8 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		}
 
 		// XP Numeric Readout Overlay
-		int totalXP = (g_rpgStats.xp > 0) ? g_rpgStats.xp : (int)s_visualXP;
-		int totalXPMax = (g_rpgStats.xp > 0) ? (g_rpgStats.xp + (xpMax - relativeXP)) : xpMax;
 		char xpText[64];
-		Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", totalXP, totalXPMax );
+		Com_sprintf( xpText, sizeof(xpText), "^2%d^7 / ^2%d XP", relativeXP, xpMax );
 		float textWidthPixels = SCR_GetStringWidth( xpText, 3.8f );
 		float xpTextX = barX + barW - textWidthPixels - 3.0f;
 		if ( xpTextX < barX + 3.0f ) xpTextX = barX + 3.0f;
@@ -1233,8 +1301,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	float textX = panelX + panelW * 0.20f;
 
 	// Line 1: Player Name & Level Badge
-	char nameStr[128];
-	Com_sprintf( nameStr, sizeof(nameStr), "^7%s ^3Lv %d", playerName, level );
+	float cardTextW = panelW * 0.74f;
+	char lvStr[32];
+	Com_sprintf( lvStr, sizeof(lvStr), "^3Lv %d", level );
+	float lvW = SCR_GetStringWidth( lvStr, 3.8f );
+	char nameFit[96];
+	SCR_FitText( playerName, nameFit, sizeof(nameFit), cardTextW - lvW - 6.0f, 3.8f );
 	
 	float nameY;
 	if ( style == 0 ) {
@@ -1244,11 +1316,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	} else {
 		nameY = panelY + 5.0f;
 	}
-	SCR_DrawVirtualString( textX, nameY, 3.8f, nameStr, whiteColor );
+	SCR_DrawVirtualString( textX, nameY, 3.8f, va( "^7%s", nameFit ), whiteColor );
+	SCR_DrawVirtualString( textX + cardTextW - lvW, nameY, 3.8f, lvStr, whiteColor );
 
 	// Line 2: Rank Title, Force Rating ELO & K/D/W/L
 	char rankStr[128];
-	Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7|^2 %d ^7[^2%dK^7/^1%dD ^2%dW^7/^1%dL^7]", rankTitle, fr, g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses );
+	Com_sprintf( rankStr, sizeof(rankStr), "^3%s ^7| ^2%d Elo", rankTitle, fr );
 	
 	if ( style == 0 ) {
 		float rankW = SCR_GetStringWidth( rankStr, 3.0f );
@@ -1272,11 +1345,12 @@ void SCR_DrawRPGHUDOverlay( void ) {
 		SCR_DrawPic( fX, fY, fillW, fH, drawFill );
 	}
 
-	int totalXP = (g_rpgStats.xp > 0) ? g_rpgStats.xp : (int)s_visualXP;
-	int totalXPMax = (g_rpgStats.xp > 0) ? (g_rpgStats.xp + (xpMax - relativeXP)) : xpMax;
-
 	char xpText[64];
-	Com_sprintf( xpText, sizeof(xpText), "^2%d^7/^2%d XP", totalXP, totalXPMax );
+	Com_sprintf( xpText, sizeof(xpText), "^2%d^7 / ^2%d XP", relativeXP, xpMax );
+
+	// kills / deaths / wins / losses, spelled out, under the card
+	SCR_DrawVirtualString( panelX + 4.0f, panelY + panelH + 1.0f, 3.0f,
+		va( "^2%d Kills  ^1%d Deaths  ^2%d Wins  ^1%d Losses", g_rpgStats.kills, g_rpgStats.deaths, g_rpgStats.wins, g_rpgStats.losses ), whiteColor );
 
 	float textWidthPixels = SCR_GetStringWidth( xpText, 3.0f );
 	float xpTextX = fX + fW - textWidthPixels - 4.0f;
@@ -2901,6 +2975,22 @@ colui_test
 Fills the collection book with sample data so the layout can be checked without a server.
 ==================
 */
+static void SCR_RPGUITest_f( void ) {
+	g_rpgStats.active = qfalse;
+	g_rpgStats.level = 4; g_rpgStats.xp = 3245; g_rpgStats.fr = 1191;
+	g_rpgStats.kills = 50; g_rpgStats.deaths = 70; g_rpgStats.wins = 28; g_rpgStats.losses = 27;
+	g_rpgStats.credits = 12450;
+	Q_strncpyz( g_rpgStats.rankTitle, "^3Youngling", sizeof( g_rpgStats.rankTitle ) );
+	Cvar_Set( "cg_rpg_name", Cmd_Argc() > 1 ? Cmd_Argv( 1 ) : "Je'daii Likima" );
+	Cvar_Set( "cg_rpg_rank", "^3Youngling" );
+	Cvar_Set( "cg_rpg_level", "4" );
+	Cvar_Set( "cg_rpg_fr", "1191" );
+	Cvar_Set( "cg_rpg_xp", "245" );
+	Cvar_Set( "cg_rpg_xp_max", "1000" );
+	Cvar_Set( "cg_drawRPGHUD", "1" );
+	if ( Cmd_Argc() > 2 ) Cvar_Set( "cg_rpg_style", Cmd_Argv( 2 ) );
+}
+
 static void SCR_ColUITest_f( void ) {
 	memset( &g_rpgCollection.sets, 0, sizeof( g_rpgCollection.sets ) );
 	static const char *setNames[5] = { "Rebel Alliance Kit", "Imperial Cache", "Jedi Order Relics", "Sith Artifacts", "Legendary Finds" };
@@ -5436,6 +5526,7 @@ Resets all dynamically cached shader references.
 ==================
 */
 void CL_ResetShaderHandles( void ) {
+	s_uiFont = -1;
 	s_hBox = 0;
 	s_hBoxFillV1 = 0;
 	s_hBoxV2 = 0;
