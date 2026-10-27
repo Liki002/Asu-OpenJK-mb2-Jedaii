@@ -7,6 +7,26 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 
 ---
 
+### Session: 2026-10-27 — Client Resolution Fix, Live Rank Table, Collection Book & Jedaii Icon
+
+#### 1. Client Fixes
+- **No more "Could not load generic shader!" after changing resolution**: `CL_ShutdownRef` in `codemp/client/cl_main.cpp` now always unloads the renderer DLL on `vid_restart`. MBII's own `rd-rend2-mbii` / `rd-vanilla-mbii` DLLs keep static state and cannot be re-initialised in place.
+- **Jedaii logo as the exe icon**: `codemp/win32/icon.ico` rebuilt from the Jedaii logo (16-256 px).
+
+#### 2. Server-Driven RPG Menu Data
+- **Live rank table**: the server now sends `rpg_ranks <xpPerLevel> <count> <threshold> "<title>" ...` (from `ranked/config.json`, `xp_per_level`) whenever it syncs RPG data (`SV_Ranked_SendRankTable` in `sv_ranked_logic.cpp`). The `!rpgmenu` RANKS tab draws that table, shows each rank's Elo range and marks the player's current rank.
+- **XP per level**: `stats_sync` and the XP bar use the server's `xp_per_level` instead of a hard-coded 1000. The wrong "XP = 100 + (L-1)*150 ..." footnote was replaced with the real formula.
+
+#### 3. Collection Book (`!collection` / `!col`)
+- **New client screen**: four set cards (progress segments, piece list with rarity colours, set bonus / COMPLETE) plus a Legendary Finds strip. `SCR_DrawCollectionOverlay` in `cl_scrn.cpp`, input in `cl_keys.cpp` (ESC / close button).
+- **Server data**: `SV_Ranked_ShowCollection` now also sends `col_clear`, `col_set`, `col_piece`, `col_open`. The chat text output is unchanged.
+- **Preview command**: `colui_test` opens the book with sample data (no server needed).
+
+#### 4. Server (earlier today)
+- **Level-up sound from the engine** (`sv_ranked_levelup_sound`), removal of the `!duel_end` / `!forfeit` chat commands (the `duel_end` console hook stays), Dojo trainer kick-displacement guard (`SV_Ranked_Trainer_Frame`).
+
+---
+
 ### Session: 2026-10-01 — Server Connect Crash Fix, Reliable Chat Parsing & Stability Overhaul
 
 #### 1. Server Connection Crash Guard
