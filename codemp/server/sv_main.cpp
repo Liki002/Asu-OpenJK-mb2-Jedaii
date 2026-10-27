@@ -1198,6 +1198,7 @@ happen before SV_Frame is called
 ==================
 */
 extern void SV_Ranked_Trainer_Frame(void);
+extern void SV_Ranked_Trainer_PreFrame(void);
 
 void SV_Frame(int msec) {
   int frameMsec;
@@ -1318,6 +1319,9 @@ void SV_Frame(int msec) {
 
   // drive Hot Potato ticks and any other per-frame ranked logic (enforces weapons/force powers before game VM think)
   SV_Ranked_Logic_Frame();
+
+  // remember trainer positions so a kick during the game frame can be undone afterwards
+  SV_Ranked_Trainer_PreFrame();
 
   // run the game simulation in chunks
   while (sv.timeResidual >= frameMsec) {
