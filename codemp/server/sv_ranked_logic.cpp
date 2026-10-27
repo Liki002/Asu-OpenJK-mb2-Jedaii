@@ -3659,16 +3659,9 @@ static qboolean SV_IsStationaryTrainer(sharedEntity_t *ent) {
   return qfalse;
 }
 
-// Knocked-down / get-up animations (BOTH_KNOCKDOWN1 .. BOTH_GETUP_FROLL_R)
-static qboolean SV_IsKnockAnim(int anim) {
-  return (anim >= BOTH_KNOCKDOWN1 && anim <= BOTH_GETUP_FROLL_R) ? qtrue : qfalse;
-}
-
 /*
 ==================
 SV_Ranked_Trainer_Frame
-Runs AFTER the game module's frame (see SV_Frame), so the kick the game just applied is undone
-before the snapshot is built and clients never see the trainer fall or slide.
 Prevents Dojo NPC trainers from being displaced or knocked down by fly kicks.
 Human players (clients 0..sv_maxclients-1) are completely ignored so dueling kicks work 100% normally.
 Stationary trainers (Dummies, Rey blockers) stay locked to their spawn mats.
@@ -3703,16 +3696,6 @@ void SV_Ranked_Trainer_Frame(void) {
 
     // 2. Stationary trainers: Dummy droids & Rey blockers stay locked on their mats
     if (SV_IsStationaryTrainer(ent)) {
-      // no knocked-down / get-up animation either: stand back up instantly
-      if (SV_IsKnockAnim(ent->playerState->legsAnim) || SV_IsKnockAnim(ent->playerState->torsoAnim) ||
-          SV_IsKnockAnim(ent->s.legsAnim) || SV_IsKnockAnim(ent->s.torsoAnim)) {
-        ent->playerState->legsAnim = ent->playerState->torsoAnim = BOTH_STAND1;
-        ent->playerState->legsTimer = ent->playerState->torsoTimer = 0;
-        ent->s.legsAnim = ent->s.torsoAnim = BOTH_STAND1;
-        ent->s.legsFlip = (qboolean)!ent->s.legsFlip;
-        ent->s.torsoFlip = (qboolean)!ent->s.torsoFlip;
-      }
-      VectorClear(ent->s.pos.trDelta);
       ent->playerState->velocity[0] = 0.0f;
       ent->playerState->velocity[1] = 0.0f;
       ent->playerState->velocity[2] = 0.0f;
@@ -3725,7 +3708,6 @@ void SV_Ranked_Trainer_Frame(void) {
       } else {
         VectorCopy(s_trainerSpawnOrigins[i], ent->r.currentOrigin);
         VectorCopy(s_trainerSpawnOrigins[i], ent->s.origin);
-        VectorCopy(s_trainerSpawnOrigins[i], ent->s.pos.trBase);
         VectorCopy(s_trainerSpawnOrigins[i], ent->playerState->origin);
       }
     } else {
@@ -3746,6 +3728,7 @@ void SV_Ranked_Trainer_Frame(void) {
 
 // Called every SV_Frame — drives the 10-second potato tick and trivia
 void SV_Ranked_Logic_Frame(void) {
+  SV_Ranked_Trainer_Frame();
   SV_Ranked_SaveAccountsIfDirty(qfalse);
   SV_Ranked_Trivia_Frame();
   SV_Ranked_Vote_Frame();

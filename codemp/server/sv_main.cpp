@@ -1197,8 +1197,6 @@ Player movement occurs as a result of packet events, which
 happen before SV_Frame is called
 ==================
 */
-extern void SV_Ranked_Trainer_Frame(void);
-
 void SV_Frame(int msec) {
   int frameMsec;
   int startTime;
@@ -1328,9 +1326,6 @@ void SV_Frame(int msec) {
     // let everything in the world think and move
     GVM_RunFrame(sv.time);
   }
-
-  // undo kick displacement on Dojo trainers now that the game has moved everything, before snapshots go out
-  SV_Ranked_Trainer_Frame();
 
   // rww - RAGDOLL_BEGIN
   re->G2API_SetTime(sv.time, 0);
