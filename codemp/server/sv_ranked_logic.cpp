@@ -4400,14 +4400,13 @@ Format: rpg_ranks <xpPerLevel> <count> <threshold> "<title>" ...
 ==================
 */
 static void SV_Ranked_SendRankTable(client_t *cl) {
-  extern cJSON *rankedConfig;
   cJSON *xpl = SV_Ranked_GetSetting("xp_per_level");
   int perLevel = (xpl && xpl->valueint > 0) ? xpl->valueint : 1000;
 
   char cmd[900];
   int n = 0;
-  cJSON *titles = rankedConfig ? cJSON_GetObjectItemCaseSensitive(rankedConfig, "rank_titles") : NULL;
-  cJSON *thresh = rankedConfig ? cJSON_GetObjectItemCaseSensitive(rankedConfig, "rank_thresholds") : NULL;
+  cJSON *titles = SV_Ranked_GetSetting("rank_titles");
+  cJSON *thresh = SV_Ranked_GetSetting("rank_thresholds");
   std::string body;
   if (titles && thresh && cJSON_IsArray(titles) && cJSON_IsArray(thresh)) {
     const int cnt = std::min(cJSON_GetArraySize(titles), cJSON_GetArraySize(thresh));
