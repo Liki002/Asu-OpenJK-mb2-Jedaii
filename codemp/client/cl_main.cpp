@@ -2275,7 +2275,9 @@ static void CL_ShutdownRef( qboolean restarting ) {
 
 	re = NULL;
 
-	if ( rendererLib != NULL && !restarting ) {
+	// MBII's stock rd-rend2-mbii/rd-vanilla-mbii DLLs keep static state and need a fresh load on every
+	// vid_restart (they fail with "Could not load generic shader!" otherwise), so always unload here.
+	if ( rendererLib != NULL ) {
 		Sys_UnloadDll (rendererLib);
 		rendererLib = NULL;
 	}
