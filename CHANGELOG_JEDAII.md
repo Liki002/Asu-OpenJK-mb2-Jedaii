@@ -24,7 +24,8 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 - **Preview command**: `colui_test` opens the book with sample data (no server needed).
 
 #### 4. Server (earlier today)
-- **Level-up sound from the engine** (`sv_ranked_levelup_sound`), removal of the `!duel_end` / `!forfeit` chat commands (the `duel_end` console hook stays), Dojo trainer kick-displacement guard (`SV_Ranked_Trainer_Frame`).
+- **Level-up sound from the engine** (`sv_ranked_levelup_sound`), removal of the `!duel_end` / `!forfeit` chat commands (the `duel_end` console hook stays).
+- **Dojo trainer kick guard removed again**: tried to stop kicks from moving the Dojo NPC trainers (`SV_Ranked_Trainer_Frame`), but it could not be made to work reliably, so the code was taken out. The trainers themselves are unchanged.
 
 ---
 

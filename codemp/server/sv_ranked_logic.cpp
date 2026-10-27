@@ -3639,96 +3639,10 @@ void SV_Ranked_Adventure_Choose(client_t *cl, int choiceIndex) {
   }
 }
 
-static vec3_t s_trainerSpawnOrigins[MAX_GENTITIES];
-static qboolean s_hasTrainerOrigin[MAX_GENTITIES] = {qfalse};
-static int s_lastServerId = -1;
-
-static qboolean SV_IsTrainerNPC(sharedEntity_t *ent) {
-  if (!ent) return qfalse;
-  if (ent->targetname && strstr(ent->targetname, "trainer")) return qtrue;
-  if (ent->script_targetname && strstr(ent->script_targetname, "trainer")) return qtrue;
-  if (ent->behaviorSet[0] && strstr(ent->behaviorSet[0], "trainer")) return qtrue;
-  return qfalse;
-}
-
-static qboolean SV_IsStationaryTrainer(sharedEntity_t *ent) {
-  if (!ent) return qfalse;
-  if (ent->behaviorSet[0] && (strstr(ent->behaviorSet[0], "dummy") || strstr(ent->behaviorSet[0], "blocker"))) return qtrue;
-  if (ent->targetname && (strstr(ent->targetname, "dummy") || strstr(ent->targetname, "rey"))) return qtrue;
-  if (ent->script_targetname && (strstr(ent->script_targetname, "dummy") || strstr(ent->script_targetname, "rey"))) return qtrue;
-  return qfalse;
-}
-
-/*
-==================
-SV_Ranked_Trainer_Frame
-Prevents Dojo NPC trainers from being displaced or knocked down by fly kicks.
-Human players (clients 0..sv_maxclients-1) are completely ignored so dueling kicks work 100% normally.
-Stationary trainers (Dummies, Rey blockers) stay locked to their spawn mats.
-Combat trainers (Reborns, Kyle, Maul) can fight and move freely, but their knockdown/kick impulse is canceled.
-==================
-*/
-void SV_Ranked_Trainer_Frame(void) {
-  if (sv.serverId != s_lastServerId) {
-    s_lastServerId = sv.serverId;
-    for (int j = 0; j < MAX_GENTITIES; j++) {
-      s_hasTrainerOrigin[j] = qfalse;
-    }
-  }
-
-  if (!sv_mapname || Q_stricmp(sv_mapname->string, "um_dojo_v2")) {
-    return;
-  }
-
-  for (int i = sv_maxclients->integer; i < sv.num_entities; i++) {
-    sharedEntity_t *ent = SV_GentityNum(i);
-    if (!ent || !ent->r.linked) continue;
-    if (ent->s.eType != ET_NPC) continue;
-    if (!ent->playerState) continue;
-
-    if (!SV_IsTrainerNPC(ent)) continue;
-
-    // 1. Cancel knockdown animation (from kicks or Force Push/Pull)
-    if (ent->playerState->forceHandExtend == HANDEXTEND_KNOCKDOWN) {
-      ent->playerState->forceHandExtend = HANDEXTEND_NONE;
-      ent->playerState->forceHandExtendTime = 0;
-    }
-
-    // 2. Stationary trainers: Dummy droids & Rey blockers stay locked on their mats
-    if (SV_IsStationaryTrainer(ent)) {
-      ent->playerState->velocity[0] = 0.0f;
-      ent->playerState->velocity[1] = 0.0f;
-      ent->playerState->velocity[2] = 0.0f;
-      ent->playerState->pm_time = 0;
-      ent->playerState->pm_flags &= ~PMF_TIME_KNOCKBACK;
-
-      if (!s_hasTrainerOrigin[i]) {
-        VectorCopy(ent->r.currentOrigin, s_trainerSpawnOrigins[i]);
-        s_hasTrainerOrigin[i] = qtrue;
-      } else {
-        VectorCopy(s_trainerSpawnOrigins[i], ent->r.currentOrigin);
-        VectorCopy(s_trainerSpawnOrigins[i], ent->s.origin);
-        VectorCopy(s_trainerSpawnOrigins[i], ent->playerState->origin);
-      }
-    } else {
-      // 3. Combat trainers (Reborns, Kyle, Maul) fight and move freely,
-      // but if kicked (G_TossTheMofo sets PMF_TIME_KNOCKBACK and velocity), clear the kick impulse
-      if (ent->playerState->pm_flags & PMF_TIME_KNOCKBACK) {
-        ent->playerState->pm_flags &= ~PMF_TIME_KNOCKBACK;
-        ent->playerState->pm_time = 0;
-        ent->playerState->velocity[0] = 0.0f;
-        ent->playerState->velocity[1] = 0.0f;
-        if (ent->playerState->velocity[2] > 0.0f) {
-          ent->playerState->velocity[2] = 0.0f;
-        }
-      }
-    }
-  }
-}
+// TODO: Optional server-side anchor for Dojo trainers to prevent kick velocity if decided later.
 
 // Called every SV_Frame — drives the 10-second potato tick and trivia
 void SV_Ranked_Logic_Frame(void) {
-  SV_Ranked_Trainer_Frame();
   SV_Ranked_SaveAccountsIfDirty(qfalse);
   SV_Ranked_Trivia_Frame();
   SV_Ranked_Vote_Frame();
