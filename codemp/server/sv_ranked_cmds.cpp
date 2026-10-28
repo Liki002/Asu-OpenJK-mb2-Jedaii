@@ -1919,6 +1919,10 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
   } else if (!Q_stricmp(cmdSpace, "!sell") || !Q_stricmp(cmdSpace, "!sl")) {
     SV_Ranked_Cmd_Sell(cl, chatText);
     return qtrue;
+  } else if (!Q_stricmp(cmdSpace, "!scrap")) {
+    const char *scrapArg = strchr(chatText, ' ');
+    SV_Ranked_ScrapDuplicates(cl, scrapArg ? scrapArg + 1 : "");
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!use") || !Q_stricmp(cmdSpace, "!u")) {
     SV_Ranked_Cmd_Use(cl, chatText);
     return qtrue;
@@ -2574,6 +2578,7 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     SV_SendServerCommand(cl, "print \"^6!send <name> <amt> / !s ^7Send credits to player\n\"");
     SV_SendServerCommand(cl, "print \"^6!buy <item>             ^7Buy from shop\n\"");
     SV_SendServerCommand(cl, "print \"^6!sell <item> / !sl      ^7Sell an item\n\"");
+    SV_SendServerCommand(cl, "print \"^6!scrap [item]           ^7Sell all extra loot copies (keeps 1 of each)\n\"");
     SV_SendServerCommand(cl, "print \"^6!use <item> / !u        ^7Use an item\n\"");
     SV_SendServerCommand(cl, "print \"^6!roll / !rl             ^7Tiered roll gamble\n\"");
     SV_SendServerCommand(cl, "print \"^6!bet <name> <amt> / !b  ^7Bet on an active duel\n\"");

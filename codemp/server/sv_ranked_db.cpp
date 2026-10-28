@@ -2577,8 +2577,9 @@ void SV_Ranked_RollLoot(int killerId, int victimId) {
 ==================
 SV_Ranked_RollLootObjective
 
-Guaranteed / boosted collection loot drop when a logged-in player completes
-an objective in FA or Legends. Higher chances for Rare and Legendary pieces.
+Collection loot drop when a logged-in player completes an objective in FA or
+Legends: a chance (default 35%) with a per-round cap and a pity counter, and a
+better rarity table than kill drops.
 ==================
 */
 void SV_Ranked_RollLootObjective(int clientNum) {
@@ -2601,15 +2602,45 @@ void SV_Ranked_RollLootObjective(int clientNum) {
   if (!r->loggedIn || !r->username[0])
     return;
 
-  // Boosted roll: 30% Common (0), 35% Uncommon (1), 25% Rare (2), 10% Legendary (3)
-  int roll = rand() % 100;
-  int rarity = (roll < 30) ? 0 : (roll < 65) ? 1 : (roll < 90) ? 2 : 3;
-  int idx = Ranked_PickLootIndex(rarity);
-  if (idx < 0)
+  // Settings (ranked config), defaults: loot_objective_chance 35 (percent), loot_objective_round_cap 2
+  // (drops per player per round, 0 = no cap), loot_objective_pity 4 (this many objectives in a row
+  // without a drop guarantee the next one, 0 = off).
+  cJSON *chancePtr = SV_Ranked_GetSetting("loot_objective_chance");
+  int chance = (chancePtr && cJSON_IsNumber(chancePtr)) ? chancePtr->valueint : 35;
+  cJSON *capPtr = SV_Ranked_GetSetting("loot_objective_round_cap");
+  int cap = (capPtr && cJSON_IsNumber(capPtr)) ? capPtr->valueint : 2;
+  cJSON *pityPtr = SV_Ranked_GetSetting("loot_objective_pity");
+  int pity = (pityPtr && cJSON_IsNumber(pityPtr)) ? pityPtr->valueint : 4;
+
+  if (cap > 0 && r->roundLootDrops >= cap)
     return;
 
   cJSON *acc = SV_Ranked_GetAccount(r->username);
   if (!acc)
+    return;
+
+  // The pity counter lives on the account so it survives reconnects
+  cJSON *dryPtr = cJSON_GetObjectItemCaseSensitive(acc, "loot_obj_dry");
+  int dry = (dryPtr && cJSON_IsNumber(dryPtr)) ? dryPtr->valueint : 0;
+  const qboolean guaranteed = (pity > 0 && dry >= pity) ? qtrue : qfalse;
+
+  if (!guaranteed && (chance <= 0 || (rand() % 100) >= chance)) {
+    if (dryPtr)
+      cJSON_SetNumberValue(dryPtr, dry + 1);
+    else
+      cJSON_AddNumberToObject(acc, "loot_obj_dry", dry + 1);
+    SV_Ranked_MarkAccountsDirty();
+    return;
+  }
+
+  // Rarity: 45% Common (0), 35% Uncommon (1), 16% Rare (2), 4% Legendary (3).
+  // A pity drop is at least Uncommon.
+  int roll = rand() % 100;
+  int rarity = (roll < 45) ? 0 : (roll < 80) ? 1 : (roll < 96) ? 2 : 3;
+  if (guaranteed && rarity == 0)
+    rarity = 1;
+  int idx = Ranked_PickLootIndex(rarity);
+  if (idx < 0)
     return;
 
   cJSON *inv = Ranked_GetInventoryObject(acc);
@@ -2620,6 +2651,11 @@ void SV_Ranked_RollLootObjective(int clientNum) {
   else
     cJSON_AddNumberToObject(inv, item->key, 1);
 
+  dryPtr = cJSON_GetObjectItemCaseSensitive(acc, "loot_obj_dry");
+  if (dryPtr)
+    cJSON_SetNumberValue(dryPtr, 0);
+  r->roundLootDrops++;
+
   if (rarity >= 2) {
     SV_SendServerCommand(NULL, "chat \"^5OBJECTIVE HERO! ^7%s completed the objective and uncovered %s ^7(%s^7)!\"",
                          cl->name, item->display, Ranked_RarityName(rarity));
@@ -2627,8 +2663,8 @@ void SV_Ranked_RollLootObjective(int clientNum) {
     SV_SendServerCommand(cl, "chat \"^5OBJECTIVE REWARD! ^7Found %s ^7(%s^7)!\"",
                          item->display, Ranked_RarityName(rarity));
   }
-  SV_Ranked_Log("LOOT_OBJ: %s uncovered %s (rarity %d) mode=%s", r->username, item->key,
-                rarity, mode);
+  SV_Ranked_Log("LOOT_OBJ: %s uncovered %s (rarity %d%s) mode=%s", r->username, item->key,
+                rarity, guaranteed ? ", pity" : "", mode);
 
   Ranked_CheckSetCompletion(cl, r, acc);
   SV_Ranked_MarkAccountsDirty();
@@ -2709,6 +2745,76 @@ void SV_Ranked_RollLootAssist(int assistId, int victimId) {
 
 /*
 ==================
+SV_Ranked_ScrapDuplicates  (!scrap [item])
+
+Sells every extra copy of loot items at the normal sell price and always keeps
+one of each, so set pieces are never sold by accident. "!scrap" scraps all
+duplicates, "!scrap <key>" only that item.
+==================
+*/
+void SV_Ranked_ScrapDuplicates(client_t *cl, const char *arg) {
+  int clientNum = cl - svs.clients;
+  rankedMatchState_t *r = &sv_rankedPlayers[clientNum];
+  if (!r->loggedIn) {
+    SV_SendServerCommand(cl, "chat \"^3Login first to scrap items.\"");
+    return;
+  }
+
+  cJSON *acc = SV_Ranked_GetAccount(r->username);
+  if (!acc)
+    return;
+  cJSON *inv = cJSON_GetObjectItemCaseSensitive(acc, "inventory");
+  if (!inv || !cJSON_IsObject(inv)) {
+    SV_SendServerCommand(cl, "chat \"^7You have no duplicate loot to scrap.\"");
+    return;
+  }
+
+  while (arg && *arg == ' ')
+    arg++;
+  const qboolean single = (arg && arg[0] && Q_stricmp(arg, "all") != 0) ? qtrue : qfalse;
+  if (single) {
+    qboolean known = qfalse;
+    for (int i = 0; sv_lootItems[i].key != NULL; i++) {
+      if (!Q_stricmp(sv_lootItems[i].key, arg))
+        known = qtrue;
+    }
+    if (!known) {
+      SV_SendServerCommand(cl, "chat \"^1Unknown loot item. Use ^3!scrap^1 for all duplicates or ^3!scrap <key>^1.\"");
+      return;
+    }
+  }
+
+  int items = 0;
+  int credits = 0;
+  for (int i = 0; sv_lootItems[i].key != NULL; i++) {
+    const shopItem_t *item = &sv_lootItems[i];
+    if (single && Q_stricmp(item->key, arg))
+      continue;
+    cJSON *owned = cJSON_GetObjectItemCaseSensitive(inv, item->key);
+    if (!owned || owned->valueint <= 1)
+      continue;
+    int extra = owned->valueint - 1;
+    credits += extra * SV_Ranked_GetShopSellBack(item->key, item->sellBack);
+    items += extra;
+    cJSON_SetNumberValue(owned, 1);
+  }
+
+  if (items == 0) {
+    SV_SendServerCommand(cl, "chat \"^7No duplicates to scrap. You keep one of every piece.\"");
+    return;
+  }
+
+  UpdateAccountCredits(r->username, credits);
+  SV_Ranked_SaveAccounts();
+  SV_Ranked_Log("SCRAP: %s scrapped %d duplicate loot item(s) for %d credits", r->username, items, credits);
+  SV_SendServerCommand(cl, "chat \"^2Scrapped ^5%d^2 duplicate item%s for ^5%d Credits^2 (kept 1 of each).\"",
+                       items, items == 1 ? "" : "s", credits);
+  extern void SV_Ranked_SyncClientRPG(client_t *cl);
+  SV_Ranked_SyncClientRPG(cl);
+}
+
+/*
+==================
 SV_Ranked_ShowCollection  (!collection)
 ==================
 */
@@ -2750,7 +2856,7 @@ void SV_Ranked_ShowCollection(client_t *cl) {
       }
     }
   }
-  SV_SendServerCommand(cl, "print \"^5Loot drops from kills in FA and Legends. Sell with ^3!sell <key>^5.\n\"");
+  SV_SendServerCommand(cl, "print \"^5Loot drops from kills and objectives in FA and Legends. Sell with ^3!sell <key>^5, or ^3!scrap^5 to sell all extra copies.\n\"");
 
   // Structured data for the client collection screen:
   //   col_set <idx> <have> <done> <rewardCredits> "<name>"

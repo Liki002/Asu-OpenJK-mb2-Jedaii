@@ -18,6 +18,7 @@ typedef struct {
   int roundDeaths;
   int roundAssists;       // From RENS assistId / ranked_assist command
   int roundObjective;     // Objective completions this round
+  int roundLootDrops;     // Objective loot drops this round (cap)
   int roundSpawns;        // Spawns this round (1 = initial, >1 = reinforcements used)
   qboolean roundSurvived; // True if alive at round end
   int latestTeamId; // To identify if they are Red or Blue for match win
@@ -215,6 +216,7 @@ void SV_Ranked_RollLoot(int killerId, int victimId);
 void SV_Ranked_RollLootObjective(int clientNum);
 void SV_Ranked_RollLootAssist(int assistId, int victimId);
 void SV_Ranked_ShowCollection(client_t *cl);
+void SV_Ranked_ScrapDuplicates(client_t *cl, const char *arg);
 void SV_Ranked_ProcessObjectiveComplete(int clientNum);
 void SV_Ranked_ProcessAssist(int assistId, int victimId);
 

@@ -7,9 +7,11 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 
 ---
 
-### Session: 2026-10-28 — HUD Card and Stats Window Follow the Active Mode
+### Session: 2026-10-28 — HUD Card and Stats Window Follow the Active Mode, Loot Balance & !scrap
 
 - **Fix: the HUD card and the stats window showed the duel numbers on Battleground / Open / FA servers.** `!stats` correctly showed the numbers of the mode the server runs, but every automatic sync (after a kill, a win, a login) re-sent the duel numbers, so the card and the stats window jumped back to duel. The sync now uses the active mode (Elo, wins/losses, kills, deaths, highest streak; Open mode uses team wins / losses, like `!stats`) and also sends the current streak, trivia wins and top rival instead of zeros. Server-side change in `SV_Ranked_SyncClientRPG`: needs a new server build on those servers.
+- **Objective loot drops are no longer guaranteed.** Completing an objective in FA / Legends used to always drop an item with a boosted rarity. Now: **35% chance** (`loot_objective_chance`), at most **2 drops per player per round** (`loot_objective_round_cap`, 0 = no cap), and a **pity counter** (`loot_objective_pity`, default 4): after that many objectives in a row without a drop the next one is guaranteed and at least Uncommon (the counter is saved on the account). Objective rarity is now 45% Common / 35% Uncommon / 16% Rare / 4% Legendary (was 30 / 35 / 25 / 10). Kill and assist drops are unchanged. All three numbers are settings in the server's ranked `config.json`.
+- **New `!scrap [item]`:** sells every extra copy of loot items at the normal sell price and keeps one of each, so set pieces are never sold by accident. `!scrap` does all duplicates, `!scrap <key>` just that item. Listed in `!help` and in the `!collection` text. Server-side change: needs a new server build.
 
 ---
 

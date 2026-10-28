@@ -1765,6 +1765,7 @@ void SV_Ranked_ProcessRoundEnd(int winnerTeam) {
     mState->roundDeaths = 0;
     mState->roundAssists = 0;
     mState->roundObjective = 0;
+    mState->roundLootDrops = 0;
     mState->roundSpawns = 0;
     mState->roundSurvived = qfalse;
     mState->killStreak = 0;
@@ -3318,6 +3319,7 @@ void SV_Ranked_ProcessRoundStart(void) {
     sv_rankedPlayers[i].roundEliminations = 0;
     sv_rankedPlayers[i].roundAssists = 0;
     sv_rankedPlayers[i].roundObjective = 0;
+    sv_rankedPlayers[i].roundLootDrops = 0;
     sv_rankedPlayers[i].roundKills = 0;
     sv_rankedPlayers[i].roundDeaths = 0;
     Com_Memset(sv_rankedPlayers[i].killsOnPlayers, 0, sizeof(sv_rankedPlayers[i].killsOnPlayers));
