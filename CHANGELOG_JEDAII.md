@@ -7,6 +7,12 @@ This repository is a fork of [AsuTechio/OpenJK](https://github.com/AsuTechio/Ope
 
 ---
 
+### Session: 2026-10-28 — HUD Card and Stats Window Follow the Active Mode
+
+- **Fix: the HUD card and the stats window showed the duel numbers on Battleground / Open / FA servers.** `!stats` correctly showed the numbers of the mode the server runs, but every automatic sync (after a kill, a win, a login) re-sent the duel numbers, so the card and the stats window jumped back to duel. The sync now uses the active mode (Elo, wins/losses, kills, deaths, highest streak; Open mode uses team wins / losses, like `!stats`) and also sends the current streak, trivia wins and top rival instead of zeros. Server-side change in `SV_Ranked_SyncClientRPG`: needs a new server build on those servers.
+
+---
+
 ### Session: 2026-10-27 — Client Resolution Fix, Live Rank Table, Collection Book & Jedaii Icon
 
 #### 1. Client Fixes

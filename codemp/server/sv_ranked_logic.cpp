@@ -4379,8 +4379,13 @@ void SV_Ranked_SyncClientRPG(client_t *cl) {
   int currentXPInLevel = (perLevel > 0) ? (totalXp % perLevel) : 0;
   int xpNeededForNext = perLevel;
 
+  // The HUD card and the stats window follow the mode the server is running (duel / open / fa / legends),
+  // the same data !stats shows. This used to be hard-coded to duel, so every sync after a kill put the duel
+  // numbers back on the card.
+  const char *activeMode = SV_Ranked_GetActiveMode();
+  const qboolean openMode = !Q_stricmp(activeMode, "open") ? qtrue : qfalse;
   cJSON *modes = cJSON_GetObjectItemCaseSensitive(acc, "modes");
-  cJSON *duel = modes ? cJSON_GetObjectItemCaseSensitive(modes, "duel") : NULL;
+  cJSON *duel = modes ? cJSON_GetObjectItemCaseSensitive(modes, activeMode) : NULL;
   cJSON *eloPtr = duel ? cJSON_GetObjectItemCaseSensitive(duel, "elo") : NULL;
   int fr = (eloPtr && cJSON_IsNumber(eloPtr)) ? eloPtr->valueint : 1000;
   const char *rankTitle = SV_Ranked_GetTitle(fr, acc);
@@ -4400,17 +4405,34 @@ void SV_Ranked_SyncClientRPG(client_t *cl) {
   int credits = (credPtr && cJSON_IsNumber(credPtr)) ? credPtr->valueint : 0;
   int wins = 0, losses = 0, kills = 0, deaths = 0, streak = 0;
   if (duel) {
-    cJSON *w = cJSON_GetObjectItemCaseSensitive(duel, "wins"); if (w) wins = w->valueint;
-    cJSON *l = cJSON_GetObjectItemCaseSensitive(duel, "losses"); if (l) losses = l->valueint;
+    // open mode counts team wins / losses (same as !stats)
+    cJSON *w = cJSON_GetObjectItemCaseSensitive(duel, openMode ? "team_wins" : "wins"); if (w) wins = w->valueint;
+    cJSON *l = cJSON_GetObjectItemCaseSensitive(duel, openMode ? "team_losses" : "losses"); if (l) losses = l->valueint;
     cJSON *k = cJSON_GetObjectItemCaseSensitive(duel, "kills"); if (k) kills = k->valueint;
     cJSON *d = cJSON_GetObjectItemCaseSensitive(duel, "deaths"); if (d) deaths = d->valueint;
     cJSON *s = cJSON_GetObjectItemCaseSensitive(duel, "highest_streak"); if (s) streak = s->valueint;
   }
+  // trivia wins and top rival, so a sync does not blank them in the stats window
+  cJSON *triviaPtr = cJSON_GetObjectItemCaseSensitive(acc, "trivia_wins");
+  int triviaWins = (triviaPtr && cJSON_IsNumber(triviaPtr)) ? triviaPtr->valueint : 0;
+  const char *topRivalName = "None";
+  int topRivalCount = 0;
+  cJSON *rivals = cJSON_GetObjectItemCaseSensitive(acc, "rivals");
+  if (rivals) {
+    for (cJSON *rv = rivals->child; rv; rv = rv->next) {
+      cJSON *c = cJSON_GetObjectItemCaseSensitive(rv, "count");
+      cJSON *n = cJSON_GetObjectItemCaseSensitive(rv, "name");
+      if (c && c->valueint > topRivalCount) {
+        topRivalCount = c->valueint;
+        topRivalName = (n && n->valuestring) ? n->valuestring : "Unknown";
+      }
+    }
+  }
   SV_SendServerCommand(cl, va("stats_sync %d %d %d %d %d %d %d %d %d %d %d %d \"%s\" \"%s\" \"%s\"",
        totalXp, level, credits, fr,
        wins, losses, kills, deaths,
-       0, streak, 0, 0,
-       rankTitle, dispName, "None"));
+       r->killStreak, streak, triviaWins, topRivalCount,
+       rankTitle, dispName, topRivalName));
 }
 
 void SV_Ranked_SyncClientRPGByName(const char *username) {
