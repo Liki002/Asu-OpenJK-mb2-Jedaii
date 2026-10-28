@@ -2477,15 +2477,16 @@ void SV_Ranked_DuelEnd(int winnerId, int loserId, int isTie, int isDisconnect,
     if (winEloChange < 1) winEloChange = 1;
     loseEloChange = (int)round((double)loseEloChange * rematchMultiplier);
     if (loseEloChange > -1) loseEloChange = -1;
-    SV_SendServerCommand(svs.clients + winnerId, va("print \"^3[Anti-Farm] ^7Consecutive duel #%d vs same opponent (Elo scaled to %d%%)\n\"", rWin->consecutiveSameOpponentCount, (int)(rematchMultiplier * 100)));
+    // the format goes straight to SV_SendServerCommand (a va() result would be read as a format string a second time)
+    SV_SendServerCommand(svs.clients + winnerId, "print \"^3[Anti-Farm] ^7Consecutive duel #%d vs same opponent (Elo scaled to %d%%)\n\"", rWin->consecutiveSameOpponentCount, (int)(rematchMultiplier * 100));
   }
 
   // Close Fight Mitigation: If loser brought winner below 25 HP or 20 BP, reduce loser's penalty by 30%
   if (winHealth < 25 || (currentWinBP > 0 && currentWinBP < 20)) {
     loseEloChange = (int)round((double)loseEloChange * 0.70);
     if (loseEloChange > -1) loseEloChange = -1;
-    SV_SendServerCommand(NULL, va("print \"^6[VALIANT EFFORT] ^5%s ^7fought hard and nearly defeated ^5%s^7 (-30%% Elo Loss Shielded)!\n\"",
-                                 svs.clients[loserId].name, svs.clients[winnerId].name));
+    SV_SendServerCommand(NULL, "print \"^6[VALIANT EFFORT] ^5%s ^7fought hard and nearly defeated ^5%s^7 (-30%% Elo Loss Shielded)!\n\"",
+                         svs.clients[loserId].name, svs.clients[winnerId].name);
   }
 
   // Flawless Defense Bonus (+2 Elo): 100 HP and >= 90 BP
