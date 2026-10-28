@@ -61,7 +61,6 @@ cvar_t		*cg_drawTopCredits;
 cvar_t		*cg_drawTopPotato;
 cvar_t		*cg_drawAdv;
 static void SCR_ColUITest_f( void );
-static void SCR_UIScreenTest_f( void );
 static void SCR_RPGUITest_f( void );
 static void SCR_RPGXPTest_f( void );
 int g_rpgXpPerLevel = 1000;
@@ -715,7 +714,6 @@ void SCR_Init( void ) {
 	Cmd_AddCommand( "rpgui_test", SCR_RPGUITest_f, "Fill the RPG HUD with sample data: rpgui_test [name] [style]" );
 	Cmd_AddCommand( "rpgxp_test", SCR_RPGXPTest_f, "Add XP to the sample HUD: rpgxp_test [amount]" );
 	Cmd_AddCommand( "colui_test", SCR_ColUITest_f, "Open the collection book with sample data" );
-	Cmd_AddCommand( "uiscreen_test", SCR_UIScreenTest_f, "Open a UI window with sample data: uiscreen_test <lb|stats|wanted|bounties|shop|inv|quest|ach|credits|potato|adv|menu|toast>" );
 	Cmd_AddCommand( "menu", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "settings", SCR_RPGMenu_f, "Toggle Master RPG Hub menu overlay" );
 	Cmd_AddCommand( "partymenu", SCR_PartyMenu_f, "Toggle Party Management Studio overlay" );
@@ -2896,114 +2894,6 @@ static void SCR_RPGXPTest_f( void ) {
 	Cvar_Set( "cg_rpg_level", va( "%d", g_rpgStats.level ) );
 	Cvar_Set( "cg_rpg_xp", va( "%d", g_rpgStats.xp % perLevel ) );
 	Cvar_Set( "cg_rpg_xp_max", va( "%d", perLevel ) );
-}
-
-static void SCR_UIScreenTest_f( void ) {
-	const char *w = Cmd_Argc() > 1 ? Cmd_Argv( 1 ) : "";
-	static const char *nm[10] = { "Je'daii Anakin", "Obi-Wan Kenobi", "Mace Windu", "Ahsoka Tano", "Kit Fisto", "Plo Koon", "Luminara Unduli", "Aayla Secura", "Shaak Ti", "Ki-Adi-Mundi" };
-	if ( !Q_stricmp( w, "lb" ) ) {
-		g_topLeaderboardCount = 10;
-		for ( int i = 0; i < 10; i++ ) {
-			g_topLeaderboard[i].rank = i + 1;
-			g_topLeaderboard[i].fr = 2400 - i * 130;
-			g_topLeaderboard[i].level = 30 - i * 2;
-			Q_strncpyz( g_topLeaderboard[i].rankTitle, i < 3 ? "Jedi Master" : "Padawan", sizeof( g_topLeaderboard[i].rankTitle ) );
-			Q_strncpyz( g_topLeaderboard[i].displayName, nm[i], sizeof( g_topLeaderboard[i].displayName ) );
-		}
-		Cvar_Set( "cg_drawLeaderboard", "1" );
-	} else if ( !Q_stricmp( w, "stats" ) ) {
-		g_rpgStats.active = qtrue;
-		g_rpgStats.level = 4; g_rpgStats.xp = 3245; g_rpgStats.elo = 1191; g_rpgStats.fr = 1191;
-		g_rpgStats.credits = 12450; g_rpgStats.wins = 28; g_rpgStats.losses = 27; g_rpgStats.kills = 50; g_rpgStats.deaths = 70;
-		g_rpgStats.highestStreak = 6; g_rpgStats.triviaWins = 3; g_rpgStats.topRivalCount = 5;
-		Q_strncpyz( g_rpgStats.name, "Je'daii Anakin", sizeof( g_rpgStats.name ) );
-		Q_strncpyz( g_rpgStats.rankTitle, "^3Youngling", sizeof( g_rpgStats.rankTitle ) );
-		Q_strncpyz( g_rpgStats.favWeapon, "Lightsaber", sizeof( g_rpgStats.favWeapon ) );
-		Q_strncpyz( g_rpgStats.topRivalName, "Obi-Wan Kenobi", sizeof( g_rpgStats.topRivalName ) );
-		Cvar_Set( "cg_drawStats", "1" );
-	} else if ( !Q_stricmp( w, "wanted" ) || !Q_stricmp( w, "bounties" ) ) {
-		g_rpgBounty.active = qtrue;
-		g_rpgBounty.isWanted = !Q_stricmp( w, "wanted" ) ? qtrue : qfalse;
-		g_rpgBounty.count = 6;
-		for ( int i = 0; i < 6; i++ ) {
-			g_rpgBounty.entries[i].rank = i + 1;
-			g_rpgBounty.entries[i].streak = 9 - i;
-			g_rpgBounty.entries[i].bounty = 900 - i * 120;
-			Q_strncpyz( g_rpgBounty.entries[i].name, nm[i], sizeof( g_rpgBounty.entries[i].name ) );
-		}
-		Cvar_Set( "cg_drawBounty", "1" );
-	} else if ( !Q_stricmp( w, "shop" ) ) {
-		g_rpgShop.active = qtrue; g_rpgShop.credits = 12450; g_rpgShop.count = 10; g_rpgShop.scroll = 0;
-		for ( int i = 0; i < 10; i++ ) {
-			Q_strncpyz( g_rpgShop.items[i].key, va( "item%d", i ), sizeof( g_rpgShop.items[i].key ) );
-			Q_strncpyz( g_rpgShop.items[i].display, va( "^7Shop Item %d ^5(+%d Force)", i + 1, i * 5 ), sizeof( g_rpgShop.items[i].display ) );
-			g_rpgShop.items[i].price = 250 + i * 150;
-			g_rpgShop.items[i].sellBack = 100 + i * 60;
-		}
-		Cvar_Set( "cg_drawShop", "1" );
-	} else if ( !Q_stricmp( w, "inv" ) ) {
-		g_rpgInventory.active = qtrue; g_rpgInventory.invCount = 4; g_rpgInventory.scroll = 0;
-		for ( int i = 0; i < 4; i++ ) {
-			Q_strncpyz( g_rpgInventory.inv[i].key, va( "inv%d", i ), sizeof( g_rpgInventory.inv[i].key ) );
-			Q_strncpyz( g_rpgInventory.inv[i].display, va( "^7Inventory Item %d", i + 1 ), sizeof( g_rpgInventory.inv[i].display ) );
-			g_rpgInventory.inv[i].qty = 1 + i;
-		}
-		Cvar_Set( "cg_drawInventory", "1" );
-	} else if ( !Q_stricmp( w, "quest" ) ) {
-		g_rpgQuest.active = qtrue; g_rpgQuest.questCount = 3;
-		for ( int i = 0; i < 3; i++ ) {
-			g_rpgQuest.quests[i].id = i + 1;
-			Q_strncpyz( g_rpgQuest.quests[i].desc, i == 0 ? "Win 5 ranked duels" : ( i == 1 ? "Get 20 kills in Full Authentic" : "Reach a 3 win streak" ), sizeof( g_rpgQuest.quests[i].desc ) );
-			g_rpgQuest.quests[i].goal = i == 0 ? 5 : ( i == 1 ? 20 : 3 );
-			g_rpgQuest.quests[i].prog = i == 2 ? 3 : ( i == 0 ? 2 : 11 );
-			g_rpgQuest.quests[i].done = i == 2 ? qtrue : qfalse;
-			g_rpgQuest.quests[i].rewardCr = 300 + i * 100;
-			g_rpgQuest.quests[i].rewardFr = 10 + i * 5;
-			Q_strncpyz( g_rpgQuest.quests[i].mode, i == 1 ? "FA" : "Duel", sizeof( g_rpgQuest.quests[i].mode ) );
-		}
-		Cvar_Set( "cg_drawQuest", "1" );
-	} else if ( !Q_stricmp( w, "ach" ) ) {
-		g_rpgAch.active = qtrue; g_rpgAch.count = 9;
-		for ( int i = 0; i < 9; i++ ) {
-			Q_strncpyz( g_rpgAch.entries[i].name, va( "Achievement number %d", i + 1 ), sizeof( g_rpgAch.entries[i].name ) );
-			g_rpgAch.entries[i].rewardCr = 100 * ( i + 1 );
-			g_rpgAch.entries[i].unlocked = ( i % 3 == 0 ) ? qtrue : qfalse;
-		}
-		Cvar_Set( "cg_drawAch", "1" );
-	} else if ( !Q_stricmp( w, "credits" ) ) {
-		g_rpgTopCredits.active = qtrue; g_rpgTopCredits.count = 10;
-		for ( int i = 0; i < 10; i++ ) {
-			g_rpgTopCredits.entries[i].rank = i + 1;
-			g_rpgTopCredits.entries[i].credits = 90000 - i * 7000;
-			Q_strncpyz( g_rpgTopCredits.entries[i].name, nm[i], sizeof( g_rpgTopCredits.entries[i].name ) );
-		}
-		Cvar_Set( "cg_drawTopCredits", "1" );
-	} else if ( !Q_stricmp( w, "potato" ) ) {
-		g_rpgTopPotato.active = qtrue; g_rpgTopPotato.count = 10;
-		for ( int i = 0; i < 10; i++ ) {
-			g_rpgTopPotato.entries[i].rank = i + 1;
-			g_rpgTopPotato.entries[i].ticks = 300 - i * 25;
-			Q_strncpyz( g_rpgTopPotato.entries[i].name, nm[i], sizeof( g_rpgTopPotato.entries[i].name ) );
-		}
-		Cvar_Set( "cg_drawTopPotato", "1" );
-	} else if ( !Q_stricmp( w, "adv" ) ) {
-		g_rpgAdv.active = qtrue; g_rpgAdv.choiceY = 0.0f;
-		Q_strncpyz( g_rpgAdv.title, "The Old Temple", sizeof( g_rpgAdv.title ) );
-		Q_strncpyz( g_rpgAdv.text, "You find a crumbling temple half buried in the sand. A faint blue glow comes from inside.", sizeof( g_rpgAdv.text ) );
-		Q_strncpyz( g_rpgAdv.choice1, "Step inside", sizeof( g_rpgAdv.choice1 ) );
-		Q_strncpyz( g_rpgAdv.choice2, "Search the ruins outside", sizeof( g_rpgAdv.choice2 ) );
-		Q_strncpyz( g_rpgAdv.choice3, "Leave quietly", sizeof( g_rpgAdv.choice3 ) );
-		Cvar_Set( "cg_drawAdv", "1" );
-	} else if ( !Q_stricmp( w, "menu" ) ) {
-		g_rpgMenu.active = qtrue;
-		g_rpgMenu.tab = Cmd_Argc() > 2 ? atoi( Cmd_Argv( 2 ) ) % 4 : 0;
-	} else if ( !Q_stricmp( w, "toast" ) ) {
-		g_rpgToast.active = qtrue; g_rpgToast.isWin = qtrue; g_rpgToast.eloDelta = 18; g_rpgToast.credits = 250; g_rpgToast.xp = 120;
-		g_rpgToast.health = 64; g_rpgToast.bp = 0; g_rpgToast.startTimeMs = cls.realtime;
-		Q_strncpyz( g_rpgToast.opponentName, "Mace Windu", sizeof( g_rpgToast.opponentName ) );
-	} else {
-		Com_Printf( "uiscreen_test <lb | stats | wanted | bounties | shop | inv | quest | ach | credits | potato | adv | menu [tab] | toast>\n" );
-	}
 }
 
 static void SCR_ColUITest_f( void ) {
