@@ -965,6 +965,23 @@ typedef struct {
 
 extern rpgTopCreditsOverlay_t g_rpgTopCredits;
 
+// --- Top Chat Overlay (!top chat) ---
+typedef struct {
+	int  rank;
+	int  count;
+	char name[64];
+	char title[32];
+} topChatEntry_t;
+
+typedef struct {
+	qboolean active;
+	int      count;
+	topChatEntry_t entries[10];
+} rpgTopChatOverlay_t;
+
+extern rpgTopChatOverlay_t g_rpgTopChat;
+void SCR_DrawTopChatOverlay( void );
+
 // --- Top Potato Overlay ---
 typedef struct {
 	int  rank;

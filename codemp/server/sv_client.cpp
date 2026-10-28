@@ -1901,6 +1901,12 @@ void SV_ExecuteClientCommand(client_t *cl, const char *s, qboolean clientOK) {
         return; // Command handled internally
       }
     }
+
+    // Chat ranking: public chat lines that are not commands (see SV_Ranked_CountChat for the spam rules)
+    if (!Q_stricmp(Cmd_Argv(0), "say") && fullChatText[0] != '!' && fullChatText[0] != '#') {
+      extern void SV_Ranked_CountChat(client_t *cl, const char *msg);
+      SV_Ranked_CountChat(cl, fullChatText);
+    }
   }
 
 

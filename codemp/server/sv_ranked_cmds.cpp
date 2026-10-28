@@ -1841,6 +1841,12 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     }
     return qtrue;
 
+  } else if (!Q_stricmp(cmdSpace, "!topchat") || !Q_stricmp(cmdSpace, "!chattop") ||
+             ((!Q_stricmp(cmdSpace, "!top") || !Q_stricmp(cmdSpace, "!t")) && strchr(chatText, ' ') &&
+              !Q_stricmpn(strchr(chatText, ' ') + 1, "chat", 4))) {
+    // "!top chat", "!topchat"
+    SV_Ranked_ShowTopChat(cl);
+    return qtrue;
   } else if (!Q_stricmp(cmdSpace, "!top") || !Q_stricmp(cmdSpace, "!t") ||
              !Q_stricmp(cmdSpace, "!topelo")) {
     SV_Ranked_ShowTop(cl);
@@ -2579,6 +2585,7 @@ qboolean SV_Ranked_ProcessCommand(client_t *cl, const char *chatText) {
     SV_SendServerCommand(cl, "print \"^6!buy <item>             ^7Buy from shop\n\"");
     SV_SendServerCommand(cl, "print \"^6!sell <item> / !sl      ^7Sell an item\n\"");
     SV_SendServerCommand(cl, "print \"^6!scrap [item]           ^7Sell all extra loot copies (keeps 1 of each)\n\"");
+    SV_SendServerCommand(cl, "print \"^6!top chat               ^7Who writes the most different chat messages\n\"");
     SV_SendServerCommand(cl, "print \"^6!use <item> / !u        ^7Use an item\n\"");
     SV_SendServerCommand(cl, "print \"^6!roll / !rl             ^7Tiered roll gamble\n\"");
     SV_SendServerCommand(cl, "print \"^6!bet <name> <amt> / !b  ^7Bet on an active duel\n\"");

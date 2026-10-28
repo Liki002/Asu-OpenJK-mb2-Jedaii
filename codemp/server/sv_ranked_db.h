@@ -160,6 +160,8 @@ void SV_Ranked_ShowTopAll(client_t *cl);   // all servers (central mode); same a
 void SV_Ranked_ShowRank(client_t *cl);
 void SV_Ranked_ShowRankThresholds(client_t *cl);
 void SV_Ranked_ShowTopCredits(client_t *cl);
+void SV_Ranked_ShowTopChat(client_t *cl);
+void SV_Ranked_CountChat(client_t *cl, const char *msg);
 void SV_Ranked_ShowTopPotato(client_t *cl);
 void SV_Ranked_ShowWanted(client_t *cl);
 void SV_Ranked_ShowQuests(client_t *cl);

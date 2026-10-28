@@ -2732,7 +2732,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 	}
 
 	// Top Leaderboard (Credits / Potato) UI Modal Input Handling
-	if ( (g_rpgTopCredits.active || g_rpgTopPotato.active || (cg_drawLeaderboard && cg_drawLeaderboard->integer)) && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
+	if ( (g_rpgTopCredits.active || g_rpgTopPotato.active || g_rpgTopChat.active || (cg_drawLeaderboard && cg_drawLeaderboard->integer)) && !( Key_GetCatcher() & ( KEYCATCH_MESSAGE | KEYCATCH_CONSOLE ) ) ) {
 		if ( key == A_MOUSE1 ) {
 			float winW = 290.0f;
 			float winH = 400.0f;
@@ -2744,6 +2744,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 			if ( mx >= winX + winW - 40.0f && mx <= winX + winW - 5.0f && my >= winY + 10.0f && my <= winY + 32.0f ) {
 				g_rpgTopCredits.active = qfalse;
 				g_rpgTopPotato.active = qfalse;
+				g_rpgTopChat.active = qfalse;
 				Cvar_Set( "cg_drawTopCredits", "0" );
 				Cvar_Set( "cg_drawTopPotato", "0" );
 				Cvar_Set( "cg_drawLeaderboard", "0" );
@@ -2753,6 +2754,7 @@ void CL_KeyDownEvent( int key, unsigned time )
 		if ( key == A_ESCAPE ) {
 			g_rpgTopCredits.active = qfalse;
 			g_rpgTopPotato.active = qfalse;
+			g_rpgTopChat.active = qfalse;
 			Cvar_Set( "cg_drawTopCredits", "0" );
 			Cvar_Set( "cg_drawTopPotato", "0" );
 			Cvar_Set( "cg_drawLeaderboard", "0" );
@@ -2838,6 +2840,10 @@ void CL_KeyDownEvent( int key, unsigned time )
 			if ( cg_drawTopPotato && cg_drawTopPotato->integer ) {
 				Cvar_Set( "cg_drawTopPotato", "0" );
 				g_rpgTopPotato.active = qfalse;
+				return;
+			}
+			if ( g_rpgTopChat.active ) {
+				g_rpgTopChat.active = qfalse;
 				return;
 			}
 			if ( cg_drawAdv && cg_drawAdv->integer ) {

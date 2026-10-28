@@ -81,6 +81,7 @@ rpgQuestOverlay_t      g_rpgQuest         = {qfalse, 0, {}};
 rpgInventoryOverlay_t  g_rpgInventory     = {qfalse, 0, {}, 0};
 rpgAchOverlay_t       g_rpgAch           = {qfalse, 0, {}};
 rpgTopCreditsOverlay_t g_rpgTopCredits   = {qfalse, 0, {}};
+rpgTopChatOverlay_t g_rpgTopChat = {qfalse, 0, {}};
 rpgTopPotatoOverlay_t g_rpgTopPotato     = {qfalse, 0, {}};
 rpgAdventureOverlay_t g_rpgAdv           = {qfalse, "", "", "", "", ""};
 rpgPartyOverlay_t     g_rpgParty         = {qfalse, "", 0, 0, {}};
@@ -1148,8 +1149,8 @@ static void SCR_UITitle( float x, float y, float w, const char *title, float siz
 }
 
 // ---- Animation + widgets for the modal windows ---------------------------------------------------
-static int s_uiShownMs[16];
-static int s_uiLastDrawMs[16];
+static int s_uiShownMs[24];
+static int s_uiLastDrawMs[24];
 static int s_uiAnimMs = 0;
 static float s_uiBaseAlpha = 1.0f;
 static float s_uiBaseDY = 0.0f;
@@ -1402,6 +1403,7 @@ void SCR_DrawRPGHUDOverlay( void ) {
 	if ( (cg_drawStats && cg_drawStats->integer) ||
 		 (cg_drawLeaderboard && cg_drawLeaderboard->integer) ||
 		 (cg_drawTopCredits && cg_drawTopCredits->integer) ||
+		 g_rpgTopChat.active ||
 		 (cg_drawTopPotato && cg_drawTopPotato->integer) ||
 		 (cg_drawBounty && cg_drawBounty->integer) ||
 		 (cg_drawShop && cg_drawShop->integer) ||
@@ -2381,6 +2383,63 @@ void SCR_DrawTopPotatoOverlay( void ) {
 
 /*
 ==================
+SCR_DrawTopChatOverlay
+
+!top chat: players with the most different chat messages, with a funny chat rank next to the count
+==================
+*/
+void SCR_DrawTopChatOverlay( void ) {
+	if ( cls.state != CA_ACTIVE ) return;
+	if ( !g_rpgTopChat.active ) return;
+
+	// same geometry as the other top lists (the ESC area is handled in cl_keys.cpp)
+	const float winW = 290.0f, winH = 400.0f;
+	const float winX = 320.0f - winW * 0.5f;
+	const float winY = 40.0f;
+	vec4_t tint  = { 0.80f, 0.45f, 1.00f, 1.0f };
+	vec4_t dim   = { 0.60f, 0.72f, 0.88f, 1.0f };
+	vec4_t white = { 1.0f, 1.0f, 1.0f, 1.0f };
+	SCR_UIWindow( winX, winY, winW, winH, "^6CHAT ^7KINGS", tint, qtrue );
+
+	const float headY = winY + 38.0f;
+	const float colName = winX + 46.0f;
+	const float colCountR = winX + 172.0f;
+	const float rightEdge = winX + winW - 18.0f;
+	SCR_DrawVirtualString( winX + 20.0f, headY, 3.6f, "#", dim );
+	SCR_DrawVirtualString( colName, headY, 3.6f, "PLAYER", dim );
+	SCR_DrawVirtualString( colCountR - SCR_GetStringWidth( "MSGS", 3.6f ), headY, 3.6f, "MSGS", dim );
+	SCR_DrawVirtualString( rightEdge - SCR_GetStringWidth( "CHAT RANK", 3.6f ), headY, 3.6f, "CHAT RANK", dim );
+
+	const float rowH = 26.0f;
+	const float rowStart = headY + 13.0f;
+	for ( int i = 0; i < 10; i++ ) {
+		const float ry = rowStart + (float)i * rowH;
+		SCR_UIRowBegin( i );
+		if ( i % 2 == 0 ) {
+			vec4_t zebra = { 1.0f, 1.0f, 1.0f, 0.05f };
+			SCR_FillRect( winX + 12.0f, ry, winW - 24.0f, rowH - 2.0f, zebra );
+		}
+		if ( i < g_rpgTopChat.count ) {
+			topChatEntry_t *e = &g_rpgTopChat.entries[i];
+			const float ty = ry + ( rowH - 2.0f - 4.8f * 1.2f ) * 0.5f;
+			SCR_UIRankBadge( winX + 18.0f, ry + 3.0f, 20.0f, rowH - 8.0f, i + 1, 4.6f );
+			char fit[64];
+			SCR_FitText( e->name, fit, sizeof( fit ), colCountR - colName - SCR_GetStringWidth( "00000", 4.8f ) - 6.0f, 4.8f );
+			SCR_DrawVirtualString( colName, ty, 4.8f, va( "^7%s", fit ), white );
+			const char *cnt = va( "^5%d", e->count );
+			SCR_DrawVirtualString( colCountR - SCR_GetStringWidth( cnt, 4.8f ), ty, 4.8f, cnt, white );
+			if ( e->title[0] ) {
+				const char *tt = va( "^3%s", e->title );
+				SCR_DrawVirtualString( rightEdge - SCR_GetStringWidth( tt, 3.8f ), ty + 0.6f, 3.8f, tt, white );
+			}
+		}
+		SCR_UIRowEnd();
+	}
+	SCR_UIFooter( winX, winY, winW, winH, tint, "^7Only different messages count, spam does not  |  ^1ESC^7 to close" );
+}
+
+/*
+==================
 SCR_DrawAdventureOverlay
 
 RPG Adventure Choice Card
@@ -2819,7 +2878,7 @@ static void SCR_RPGUITest_f( void ) {
 	g_rpgStats.kills = 50; g_rpgStats.deaths = 70; g_rpgStats.wins = 28; g_rpgStats.losses = 27;
 	g_rpgStats.credits = 12450;
 	Q_strncpyz( g_rpgStats.rankTitle, "^3Youngling", sizeof( g_rpgStats.rankTitle ) );
-	Cvar_Set( "cg_rpg_name", Cmd_Argc() > 1 ? Cmd_Argv( 1 ) : "Je'daii Likima" );
+	Cvar_Set( "cg_rpg_name", Cmd_Argc() > 1 ? Cmd_Argv( 1 ) : "Je'daii Anakin" );
 	Cvar_Set( "cg_rpg_rank", "^3Youngling" );
 	Cvar_Set( "cg_rpg_level", "4" );
 	Cvar_Set( "cg_rpg_fr", "1191" );
@@ -2841,7 +2900,7 @@ static void SCR_RPGXPTest_f( void ) {
 
 static void SCR_UIScreenTest_f( void ) {
 	const char *w = Cmd_Argc() > 1 ? Cmd_Argv( 1 ) : "";
-	static const char *nm[10] = { "Je'daii Likima", "Defiant", "Rey_Trainer", "Sentinel", "Cozy_Snoozer", "Mecca Chameleon", "Padawan_Kid", "Rinnegan", "DarkLord99", "NoobSlayer" };
+	static const char *nm[10] = { "Je'daii Anakin", "Obi-Wan Kenobi", "Mace Windu", "Ahsoka Tano", "Kit Fisto", "Plo Koon", "Luminara Unduli", "Aayla Secura", "Shaak Ti", "Ki-Adi-Mundi" };
 	if ( !Q_stricmp( w, "lb" ) ) {
 		g_topLeaderboardCount = 10;
 		for ( int i = 0; i < 10; i++ ) {
@@ -2857,10 +2916,10 @@ static void SCR_UIScreenTest_f( void ) {
 		g_rpgStats.level = 4; g_rpgStats.xp = 3245; g_rpgStats.elo = 1191; g_rpgStats.fr = 1191;
 		g_rpgStats.credits = 12450; g_rpgStats.wins = 28; g_rpgStats.losses = 27; g_rpgStats.kills = 50; g_rpgStats.deaths = 70;
 		g_rpgStats.highestStreak = 6; g_rpgStats.triviaWins = 3; g_rpgStats.topRivalCount = 5;
-		Q_strncpyz( g_rpgStats.name, "Je'daii Likima", sizeof( g_rpgStats.name ) );
+		Q_strncpyz( g_rpgStats.name, "Je'daii Anakin", sizeof( g_rpgStats.name ) );
 		Q_strncpyz( g_rpgStats.rankTitle, "^3Youngling", sizeof( g_rpgStats.rankTitle ) );
 		Q_strncpyz( g_rpgStats.favWeapon, "Lightsaber", sizeof( g_rpgStats.favWeapon ) );
-		Q_strncpyz( g_rpgStats.topRivalName, "Defiant", sizeof( g_rpgStats.topRivalName ) );
+		Q_strncpyz( g_rpgStats.topRivalName, "Obi-Wan Kenobi", sizeof( g_rpgStats.topRivalName ) );
 		Cvar_Set( "cg_drawStats", "1" );
 	} else if ( !Q_stricmp( w, "wanted" ) || !Q_stricmp( w, "bounties" ) ) {
 		g_rpgBounty.active = qtrue;
@@ -2941,7 +3000,61 @@ static void SCR_UIScreenTest_f( void ) {
 	} else if ( !Q_stricmp( w, "toast" ) ) {
 		g_rpgToast.active = qtrue; g_rpgToast.isWin = qtrue; g_rpgToast.eloDelta = 18; g_rpgToast.credits = 250; g_rpgToast.xp = 120;
 		g_rpgToast.health = 64; g_rpgToast.bp = 0; g_rpgToast.startTimeMs = cls.realtime;
-		Q_strncpyz( g_rpgToast.opponentName, "Defiant", sizeof( g_rpgToast.opponentName ) );
+		Q_strncpyz( g_rpgToast.opponentName, "Mace Windu", sizeof( g_rpgToast.opponentName ) );
+	} else if ( !Q_stricmp( w, "party" ) ) {
+		extern int g_partyStudioTab;
+		extern char g_partyTeamName[32];
+		g_rpgPartyStudio.active = qtrue; g_partyStudioTab = 0;
+		g_rpgParty.active = qfalse; g_rpgParty.memberCount = 0; g_rpgParty.teamName[0] = 0;
+		Q_strncpyz( g_partyTeamName, "Jedi Council", sizeof( g_partyTeamName ) );
+		g_pendingInviteLeaderId = -1;
+	} else if ( !Q_stricmp( w, "partycreate" ) || !Q_stricmp( w, "partyjoin" ) ) {
+		const int n = !Q_stricmp( w, "partycreate" ) ? 1 : 3;
+		g_rpgParty.active = qtrue; g_rpgParty.teamColorIdx = 0; g_rpgParty.score = 120; g_rpgParty.memberCount = n;
+		Q_strncpyz( g_rpgParty.teamName, "Jedi Council", sizeof( g_rpgParty.teamName ) );
+		for ( int i = 0; i < n; i++ ) {
+			Q_strncpyz( g_rpgParty.members[i].name, nm[i], sizeof( g_rpgParty.members[i].name ) );
+			g_rpgParty.members[i].clientNum = 60 + i;
+			g_rpgParty.members[i].level = 12 + i * 5;
+			g_rpgParty.members[i].maxHealth = 100; g_rpgParty.members[i].health = 100 - i * 38;
+			g_rpgParty.members[i].maxFP = 100; g_rpgParty.members[i].fp = 90 - i * 30;
+			g_rpgParty.members[i].maxBP = 100; g_rpgParty.members[i].bp = 100 - i * 45;
+		}
+	} else if ( !Q_stricmp( w, "partytab1" ) ) {
+		extern int g_partyStudioTab;
+		g_rpgPartyStudio.active = qtrue; g_partyStudioTab = 1;
+		g_clientPartyCount = 3;
+		for ( int i = 0; i < 3; i++ ) {
+			g_clientPartyList[i].leaderId = 10 + i;
+			g_clientPartyList[i].colorIdx = i;
+			g_clientPartyList[i].memberCount = 2 + i;
+			Q_strncpyz( g_clientPartyList[i].teamName, i == 0 ? "Jedi Order" : ( i == 1 ? "Clone Troopers" : "Rebel Alliance" ), sizeof( g_clientPartyList[i].teamName ) );
+			Q_strncpyz( g_clientPartyList[i].leaderName, nm[2 + i], sizeof( g_clientPartyList[i].leaderName ) );
+		}
+		g_pendingInviteLeaderId = 10;
+		Q_strncpyz( g_pendingInviteLeaderName, nm[2], sizeof( g_pendingInviteLeaderName ) );
+		Q_strncpyz( g_pendingInviteTeamName, "Jedi Order", sizeof( g_pendingInviteTeamName ) );
+	} else if ( !Q_stricmp( w, "chat" ) ) {
+		static const char *titles[10] = { "Galactic Broadcast", "Wookiee Whisperer", "Jar Jar's Apprentice", "Midi-chlorian Mouth",
+			"Senate Filibusterer", "Chatterbox Knight", "Jawa Translator", "Gossip Droid", "Cantina Regular", "Throat Clearer" };
+		g_rpgTopChat.active = qtrue; g_rpgTopChat.count = 10;
+		for ( int i = 0; i < 10; i++ ) {
+			g_rpgTopChat.entries[i].rank = i + 1;
+			g_rpgTopChat.entries[i].count = 52000 - i * 5200;
+			Q_strncpyz( g_rpgTopChat.entries[i].name, nm[i], sizeof( g_rpgTopChat.entries[i].name ) );
+			Q_strncpyz( g_rpgTopChat.entries[i].title, titles[i], sizeof( g_rpgTopChat.entries[i].title ) );
+		}
+	} else if ( !Q_stricmp( w, "closeall" ) ) {
+		// same effect as pressing ESC on every window: flags off and draw cvars off
+		g_rpgStats.active = qfalse; g_rpgBounty.active = qfalse; g_rpgShop.active = qfalse; g_rpgInventory.active = qfalse;
+		g_rpgQuest.active = qfalse; g_rpgAch.active = qfalse; g_rpgTopCredits.active = qfalse; g_rpgTopPotato.active = qfalse; g_rpgTopChat.active = qfalse;
+		g_rpgAdv.active = qfalse; g_rpgMenu.active = qfalse; g_rpgCollection.active = qfalse; g_rpgPartyStudio.active = qfalse;
+		g_cantinaGames.active = qfalse;
+		static const char *drawCvars[] = { "cg_drawLeaderboard", "cg_drawStats", "cg_drawBounty", "cg_drawShop", "cg_drawQuest",
+			"cg_drawInventory", "cg_drawAch", "cg_drawTopCredits", "cg_drawTopPotato", "cg_drawAdv" };
+		for ( int i = 0; i < (int)( sizeof( drawCvars ) / sizeof( drawCvars[0] ) ); i++ ) Cvar_Set( drawCvars[i], "0" );
+	} else if ( !Q_stricmp( w, "partyoff" ) ) {
+		g_rpgParty.active = qfalse; g_rpgParty.memberCount = 0; g_pendingInviteLeaderId = -1; g_clientPartyCount = 0;
 	} else {
 		Com_Printf( "uiscreen_test <lb | stats | wanted | bounties | shop | inv | quest | ach | credits | potato | adv | menu [tab] | toast>\n" );
 	}
@@ -3476,6 +3589,13 @@ void SCR_DrawPartyStudioOverlay( void ) {
 			char nameBuf[64];
 			Q_strncpyz( nameBuf, Info_ValueForKey( cInfo, "n" ), sizeof( nameBuf ) );
 
+			// cl_uiDemo 1 (showcase recordings): show Jedi names instead of the real players
+			{
+				static cvar_t *s_uiDemo = NULL;
+				if ( !s_uiDemo ) s_uiDemo = Cvar_Get( "cl_uiDemo", "0", 0 );
+				static const char *demoNames[8] = { "Qui-Gon Jinn", "Plo Koon", "Shaak Ti", "Aayla Secura", "Luminara Unduli", "Kit Fisto", "Yoda", "Mace Windu" };
+				if ( s_uiDemo->integer ) Q_strncpyz( nameBuf, demoNames[( g_partyPlayerScroll + v ) % 8], sizeof( nameBuf ) );
+			}
 			// Draw Player Row
 			vec4_t rBg = { 0.05f, 0.15f, 0.25f, (v % 2 == 0) ? 0.35f : 0.15f };
 			SCR_FillRect( rightX, rowY, rightW, 22.0f, rBg );
@@ -5307,6 +5427,7 @@ void SCR_DrawScreenField( stereoFrame_t stereoFrame ) {
 					SCR_UIAnimated( 8, SCR_DrawTopCreditsOverlay );
 					SCR_UIAnimated( 9, SCR_DrawTopPotatoOverlay );
 					SCR_UIAnimated( 10, SCR_DrawAdventureOverlay );
+					SCR_UIAnimated( 16, SCR_DrawTopChatOverlay );
 					void SCR_DrawRPGMenuOverlay( void );
 					void SCR_DrawPartyStudioOverlay( void );
 					void SCR_DrawAdminOverlay( void );
@@ -5451,6 +5572,7 @@ void CL_ResetRPGOverlays( void ) {
 	g_rpgAch.active = qfalse;
 	g_rpgTopCredits.active = qfalse;
 	g_rpgTopPotato.active = qfalse;
+	g_rpgTopChat.active = qfalse;
 	g_rpgStats.active = qfalse;
 	g_rpgBounty.active = qfalse;
 	g_rpgMenu.active = qfalse;

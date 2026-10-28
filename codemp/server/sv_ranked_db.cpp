@@ -2276,6 +2276,213 @@ void SV_Ranked_ShowTopCredits(client_t *cl) {
   SV_SendServerCommand(cl, "topcr_open");
 }
 
+// -----------------------------------------------------------------------------
+// Chat ranking (!top chat). Counts how many DIFFERENT messages a logged-in player writes in public chat,
+// in every mode. The text is never stored, only the number (account.chat_msgs).
+// Anti-spam: a message does not count when it repeats one of the player's last 5 messages (compared without
+// colour codes, case, punctuation and doubled letters, so "ok", "OK!" and "okkk" are the same message), when
+// it is shorter than 2 letters, within 2 seconds of the last counted message, or beyond 10 counted per minute.
+// -----------------------------------------------------------------------------
+struct ChatRankTitle {
+  int min;
+  const char *name;
+};
+static const ChatRankTitle sv_chatTitles[] = {
+    {0, "Silent Youngling"},      {25, "Throat Clearer"},        {100, "Cantina Regular"},
+    {250, "Gossip Droid"},        {500, "Jawa Translator"},      {1000, "Chatterbox Knight"},
+    {2500, "Senate Filibusterer"}, {5000, "Midi-chlorian Mouth"}, {10000, "Jar Jar's Apprentice"},
+    {25000, "Wookiee Whisperer"}, {50000, "Galactic Broadcast"}, {0, NULL}};
+
+static const char *Ranked_ChatTitle(int count) {
+  const char *t = sv_chatTitles[0].name;
+  for (int i = 0; sv_chatTitles[i].name != NULL; i++) {
+    if (count >= sv_chatTitles[i].min)
+      t = sv_chatTitles[i].name;
+  }
+  return t;
+}
+
+struct ChatSpamState {
+  unsigned userHash;
+  unsigned hist[5];
+  int histPos;
+  int lastCountTime;
+  int windowStart;
+  int windowCount;
+  qboolean counted;
+};
+static ChatSpamState sv_chatSpam[MAX_CLIENTS];
+
+static unsigned Ranked_ChatFingerprint(const char *msg, int *lenOut) {
+  unsigned h = 2166136261u;
+  int len = 0;
+  char last = 0;
+  for (const char *p = msg; *p; ++p) {
+    if (Q_IsColorString(p)) {
+      ++p;
+      continue;
+    }
+    unsigned char c = (unsigned char)*p;
+    if (!isalnum(c))
+      continue;
+    char lc = (char)tolower(c);
+    if (lc == last)
+      continue;
+    last = lc;
+    h = (h ^ (unsigned char)lc) * 16777619u;
+    len++;
+  }
+  *lenOut = len;
+  return h;
+}
+
+static int Ranked_BumpInt(cJSON *obj, const char *key, int delta) {
+  cJSON *v = cJSON_GetObjectItemCaseSensitive(obj, key);
+  int now = (v && cJSON_IsNumber(v)) ? v->valueint : 0;
+  now += delta;
+  if (v)
+    cJSON_SetNumberValue(v, now);
+  else
+    cJSON_AddNumberToObject(obj, key, now);
+  return now;
+}
+
+// Called for every public chat line that is not a command
+void SV_Ranked_CountChat(client_t *cl, const char *msg) {
+  if (!cl || !msg || !msg[0])
+    return;
+  if (!Cvar_VariableIntegerValue("sv_ranked_enabled"))
+    return;
+  int n = (int)(cl - svs.clients);
+  if (n < 0 || n >= MAX_CLIENTS)
+    return;
+  rankedMatchState_t *r = &sv_rankedPlayers[n];
+  if (!r->loggedIn || r->isTemp || !r->username[0])
+    return;
+
+  ChatSpamState *st = &sv_chatSpam[n];
+  unsigned uh = 2166136261u;
+  for (const char *u = r->username; *u; ++u)
+    uh = (uh ^ (unsigned char)*u) * 16777619u;
+  if (st->userHash != uh) {
+    memset(st, 0, sizeof(*st));
+    st->userHash = uh;
+  }
+
+  int len = 0;
+  unsigned fp = Ranked_ChatFingerprint(msg, &len);
+  if (len < 2)
+    return;
+  for (int i = 0; i < 5; i++) {
+    if (st->hist[i] == fp)
+      return; // same message as one of the last five
+  }
+  st->hist[st->histPos] = fp; // remembered even when it does not count below, so variants of spam stay spam
+  st->histPos = (st->histPos + 1) % 5;
+
+  const int now = svs.time;
+  if (st->counted && now - st->lastCountTime < 2000)
+    return;
+  if (now - st->windowStart > 60000 || now < st->windowStart) {
+    st->windowStart = now;
+    st->windowCount = 0;
+  }
+  if (st->windowCount >= 10)
+    return;
+  st->windowCount++;
+  st->lastCountTime = now;
+  st->counted = qtrue;
+
+  cJSON *acc = SV_Ranked_GetAccount(r->username);
+  if (!acc)
+    return;
+  cJSON *tot = cJSON_GetObjectItemCaseSensitive(acc, "chat_msgs");
+  const int before = (tot && cJSON_IsNumber(tot)) ? tot->valueint : 0;
+  const int after = Ranked_BumpInt(acc, "chat_msgs", 1);
+  SV_Ranked_MarkAccountsDirty();
+
+  const char *oldTitle = Ranked_ChatTitle(before);
+  const char *newTitle = Ranked_ChatTitle(after);
+  if (Q_stricmp(oldTitle, newTitle) != 0) {
+    SV_SendServerCommand(cl, "chat \"^5[CHAT RANK] ^7You are now a ^3%s^7! (^5%d^7 messages)\"", newTitle, after);
+  }
+}
+
+void SV_Ranked_ShowTopChat(client_t *cl) {
+  if (!cl)
+    return;
+  std::vector<RankedListEntry> list;
+  if (SV_Ranked_CentralEnabled()) {
+    cJSON *rows = NULL;
+    int st = SV_Ranked_Central_TopRows(cl, CENTRAL_TOP_CHAT, "duel", "chat_msgs", &rows);
+    if (st == 0)
+      return;
+    if (st < 0) {
+      SV_SendServerCommand(cl, "chat \"^1The leaderboard is not available right now.\"");
+      return;
+    }
+    list = Ranked_ListFromCentralRows(rows, false);
+  } else {
+    list = Ranked_BuildListByAccountField("chat_msgs");
+  }
+  while (!list.empty() && list.back().value <= 0)
+    list.pop_back();
+  if (list.empty()) {
+    SV_SendServerCommand(cl, "chat \"^3Nobody is on the chat list yet. Write something different!\"");
+    return;
+  }
+
+  SV_SendServerCommand(cl, "topchat_clear");
+  SV_SendServerCommand(cl, "print \"\n^2--- ^7Top Chat ^2---\n\"");
+  const int max = (int)std::min<size_t>(10, list.size());
+  for (int i = 0; i < max; ++i) {
+    const char *title = Ranked_ChatTitle(list[i].value);
+    SV_SendServerCommand(cl, "print \"^3%2d^7) %s ^2- ^7%d ^5%s\n\"", i + 1, list[i].displayName.c_str(),
+                         list[i].value, title);
+    SV_SendServerCommand(cl, va("topchat_entry %d %d \"%s\" \"%s\"", i + 1, list[i].value,
+                                list[i].displayName.c_str(), title));
+  }
+
+  // Where the asking player stands, even when they are not in the top 10
+  {
+    const int meNum = (int)(cl - svs.clients);
+    rankedMatchState_t *me = (meNum >= 0 && meNum < MAX_CLIENTS) ? &sv_rankedPlayers[meNum] : NULL;
+    cJSON *myAcc = (me && me->loggedIn && !me->isTemp && me->username[0]) ? SV_Ranked_GetAccount(me->username) : NULL;
+    if (myAcc) {
+      cJSON *tp = cJSON_GetObjectItemCaseSensitive(myAcc, "chat_msgs");
+      const int total = (tp && cJSON_IsNumber(tp)) ? tp->valueint : 0;
+      int place = 0;
+      for (int i = 0; i < (int)list.size() && i < 10; ++i) {
+        if (list[i].key == me->username) {
+          place = i + 1;
+          break;
+        }
+      }
+      char placeStr[32] = "";
+      if (place > 0)
+        Com_sprintf(placeStr, sizeof(placeStr), ", place ^3#%d^7", place);
+      const char *nextName = NULL;
+      int nextMin = 0;
+      for (int i = 0; sv_chatTitles[i].name != NULL; i++) {
+        if (sv_chatTitles[i].min > total) {
+          nextName = sv_chatTitles[i].name;
+          nextMin = sv_chatTitles[i].min;
+          break;
+        }
+      }
+      if (nextName) {
+        SV_SendServerCommand(cl, "print \"^5[CHAT RANK] ^7You: ^3%s^7 with ^5%d^7 messages%s. Next rank ^5%s^7 at %d.\n\"",
+                             Ranked_ChatTitle(total), total, placeStr, nextName, nextMin);
+      } else {
+        SV_SendServerCommand(cl, "print \"^5[CHAT RANK] ^7You: ^3%s^7 with ^5%d^7 messages%s. Top rank reached!\n\"",
+                             Ranked_ChatTitle(total), total, placeStr);
+      }
+    }
+  }
+  SV_SendServerCommand(cl, "print \"\n\"");
+  SV_SendServerCommand(cl, "topchat_open");
+}
+
 void SV_Ranked_ShowTopPotato(client_t *cl) {
   if (!cl)
     return;

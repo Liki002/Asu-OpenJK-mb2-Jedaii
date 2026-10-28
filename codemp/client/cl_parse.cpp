@@ -1297,6 +1297,27 @@ void CL_ParseCommandString( msg_t *msg ) {
 	} else if ( !Q_strncmp( s, "topcr_close", 11 ) ) {
 		g_rpgTopCredits.active = qfalse;
 		Cvar_Set( "cg_drawTopCredits", "0" );
+	} else if ( !Q_strncmp( s, "topchat_clear", 13 ) ) {
+		g_rpgTopChat.count = 0;
+	} else if ( !Q_strncmp( s, "topchat_entry", 13 ) ) {
+		if ( g_rpgTopChat.count < 10 ) {
+			topChatEntry_t *e = &g_rpgTopChat.entries[g_rpgTopChat.count];
+			int rNum = 0, cnt = 0;
+			char nameBuf[64] = "";
+			char titleBuf[32] = "";
+			int num = sscanf( s, "topchat_entry %d %d \"%63[^\"]\" \"%31[^\"]\"", &rNum, &cnt, nameBuf, titleBuf );
+			if ( num >= 3 ) {
+				e->rank = rNum;
+				e->count = cnt;
+				Q_strncpyz( e->name, nameBuf, sizeof( e->name ) );
+				Q_strncpyz( e->title, num >= 4 ? titleBuf : "", sizeof( e->title ) );
+				g_rpgTopChat.count++;
+			}
+		}
+	} else if ( !Q_strncmp( s, "topchat_open", 12 ) ) {
+		g_rpgTopChat.active = qtrue;
+	} else if ( !Q_strncmp( s, "topchat_close", 13 ) ) {
+		g_rpgTopChat.active = qfalse;
 	} else if ( !Q_strncmp( s, "toppotato_clear", 15 ) ) {
 		g_rpgTopPotato.count = 0;
 	} else if ( !Q_strncmp( s, "toppotato_entry", 15 ) ) {

@@ -654,6 +654,7 @@ void RunDisplay(const Waiter &w) {
     case CENTRAL_TOP_ELO_ALL: SV_Ranked_ShowTopAll(cl); break;
     case CENTRAL_TOP_CREDITS: SV_Ranked_ShowTopCredits(cl); break;
     case CENTRAL_TOP_POTATO: SV_Ranked_ShowTopPotato(cl); break;
+    case CENTRAL_TOP_CHAT: SV_Ranked_ShowTopChat(cl); break;
     case CENTRAL_TOP_WANTED: SV_Ranked_ShowWanted(cl); break;
     default: break;
   }
